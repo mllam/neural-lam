@@ -171,7 +171,7 @@ class BaseHiGraphModel(BaseGraphModel):
     def embedd_mesh_nodes(self) -> torch.Tensor:
         """
         Embed static mesh node features for the bottom level only;
-        remaining levels are embedded at the start of ``process_step``.
+        remaining levels are embedded in ``embed_static_processor_features``.
 
         Returns
         -------
@@ -183,7 +183,60 @@ class BaseHiGraphModel(BaseGraphModel):
         """
         return self.mesh_embedders[0](self.mesh_static_features[0])
 
-    def process_step(self, mesh_rep: torch.Tensor) -> torch.Tensor:
+    def embed_static_processor_features(
+        self,
+    ) -> tuple[
+        list[torch.Tensor],
+        list[torch.Tensor],
+        list[torch.Tensor],
+        list[torch.Tensor],
+    ]:
+        """
+        Embed static node and edge features for hierarchical processor levels.
+
+        Returns
+        -------
+        tuple
+            Tuple of lists
+            ``(mesh_emb_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep)``.
+        """
+        mesh_emb_levels = [
+            emb(node_static_features)
+            for emb, node_static_features in zip(
+                self.mesh_embedders[1:],
+                self.mesh_static_features[1:],
+            )
+        ]
+        mesh_same_rep = [
+            emb(edge_feat)
+            for emb, edge_feat in zip(
+                self.mesh_same_embedders, self.m2m_features
+            )
+        ]
+        mesh_up_rep = [
+            emb(edge_feat)
+            for emb, edge_feat in zip(
+                self.mesh_up_embedders, self.mesh_up_features
+            )
+        ]
+        mesh_down_rep = [
+            emb(edge_feat)
+            for emb, edge_feat in zip(
+                self.mesh_down_embedders, self.mesh_down_features
+            )
+        ]
+        return (mesh_emb_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep)
+
+    def process_step(
+        self,
+        mesh_rep: torch.Tensor,
+        processor_embeddings: tuple[
+            list[torch.Tensor],
+            list[torch.Tensor],
+            list[torch.Tensor],
+            list[torch.Tensor],
+        ],
+    ) -> torch.Tensor:
         """
         Process the mesh representation across all hierarchy levels,
         implementing the full init-process-readout cycle.
@@ -195,6 +248,9 @@ class BaseHiGraphModel(BaseGraphModel):
             node representations from the encoder. Dims: ``B`` is batch
             size, ``num_mesh_nodes[0]`` is the number of nodes at
             level 0, and ``hidden_dim`` is the hidden dimension.
+        processor_embeddings : tuple
+            Static node and edge embeddings of the hierarchy levels from
+            ``embed_static_processor_features``.
 
         Returns
         -------
@@ -204,36 +260,29 @@ class BaseHiGraphModel(BaseGraphModel):
         """
         batch_size = mesh_rep.shape[0]
 
-        # EMBED REMAINING MESH NODES (levels >= 1) -
+        mesh_emb_levels, mesh_same_emb, mesh_up_emb, mesh_down_emb = (
+            processor_embeddings
+        )
+
         # Create list of mesh node representations for each level,
         # each of size (B, num_mesh_nodes[l], hidden_dim)
         mesh_rep_levels = [mesh_rep] + [
-            self.expand_to_batch(emb(node_static_features), batch_size)
-            for emb, node_static_features in zip(
-                self.mesh_embedders[1:],
-                self.mesh_static_features[1:],
-            )
+            self.expand_to_batch(node_emb, batch_size)
+            for node_emb in mesh_emb_levels
         ]
 
-        # - EMBED EDGES -
-        # Embed edges, expand with batch dimension
+        # Expand edge embeddings with batch dimension
         mesh_same_rep = [
-            self.expand_to_batch(emb(edge_feat), batch_size)
-            for emb, edge_feat in zip(
-                self.mesh_same_embedders, self.m2m_features
-            )
+            self.expand_to_batch(edge_emb, batch_size)
+            for edge_emb in mesh_same_emb
         ]
         mesh_up_rep = [
-            self.expand_to_batch(emb(edge_feat), batch_size)
-            for emb, edge_feat in zip(
-                self.mesh_up_embedders, self.mesh_up_features
-            )
+            self.expand_to_batch(edge_emb, batch_size)
+            for edge_emb in mesh_up_emb
         ]
         mesh_down_rep = [
-            self.expand_to_batch(emb(edge_feat), batch_size)
-            for emb, edge_feat in zip(
-                self.mesh_down_embedders, self.mesh_down_features
-            )
+            self.expand_to_batch(edge_emb, batch_size)
+            for edge_emb in mesh_down_emb
         ]
 
         # - MESH INIT. -

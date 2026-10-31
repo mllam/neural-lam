@@ -2,6 +2,7 @@
 
 # Standard library
 from abc import ABC, abstractmethod
+from typing import Any
 
 # Third-party
 import torch
@@ -150,6 +151,21 @@ class StepPredictor(nn.Module, ABC):
             Shape ``(B, N, d)``. Batch-expanded view of ``x``.
         """
         return x.unsqueeze(0).expand(batch_size, -1, -1)
+
+    def embed_static_features(self) -> Any | None:
+        """
+        Embed static features (e.g. mesh and edge attributes) to be reused
+        across autoregressive rollout steps. Predictors that return a value
+        here must accept it as the ``static_embeddings`` keyword argument
+        of ``forward``.
+
+        Returns
+        -------
+        Any or None
+            Precomputed static embeddings, or ``None`` if the predictor has
+            no static features to embed.
+        """
+        return None
 
     @abstractmethod
     def forward(
