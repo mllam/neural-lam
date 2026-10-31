@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add agent skills for common neural-lam workflows (`add-step-predictor`, `add-datastore`, `add-metric`, `add-loss`, `create-graph`, `smoke-train`, `prepare-pr`, `review-pr`) in `.agents/skills/` following the Agent Skills standard, with declarative pointers in `AGENTS.md`, and an anti-rot CI test suite in `tests/test_skills.py` [\#821](https://github.com/mllam/neural-lam/pull/821) @Sharkyii
+
 - Add deterministic and probabilistic forecaster/module interfaces with
   shared autoregressive unrolling and forecaster-owned training objectives.
   [\#700](https://github.com/mllam/neural-lam/pull/700) @Sir-Sloth-The-Lazy
