@@ -328,8 +328,13 @@ class BaseGraphModel(StepPredictor):
             grid_features
         )  # (B, num_grid_nodes, hidden_dim)
 
+        grid_emb = self.grid_embedder(
+            grid_features
+        )  # (B, num_grid_nodes, hidden_dim)
+
         if static_embeddings is None:
             static_embeddings = self.embed_static_features()
+
         mesh_emb, g2m_emb, m2g_emb, processor_emb = static_embeddings
 
         # Map from grid to mesh
@@ -361,7 +366,7 @@ class BaseGraphModel(StepPredictor):
         # Map to output dimension, only for grid
         net_output = self.output_map(
             grid_rep
-        )  # (B, num_grid_nodes, d_grid_out)
+        )  # (B, num_grid_nodes, grid_output_dim)
 
         if self.output_std:
             pred_delta_mean, pred_std_raw = net_output.chunk(
