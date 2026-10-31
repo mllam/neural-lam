@@ -1,6 +1,7 @@
 """Base class for step predictors."""
 
 # Standard library
+import math
 from abc import ABC, abstractmethod
 
 # Third-party
@@ -204,6 +205,13 @@ class StepPredictor(nn.Module, ABC):
         ----------
         datastore : BaseDatastore
             The datastore providing variable names.
+
+        Raises
+        ------
+        ValueError
+            If clamping limits are specified for unknown features, if any
+            limit is not a finite number, or if lower limit is greater
+            than or equal to upper limit for a feature.
         """
 
         # Read clamping limits stored on self
@@ -223,6 +231,29 @@ class StepPredictor(nn.Module, ABC):
                 "State feature limits were provided for unknown features: "
                 f"{unknown_features_lower.union(unknown_features_upper)}"
             )
+
+        # Check that limits are finite numbers
+        for feature, val in lower_lims.items():
+            if (
+                isinstance(val, bool)
+                or not isinstance(val, (int, float))
+                or not math.isfinite(val)
+            ):
+                raise ValueError(
+                    f"Lower clamping limit for feature '{feature}' must be "
+                    f"a finite number, got {val}."
+                )
+
+        for feature, val in upper_lims.items():
+            if (
+                isinstance(val, bool)
+                or not isinstance(val, (int, float))
+                or not math.isfinite(val)
+            ):
+                raise ValueError(
+                    f"Upper clamping limit for feature '{feature}' must be "
+                    f"a finite number, got {val}."
+                )
 
         # Constant parameters for clamping
         sigmoid_sharpness = 1

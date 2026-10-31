@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Validate that output clamping limits are finite numbers in `StepPredictor.prepare_clamping_params` and add unit test coverage [\#848](https://github.com/mllam/neural-lam/issues/848) @muskan-creates352
+
 - Fix shifted test spatial loss map titles and `spatial_loss_maps/loss_t{n}.pdf` filenames when `val_steps_to_log` contains steps outside the evaluation rollout [\#752](https://github.com/mllam/neural-lam/pull/752) @vikramsingh920
 
 - Fix `WeatherDataset.__len__` undercounting samples by `num_future_forcing_steps` when a datastore has no forcing data, sometimes raising a spurious `ValueError` in `__init__` [\#735](https://github.com/mllam/neural-lam/pull/735) @AshNicolus
