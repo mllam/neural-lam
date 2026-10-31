@@ -1,7 +1,7 @@
-"""Standalone script to upgrade a checkpoint's state dict in place.
+"""Standalone script to upgrade a checkpoint's state dict schema.
 
 Wraps the same `neural_lam.migrations.apply_migrations` used by
-`ForecasterModule.on_load_checkpoint`, so a checkpoint can be migrated
+`BaseForecastingModule.on_load_checkpoint`, so a checkpoint can be migrated
 once and re-saved instead of being migrated in memory on every load. See
 issue #48 for the motivation.
 """

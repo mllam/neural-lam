@@ -7,7 +7,7 @@ Git Tag: v0.7.0
 File Size: ~103 KB
 SHA-256: 75ba32cb7b4d1a13dc36033a20ccb3edfae2c3d9f520d637b0d89be3b48c9555
 S3 Path:
-neural-lam/model-checkpoints/v0.7.0/danra_winds_graph_lam_1level_v1.ckpt
+mllam-testdata/neural-lam/model-checkpoints/v0.7.0/danra_winds_graph_lam_1level_v1.ckpt
 
 This script records the command sequence used to generate the minimal
 reference model from a clean checkout of release tag ``v0.7.0``. It can also be
@@ -23,7 +23,8 @@ import sys
 import neural_lam
 
 REFERENCE_CHECKPOINT_KEY = (
-    "neural-lam/model-checkpoints/v0.7.0/danra_winds_graph_lam_1level_v1.ckpt"
+    "mllam-testdata/neural-lam/model-checkpoints/v0.7.0/"
+    "danra_winds_graph_lam_1level_v1.ckpt"
 )
 REFERENCE_CHECKPOINT_HASH = (
     "75ba32cb7b4d1a13dc36033a20ccb3edfae2c3d9f520d637b0d89be3b48c9555"

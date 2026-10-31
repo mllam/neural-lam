@@ -1,8 +1,10 @@
 # Third-party
 import pytest
+import torch
 
 # First-party
 from neural_lam import migrations
+from neural_lam.migrate_checkpoint import migrate_checkpoint_file
 
 
 def test_rename_keys_renames_matching_prefix_only():
@@ -115,8 +117,6 @@ def test_pre_refactor_flat_checkpoint_migrates_to_current_layout():
         "forecaster.predictor.encoding_grid_mlp.0.weight": "w0",
         "forecaster.predictor.encoding_grid_mlp.0.bias": "b0",
         "forecaster.predictor.some_other_layer.weight": "w1",
-        "interior_mask_bool": "mask",
-        "per_var_std": "std",
     }
 
 
@@ -165,3 +165,50 @@ def test_grid_mlp_migration_handles_prefixed_keys():
     migrated, _ = migrations.apply_migrations(state_dict, from_version=0)
     assert "forecaster.predictor.encoding_grid_mlp.0.weight" in migrated
     assert "forecaster.predictor.g2m_gnn.grid_mlp.0.weight" not in migrated
+
+
+def test_migrate_checkpoint_file_upgrades_file_on_disk(tmp_path):
+    """Test standalone migrate_checkpoint_file upgrades a file on disk."""
+    load_path = tmp_path / "legacy.ckpt"
+    save_path = tmp_path / "migrated.ckpt"
+
+    legacy_ckpt = {
+        "state_dict": {
+            "g2m_gnn.grid_mlp.0.weight": torch.tensor([1.0]),
+            "interior_mask_bool": torch.tensor([True]),
+        }
+    }
+    torch.save(legacy_ckpt, load_path)
+
+    migrate_checkpoint_file(str(load_path), str(save_path))
+
+    migrated_ckpt = torch.load(
+        save_path, map_location="cpu", weights_only=False
+    )
+    assert (
+        migrated_ckpt["neural_lam_checkpoint_version"]
+        == migrations.CURRENT_CHECKPOINT_VERSION
+    )
+    assert (
+        "forecaster.predictor.encoding_grid_mlp.0.weight"
+        in migrated_ckpt["state_dict"]
+    )
+    assert "interior_mask_bool" not in migrated_ckpt["state_dict"]
+
+
+def test_migrate_checkpoint_file_noop_when_already_current(tmp_path, capsys):
+    """Test standalone migrate_checkpoint_file is a no-op if already current."""
+    load_path = tmp_path / "current.ckpt"
+    save_path = tmp_path / "output.ckpt"
+
+    current_ckpt = {
+        "neural_lam_checkpoint_version": migrations.CURRENT_CHECKPOINT_VERSION,
+        "state_dict": {},
+    }
+    torch.save(current_ckpt, load_path)
+
+    migrate_checkpoint_file(str(load_path), str(save_path))
+
+    captured = capsys.readouterr()
+    assert "nothing to migrate" in captured.out
+    assert not save_path.exists()

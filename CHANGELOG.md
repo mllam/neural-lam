@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add a checkpoint migration registry (`neural_lam/migrations.py`) so
+  checkpoints from older neural-lam versions keep loading across renames
+  and restructuring of the model classes, instead of failing outright.
+  Checkpoints are now stamped with an internal schema version;
+  `BaseForecastingModule.on_load_checkpoint` migrates old ones automatically
+  with a warning, and a standalone `python -m neural_lam.migrate_checkpoint`
+  script can upgrade a checkpoint file in place.
+  Includes a backward compatibility test using a reference checkpoint
+  fetched via pooch and a reproduction script
+  (`tests/testdata/generate_reference_checkpoint.py`).
+  [\#48](https://github.com/mllam/neural-lam/issues/48) @Sharkyii
+
 - Add deterministic and probabilistic forecaster/module interfaces with
   shared autoregressive unrolling and forecaster-owned training objectives.
   [\#700](https://github.com/mllam/neural-lam/pull/700) @Sir-Sloth-The-Lazy
@@ -74,17 +86,6 @@ It also contains a number of smaller improvements, bug fixes and maintenance upd
 
 - Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#675](https://github.com/mllam/neural-lam/pull/675) @GiGiKoneti
 
-- Add a checkpoint migration registry (`neural_lam/migrations.py`) so
-  checkpoints from older neural-lam versions keep loading across renames
-  and restructuring of the model classes, instead of failing outright.
-  Checkpoints are now stamped with an internal schema version;
-  `BaseForecastingModule.on_load_checkpoint` migrates old ones automatically
-  with a warning, and a standalone `python -m neural_lam.migrate_checkpoint`
-  script can upgrade a checkpoint file in place.
-  Includes a backward compatibility test using a reference checkpoint
-  fetched via pooch and a reproduction script
-  (`tests/testdata/generate_reference_checkpoint.py`).
-  [\#48](https://github.com/mllam/neural-lam/issues/48) @Sharkyii
 
 - Add `PropagationNet` GNN layer that incentivises directional message
   propagation from sender to receiver nodes, and expose it alongside

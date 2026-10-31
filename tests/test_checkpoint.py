@@ -142,8 +142,11 @@ def test_pre_refactor_checkpoint_loads_via_migration(tmp_path):
 
     # Reverse this PR's own migrations to build a legacy state dict: strip
     # the 'forecaster.predictor.' prefix and rename encoding_grid_mlp back
-    # to its pre-refactor name.
-    legacy_state_dict = {}
+    # to its pre-refactor name. Include legacy non-persistent buffers.
+    legacy_state_dict = {
+        "interior_mask_bool": torch.ones(10, dtype=torch.bool),
+        "per_var_std": torch.ones(4),
+    }
     for key, value in current_state_dict.items():
         legacy_key = key.removeprefix("forecaster.predictor.")
         legacy_key = legacy_key.replace("encoding_grid_mlp", "g2m_gnn.grid_mlp")
@@ -157,6 +160,7 @@ def test_pre_refactor_checkpoint_loads_via_migration(tmp_path):
         checkpoint["neural_lam_checkpoint_version"]
         == migrations.CURRENT_CHECKPOINT_VERSION
     )
+    model.load_state_dict(checkpoint["state_dict"], strict=True)
 
 
 REFERENCE_CHECKPOINT_KEY = (

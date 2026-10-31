@@ -72,12 +72,13 @@ def _prefix_flat_ar_model_keys(state_dict: StateDict) -> StateDict:
     Move every parameter of the pre-refactor, flat ``ARModel`` under
     ``forecaster.predictor.``, matching the ``ForecasterModule`` /
     ``Forecaster`` / ``StepPredictor`` split introduced in #208.
+    Non-persistent buffers (``interior_mask_bool`` and ``per_var_std``)
+    are dropped since modern modules register them with persistent=False.
     """
-    unprefixed_keys = ("interior_mask_bool", "per_var_std")
+    state_dict.pop("interior_mask_bool", None)
+    state_dict.pop("per_var_std", None)
     for old_key in [
-        key
-        for key in state_dict
-        if not key.startswith("forecaster.") and key not in unprefixed_keys
+        key for key in state_dict if not key.startswith("forecaster.")
     ]:
         state_dict[f"forecaster.predictor.{old_key}"] = state_dict.pop(old_key)
     return state_dict
