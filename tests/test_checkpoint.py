@@ -13,8 +13,12 @@ import torch
 from neural_lam import config as nlconfig
 from neural_lam import migrations
 from neural_lam.create_graph import create_graph_from_datastore
-from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
-from neural_lam.train_model import load_forecaster_module_from_checkpoint
+from neural_lam.models import (
+    DeterministicARForecaster,
+    DeterministicForecastingModule,
+    GraphLAM,
+)
+from neural_lam.train_model import load_forecasting_module_from_checkpoint
 
 # Local
 from .conftest import (
@@ -25,8 +29,10 @@ from .conftest import (
 from .dummy_datastore import DummyDatastore
 
 
-def _build_forecaster_module(datastore: DummyDatastore) -> ForecasterModule:
-    """Build the minimal `ForecasterModule` the checkpoint tests need."""
+def _build_forecaster_module(
+    datastore: DummyDatastore,
+) -> DeterministicForecastingModule:
+    """Build the minimal `DeterministicForecastingModule` the checkpoint tests need."""
     graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
     if not graph_dir_path.exists():
         create_graph_from_datastore(
@@ -36,10 +42,12 @@ def _build_forecaster_module(datastore: DummyDatastore) -> ForecasterModule:
         )
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=str(datastore.root_path),
-        ),
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        },
     )
 
     predictor = GraphLAM(
@@ -55,12 +63,13 @@ def _build_forecaster_module(datastore: DummyDatastore) -> ForecasterModule:
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
     )
-    forecaster = ARForecaster(predictor, datastore)
-    return ForecasterModule(
+    forecaster = DeterministicARForecaster(
+        predictor, datastore, config=config, loss="mse"
+    )
+    return DeterministicForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss="mse",
         lr=1.0e-3,
         n_example_pred=1,
         val_steps_to_log=[1],
@@ -184,7 +193,7 @@ def test_v0_7_0_reference_checkpoint_loads_via_pooch(tmp_path):
         DATASTORE_EXAMPLES_ROOT_PATH / "mdp/danra_100m_winds/config.yaml"
     )
     config, datastore = nlconfig.load_config_and_datastore(danra_config_path)
-    loaded_model = load_forecaster_module_from_checkpoint(
+    loaded_model = load_forecasting_module_from_checkpoint(
         ckpt_path=ckpt_file,
         config=config,
         datastore=datastore,

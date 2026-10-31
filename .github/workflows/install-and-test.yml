@@ -18,6 +18,17 @@
 # - ubuntu-latest for CPU: these are on github
 # - cirun-aws-runner--${{ github.run_id }} for GPU: these are on AWS,
 #   orchestrated by cirun.io
+#
+# GPU test scope:
+# - The GPU job installs the gpu-cu128 extra (CUDA 12.8), which is compatible
+#   with the cirun runner's CUDA 12.2 driver via CUDA minor version
+#   compatibility.
+# - It asserts torch.cuda.is_available() so a future driver/wheel mismatch
+#   fails fast rather than silently running on CPU.
+# - Only GPU-relevant tests are run on the paid cirun runner:
+#   * tests marked requires_training (trainer.fit() exercises CUDA paths)
+#   * tests/test_datasets.py::test_single_batch (training_step on CUDA)
+# - The full suite continues to run on the free ubuntu-latest CPU runner.
 name: CPU+GPU testing
 
 on: [push, pull_request, workflow_dispatch]
@@ -35,8 +46,10 @@ jobs:
         include:
           - device: cpu
             runner: ubuntu-latest
+            extra: cpu
           - device: gpu
             runner: "cirun-aws-runner--${{ github.run_id }}"
+            extra: gpu-cu128
 
     steps:
       - name: Checkout repository
@@ -52,7 +65,7 @@ jobs:
 
       - name: Install with uv
         run: |
-          uv sync --extra ${{ matrix.device }} --group dev --locked
+          uv sync --extra ${{ matrix.extra }} --group dev --locked
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
       - name: Print torch version
@@ -64,10 +77,16 @@ jobs:
         run: |
           python -c "import torch; assert torch.__version__.endswith('+cpu')"
 
-      - name: Check torch variant is cu130
+      - name: Check torch variant is cu128
         if: matrix.device == 'gpu'
         run: |
-          python -c "import torch; assert torch.__version__.endswith('+cu130')"
+          python -c "import torch; assert torch.__version__.endswith('+cu128')"
+
+      - name: Check CUDA is available
+        if: matrix.device == 'gpu'
+        run: |
+          nvidia-smi
+          python -c "import torch; assert torch.cuda.is_available(), f'CUDA is not available - torch={torch.__version__}, cuda_version={torch.version.cuda}, device_count={torch.cuda.device_count()}'"
 
       - name: Cache meps example data
         uses: actions/cache@v4
@@ -81,9 +100,16 @@ jobs:
           path: .fsspec-cache
           key: ${{ runner.os }}-mdp-input-v1-${{ hashFiles('tests/datastore_examples/mdp/**/*.datastore.yaml') }}
 
-      - name: Run tests
+      - name: Run tests (CPU - full suite)
+        if: matrix.device == 'cpu'
         run: |
           pytest -vv -s --doctest-modules
+
+      - name: Run tests (GPU - training and GPU-specific tests only)
+        if: matrix.device == 'gpu'
+        run: |
+          pytest -vv -s -m requires_training
+          pytest -vv -s tests/test_datasets.py::test_single_batch
 
       - name: Upload test figures
         uses: actions/upload-artifact@v4

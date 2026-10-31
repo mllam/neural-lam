@@ -151,14 +151,19 @@ assume you placed `config.yaml` in a folder called `data`):
 data/
 ├── config.yaml           - Configuration file for neural-lam
 ├── danra.datastore.yaml  - Configuration file for the datastore, referred to from config.yaml
+├── era5.datastore.yaml   - Optional second datastore, here providing boundary forcing
 └── graphs/               - Directory containing graphs for training
 ```
 
 And the content of `config.yaml` could in this case look like:
 ```yaml
-datastore:
-  kind: mdp
-  config_path: danra.datastore.yaml
+datastores:
+  danra:
+    kind: mdp
+    config_path: danra.datastore.yaml
+  era5:  # optional; no `state` data, so used for input (boundary) only
+    kind: mdp
+    config_path: era5.datastore.yaml
 training:
   state_feature_weighting:
     __config_class__: ManualStateFeatureWeighting
@@ -177,13 +182,19 @@ training:
 
 For now the neural-lam config only defines few things:
 
-1. The kind of datastore and the path to its config
+1. A named mapping of datastores (`datastores`), each giving the kind of
+   datastore and the path to its config. Which one is the interior and which is
+   the boundary follows from the categories each provides, see [Data
+   categories](#data-categories) below.
 2. The weighting of different features in
 the loss function. If you don't define the state feature weighting it will default to
 weighting all features equally.
 3. Valid numerical range for output of each feature. The numerical range of all features default to $]-\infty, \infty[$.
 
-(This example is taken from the `tests/datastore_examples/mdp` directory.)
+(This example is taken from the
+`tests/datastore_examples/mdp/era5_1000hPa_danra_100m_winds` directory; the
+`tests/datastore_examples/mdp/danra_100m_winds` one next to it is the
+single-datastore version.)
 
 
 Below follows instructions on how to use Neural-LAM to train and evaluate
@@ -213,9 +224,36 @@ the input-data representation is split into two parts:
 
 2. A `pytorch.Dataset`-derived class (called
    `neural_lam.weather_dataset.WeatherDataset`) which takes care of sampling in
-   time to create individual samples for training, validation and testing. The
-   `WeatherDataset` class is also responsible for normalising the values and
-   returning `torch.Tensor`-objects.
+   time to create individual samples for training, validation and testing, and
+   returning `torch.Tensor`-objects. The values are returned unnormalised;
+   normalisation is applied to each batch on the accelerator instead, by
+   `BaseForecastingModule.on_after_batch_transfer`.
+
+Each interior `MDPDatastore` still has its own boundary mask - a rim of
+`n_boundary_points` grid cells (default 30) excluded from the loss and
+overwritten with ground truth in the prediction. This is independent of any
+pairing with a separate boundary datastore (below).
+Set `datastores.<name>.n_boundary_points` in `config.yaml` to 0 once boundary
+forcing comes from elsewhere. If there is no separate datastore with boundary
+forcing, `n_boundary_points > 0` can still be used to take boundary input from the
+interior state. Using both `n_boundary_points > 0` and a separate boundary datastore
+corresponds to taking two kinds of boundary inputs (from interior state and boundary
+datastore), and is not recommended unless you have a very specific setup.
+`NpyFilesDatastoreMEPS`'s boundary mask is fixed at data-preparation time and
+does not support this option.
+
+### Data categories
+
+Each variable in a datastore belongs to one of three *categories*, which fix
+whether it is fed to the model as input, predicted as output, or both:
+
+| Category  | Model input | Model output | Description |
+|-----------|:-----------:|:------------:|-------------|
+| `state`   | ✓           | ✓            | Prognostic variables the model both reads and predicts (autoregressed forward in time). |
+| `forcing` | ✓           |              | Time-varying inputs known in advance (e.g. solar radiation, boundary forcing). |
+| `static`  | ✓           |              | Time-invariant inputs (e.g. orography, land-sea mask). |
+
+The categories also fix each datastore's role. A datastore with `state` data is the interior domain; one without is input-only, e.g. ERA5 boundary forcing for a LAM domain, whose forcing is windowed into an extra tensor per training sample. Exactly one interior datastore is required and at most one boundary datastore is supported.
 
 There are currently two different datastores implemented in the codebase:
 
@@ -236,9 +274,12 @@ There are currently two different datastores implemented in the codebase:
    example for how to create similar numpy-based datastores.
 
 If neither of these options fit your need you can create your own datastore by
-subclassing the `neural_lam.datastore.BaseDataStore` class or
-`neural_lam.datastore.BaseRegularGridDatastore` class (if your data is stored on
-a regular grid) and implementing the abstract methods.
+subclassing the `neural_lam.datastore.BaseDatastore` class and implementing the abstract methods.
+
+Datastores whose grid points form a complete 2D `x`/`y` rectilinear grid (the
+spacing need not be uniform) set `is_on_rectilinear_grid` to `True` and
+implement `grid_shape_state`. This can depend on the data, e.g. a
+domain-cropped `MDPDatastore` is not on a rectilinear grid.
 
 
 ### MDP (mllam-data-prep) Datastore - `MDPDatastore`
@@ -382,9 +423,10 @@ Which you can then use in a neural-lam configuration file like this:
 
 ```yaml
 # config.yaml
-datastore:
-  kind: npyfilesmeps
-  config_path: meps.datastore.yaml
+datastores:
+  meps:
+    kind: npyfilesmeps
+    config_path: meps.datastore.yaml
 training:
   state_feature_weighting:
     __config_class__: ManualStateFeatureWeighting
@@ -470,6 +512,7 @@ A few of the key ones are outlined below:
 * `--processor_layers`: Number of GNN layers to use in the processing part of the model
 * `--ar_steps_train`: Number of time steps to unroll for when making predictions and computing the loss
 * `--ar_steps_eval`: Number of time steps to unroll for during validation steps
+* `--loss`: Which of the loss functions in `neural_lam/metrics.py` to train on
 
 Checkpoints of trained models are stored under `runs/<run-name>/checkpoints/`, alongside Lightning and logger outputs for the same run.
 The implemented models are:
@@ -562,6 +605,62 @@ Except for training and pre-processing scripts all the source code can be found 
 Model classes, including abstract base classes, are located in `neural_lam/models`.
 Notebooks for visualization and analysis are marimo `.py` files in `docs/notebooks`.
 
+The model code is split into three layers:
+
+- `BaseForecastingModule` wraps a forecaster in the Lightning training/evaluation loop, handling optimization, logging, plotting and batch standardization. Its deterministic and probabilistic subclasses evaluate single forecasts and sampled ensembles, respectively.
+- `BaseForecaster` maps initial states and forcing to a full forecast through `forward` and owns the training objective. `BaseDeterministicForecaster` returns the same forecast every call; `BaseProbabilisticForecaster` samples a fresh one, with `sample_ensemble` stacking repeated samples.
+- `StepPredictor` advances the state one time step. The autoregressive forecasters (`DeterministicARForecaster` and `BaseProbabilisticARForecaster`) repeatedly apply it through the shared `unroll_forecast` function.
+
+A forecaster is free to produce a forecast in any way, including predicting all lead times at once; only the autoregressive versions use unrolling.
+
+All of these are `torch.nn.Module` subclasses, and `*` marks a class that is abstract and meant to be subclassed:
+```
+nn.Module
+├── pl.LightningModule
+│   └── BaseForecastingModule*             - Optimizer, logging, plotting and batch standardization (neural_lam/models/modules)
+│       ├── DeterministicForecastingModule - Evaluates the single forecast the forecaster produces
+│       └── ProbabilisticForecastingModule - Samples an ensemble and scores its mean
+├── BaseForecaster*                        - Initial states + forcing -> full forecast; owns the training objective (neural_lam/models/forecasters)
+│   ├── BaseDeterministicForecaster*       - forward -> the same forecast every call; objective: a loss function applied to it
+│   │   └── DeterministicARForecaster      - Unrolls that forecast; what neural_lam.train_model builds
+│   └── BaseProbabilisticForecaster*       - forward -> a fresh sample each call; sample_ensemble stacks several, leaving the objective open
+│       └── BaseProbabilisticARForecaster* - Unrolls each sample, still without an objective
+├── StepPredictor*                         - (X_{t-1}, X_t, forcing_t) -> X_{t+1} (neural_lam/models/step_predictors)
+│   ├── BaseGraphModel*                    - Encode-process-decode over a mesh graph
+│   │   ├── GraphLAM
+│   │   └── BaseHiGraphModel*              - Requires a hierarchical mesh graph
+│   │       ├── HiLAM
+│   │       └── HiLAMParallel
+│   └── BaseGraphEFM*                      - Latent-variable predictors with their own prior, encoder and decoder
+│       ├── GraphEFM
+│       └── GraphEFMMultiScale
+├── BaseLatentEncoder*                     - Grid representation -> Gaussian over a latent on the mesh (neural_lam/models/latent)
+│   ├── ConstantLatentEncoder
+│   ├── GraphLatentEncoder
+│   └── HiGraphLatentEncoder
+└── BaseGraphLatentDecoder*                - Grid representation + latent sample -> next-state increment (neural_lam/models/latent)
+    ├── GraphLatentDecoder
+    └── HiGraphLatentDecoder
+```
+The `--model` values listed under [Train Models](#train-models) select the step predictor. `GraphEFM` and `GraphEFMMultiScale` are implemented but not yet selectable this way.
+
+The building blocks these are assembled from are also `torch.nn.Module` subclasses:
+```
+nn.Module
+├── pyg.nn.MessagePassing
+│   └── InteractionNet   - GNN layer, chosen per edge type with --g2m_gnn_type, --m2g_gnn_type, --mesh_up_gnn_type, --mesh_down_gnn_type (neural_lam/gnn_layers.py)
+│       └── PropagationNet
+├── BufferList           - List of tensor buffers held as a Module (neural_lam/utils/buffer_list.py)
+└── SplitMLPs            - Feeds chunks of the input through separate MLPs (neural_lam/gnn_layers.py)
+```
+
+What to extend depends on the kind of model:
+
+* **Deterministic, autoregressive:** write a new `StepPredictor` and run it with the existing `DeterministicARForecaster`. This is the common case.
+* **Deterministic, not autoregressive:** subclass `BaseDeterministicForecaster`, implementing `forward` with the new way of producing a forecast, reusing an existing `StepPredictor` or a new one if the model has a per-step component at all.
+* **Probabilistic, autoregressive:** subclass `BaseProbabilisticARForecaster`, implementing the training objective, typically alongside a new `StepPredictor` that samples its output.
+* **Probabilistic, not autoregressive:** subclass `BaseProbabilisticForecaster`, which additionally leaves the way a single sample is produced open.
+
 ## Format of graph directory
 The `graphs` directory contains generated graph structures that can be used by different graph-based models.
 For a strict, machine-verifiable specification, see `docs/graph_storage_spec.md`.
@@ -612,15 +711,26 @@ Entries 0 in these lists describe edges between the lowest levels 1 and 2.
 Canonical dimension names used in tensor shape annotations throughout the codebase:
 
 - `B` - batch size
+- `S` - number of members in an ensemble forecast
 - `pred_steps` - number of autoregressive prediction steps
+- `num_times` - number of time steps along the time axis of a raw or batched timeseries (a trailing `'`, e.g. `num_times'`, denotes a pre-subsampling / pre-differencing variant)
 - `num_grid_nodes` - number of nodes in the flattened spatial grid
+- `num_boundary_grid_nodes` - number of nodes in the flattened boundary spatial grid
 - `num_mesh_nodes` - number of mesh nodes; indexed as `num_mesh_nodes[l]` for hierarchical level `l`
 - `num_state_vars` - number of atmospheric state variables
 - `num_forcing_vars` - number of forcing input variables
+- `num_windowed_forcing_vars` - forcing variables stacked over the past/future forcing window
+- `num_windowed_boundary_vars` - boundary forcing variables stacked over the past/future boundary window
 - `num_variables` - generic variable dimension used in metric functions
 - `hidden_dim` - internal hidden representation size in GNN layers and MLPs
+- `latent_dim` - dimensionality of the Graph-EFM latent variable
 - `input_dim` - input feature dimensionality to a layer before transformation
-- `num_edges` - number of edges in a graph (g2m, m2g, same-level, up, down)
+- `num_mesh_static_vars` - number of static features per mesh node
+- `num_edges` - number of edges in a generic edge set, e.g. in message-passing layers
+- `num_edges_<set>` - number of edges in a specific edge set, `<set>` being one of `g2m`, `m2g`, `m2m`, `mesh_up`, `mesh_down`; indexed as e.g. `num_edges_m2m[l]` for the per-level lists of a hierarchical graph
+- `num_edge_features` - number of static features per edge
+- `grid_size_x` - number of grid points along the x axis of a rectilinear grid
+- `grid_size_y` - number of grid points along the y axis of a rectilinear grid
 - `num_send` - number of sender nodes in a message-passing step
 - `num_rec` - number of receiver nodes in a message-passing step
 

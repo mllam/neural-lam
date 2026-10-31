@@ -52,8 +52,8 @@ class ConstantLatentEncoder(BaseLatentEncoder):
         Parameters
         ----------
         grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Grid input representation,
-            used only to determine batch size and device.
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Grid input
+            representation, used only to determine batch size and device.
         **kwargs
             Ignored; accepted for compatibility with the base class
             interface.

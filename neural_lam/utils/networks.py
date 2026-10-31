@@ -58,7 +58,7 @@ def make_gnn_seq(
     Parameters
     ----------
     edge_index : torch.Tensor
-        Shape ``(2, M)``. Edge index of the edges that the GNN layers
+        Shape ``(2, num_edges)``. Edge index of the edges that the GNN layers
         operate on.
     num_gnn_layers : int
         Number of stacked GNN layers; must be at least 1. Callers that

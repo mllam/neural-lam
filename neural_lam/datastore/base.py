@@ -17,6 +17,14 @@ import xarray as xr
 from pandas.core.indexes.multi import MultiIndex
 
 
+@dataclasses.dataclass
+class CartesianGridShape:
+    """Dataclass to store the shape of a grid."""
+
+    x: int
+    y: int
+
+
 class BaseDatastore(abc.ABC):
     """
     Base class for weather data used in the neural-lam package. A datastore
@@ -56,11 +64,20 @@ class BaseDatastore(abc.ABC):
     of the grid points should be stored in the `x` and `y` coordinates of the
     dataarray or dataset with the `grid_index` dimension as the coordinate for
     each of the `x` and `y` coordinates.
+
+    Rectilinear grid
+    ----------------
+    A datastore whose `grid_index` can be reshaped back into a complete 2D
+    `x`/`y` grid, with possibly non-uniform spacing, should set
+    `is_on_rectilinear_grid` to `True` and implement `grid_shape_state`.
+    `grid_shape_state`, `stack_grid_coords` and `unstack_grid_coords` raise
+    `NotImplementedError` otherwise.
     """
 
     is_ensemble: bool = False
     has_ensemble_forcing: bool = False
     is_forecast: bool = False
+    spatial_coordinates: tuple[str, str] = ("x", "y")
 
     @property
     @abc.abstractmethod
@@ -303,7 +320,8 @@ class BaseDatastore(abc.ABC):
         Returns
         -------
         np.ndarray
-            The x, y coordinates of the dataset with shape `[n_grid_points, 2]`.
+            The x, y coordinates of the dataset with shape
+            `[num_grid_nodes, 2]`.
         """
 
     @property
@@ -365,16 +383,30 @@ class BaseDatastore(abc.ABC):
         return lon_lat
 
     @property
-    @abc.abstractmethod
     def num_grid_points(self) -> int:
         """Return the number of grid points in the dataset.
+
+        Derived from `grid_shape_state`, so datastores not on a rectilinear
+        grid must override this.
 
         Returns
         -------
         int
             The number of grid points in the dataset.
 
+        Raises
+        ------
+        NotImplementedError
+            If the datastore is not on a rectilinear grid and does not
+            override this.
         """
+        if not self.is_on_rectilinear_grid:
+            raise NotImplementedError(
+                f"{type(self).__name__} is not on a rectilinear grid, "
+                "so `num_grid_points` cannot be derived from "
+                "`grid_shape_state` and must be overridden."
+            )
+        return self.grid_shape_state.x * self.grid_shape_state.y
 
     @cached_property
     @abc.abstractmethod
@@ -459,50 +491,19 @@ class BaseDatastore(abc.ABC):
 
         return tuple(dim_order)
 
+    @property
+    def is_on_rectilinear_grid(self) -> bool:
+        """Whether ``grid_index`` can be unstacked into a complete 2D
+        ``x``/``y`` rectilinear grid. The spacing need not be uniform.
 
-@dataclasses.dataclass
-class CartesianGridShape:
-    """Dataclass to store the shape of a grid."""
-
-    x: int
-    y: int
-
-
-class BaseRegularGridDatastore(BaseDatastore):
-    """
-    Base class for weather data stored on a regular grid (like a chess-board,
-    as opposed to a irregular grid where each cell cannot be indexed by just
-    two integers, see https://en.wikipedia.org/wiki/Regular_grid). In addition
-    to the methods and attributes required for weather data in general (see
-    `BaseDatastore`) for regular-gridded source data each `grid_index`
-    coordinate value is assumed to be associated with `x` and `y`-values that
-    allow the processed data-arrays can be reshaped back into into 2D
-    xy-gridded arrays (to change the name of the spatial coordinates the
-    `spatial_coordinates` value should be changed from its default value of
-    `("x", "y")`).
-
-    The following methods and attributes must be implemented for datastore that
-    represents regular-gridded data:
-
-    * `grid_shape_state` (property): 2D shape of the grid for the state
-      variables.
-    * `get_xy` (method): Return the x, y coordinates of the dataset, with the
-      option to not stack the coordinates (so that they are returned as a 2D
-      grid).
-    * `get_lat_lon` (method): Return the latitude/longitude coordinates of
-      the dataset for convenience when plotting.
-
-    The operation of going from (x,y)-indexed regular grid
-    to `grid_index`-indexed data-array is called "stacking" and the reverse
-    operation is called "unstacking". This class provides methods to stack and
-    unstack the spatial grid coordinates of the data-arrays (called
-    `stack_grid_coords` and `unstack_grid_coords` respectively).
-    """
-
-    spatial_coordinates: tuple[str, str] = ("x", "y")
+        Returns
+        -------
+        bool
+            ``False`` unless a subclass opts in.
+        """
+        return False
 
     @cached_property
-    @abc.abstractmethod
     def grid_shape_state(self) -> CartesianGridShape:
         """The shape of the grid for the state variables.
 
@@ -512,29 +513,36 @@ class BaseRegularGridDatastore(BaseDatastore):
             The shape of the grid for the state variables, which has `x` and
             `y` attributes.
 
+        Raises
+        ------
+        NotImplementedError
+            If the datastore is not on a rectilinear grid.
         """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not define `grid_shape_state`; "
+            "this is only available for datastores where "
+            "`is_on_rectilinear_grid` is True."
+        )
 
-    @abc.abstractmethod
-    def get_xy(self, category: str, stacked: bool) -> np.ndarray:
-        """Return the x, y coordinates of the dataset.
+    def _check_on_rectilinear_grid(self, operation: str) -> None:
+        """Guard an operation that requires a complete 2D ``x``/``y`` grid.
 
         Parameters
         ----------
-        category : str
-            The category of the dataset (state/forcing/static).
-        stacked : bool
-            Whether to stack the x, y coordinates.
+        operation : str
+            Name of the calling method, used in the error message.
 
-        Returns
-        -------
-        np.ndarray
-            The x, y coordinates of the dataset, returned differently based on
-            the value of `stacked`:
-
-            * `stacked==True`: shape `(n_grid_points, 2)` where
-              n_grid_points=N_x*N_y.
-            * `stacked==False`: shape `(N_x, N_y, 2)`
+        Raises
+        ------
+        NotImplementedError
+            If the datastore's grid points do not form a complete 2D grid.
         """
+        if not self.is_on_rectilinear_grid:
+            raise NotImplementedError(
+                f"`{operation}` requires the grid points to form a complete "
+                "2D grid (`is_on_rectilinear_grid`); "
+                f"{type(self).__name__} reports that they do not."
+            )
 
     @overload
     def unstack_grid_coords(self, da_or_ds: xr.DataArray) -> xr.DataArray:
@@ -562,10 +570,17 @@ class BaseRegularGridDatastore(BaseDatastore):
         -------
         xr.DataArray or xr.Dataset
             The dataarray or dataset with the grid coordinates unstacked.
+
+        Raises
+        ------
+        NotImplementedError
+            If the datastore is not on a rectilinear grid.
         """
         # Return original data if already unstacked (no grid_index dimension)
         if "grid_index" not in da_or_ds.dims:
             return da_or_ds
+
+        self._check_on_rectilinear_grid("unstack_grid_coords")
 
         # Check whether `grid_index` is a multi-index
         if not isinstance(da_or_ds.indexes.get("grid_index"), MultiIndex):
@@ -624,10 +639,17 @@ class BaseRegularGridDatastore(BaseDatastore):
         -------
         xr.DataArray or xr.Dataset
             The dataarray or dataset with the grid coordinates stacked.
+
+        Raises
+        ------
+        NotImplementedError
+            If the datastore is not on a rectilinear grid.
         """
         # Return original data if already stacked (has grid_index dimension)
         if "grid_index" in da_or_ds.dims:
             return da_or_ds
+
+        self._check_on_rectilinear_grid("stack_grid_coords")
 
         da_or_ds_stacked = da_or_ds.stack(grid_index=self.spatial_coordinates)
 
@@ -646,15 +668,3 @@ class BaseRegularGridDatastore(BaseDatastore):
         dim_order = self.expected_dim_order(category=category)
 
         return da_or_ds_stacked.transpose(*dim_order)
-
-    @property
-    def num_grid_points(self) -> int:
-        """Return the number of grid points in the dataset.
-
-        Returns
-        -------
-        int
-            The number of grid points in the dataset.
-
-        """
-        return self.grid_shape_state.x * self.grid_shape_state.y

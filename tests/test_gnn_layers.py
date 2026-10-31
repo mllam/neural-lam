@@ -9,7 +9,7 @@ import torch
 from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.gnn_layers import InteractionNet, PropagationNet
-from neural_lam.models import MODELS, ARForecaster
+from neural_lam.models import MODELS, DeterministicARForecaster
 from tests.conftest import init_datastore_example
 
 
@@ -74,7 +74,7 @@ def _build_model_and_data(
         output_clamping_upper=config.training.output_clamping.upper,
         **gnn_kwargs,
     )
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = DeterministicARForecaster(predictor, datastore, config=config)
 
     B = 2
     num_grid_nodes = predictor.num_grid_nodes
@@ -95,10 +95,12 @@ def _get_datastore_and_config(graph_name):
     """Create a datastore with graph already built."""
     datastore = init_datastore_example("mdp")
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        }
     )
 
     # Ensure graph exists
