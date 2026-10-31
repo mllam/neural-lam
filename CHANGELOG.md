@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Raise a `ValueError` for `--val_interval` below 1 in `train_model.fit`; `0` previously crashed with a `ZeroDivisionError` inside Lightning after the model was built, and negative values were silently accepted [\#847](https://github.com/mllam/neural-lam/pull/847) @nikhil3495
+
 - Fix shifted test spatial loss map titles and `spatial_loss_maps/loss_t{n}.pdf` filenames when `val_steps_to_log` contains steps outside the evaluation rollout [\#752](https://github.com/mllam/neural-lam/pull/752) @vikramsingh920
 
 - Fix `WeatherDataset.__len__` undercounting samples by `num_future_forcing_steps` when a datastore has no forcing data, sometimes raising a spurious `ValueError` in `__init__` [\#735](https://github.com/mllam/neural-lam/pull/735) @AshNicolus
