@@ -151,7 +151,8 @@ def test_pre_refactor_checkpoint_loads_via_migration(tmp_path):
 
 
 REFERENCE_CHECKPOINT_KEY = (
-    "neural-lam/model-checkpoints/v0.7.0/danra_winds_graph_lam_1level_v1.ckpt"
+    "mllam-testdata/neural-lam/model-checkpoints/v0.7.0/"
+    "danra_winds_graph_lam_1level_v1.ckpt"
 )
 REFERENCE_CHECKPOINT_URL = (
     f"{S3_ENDPOINT_URL}/{S3_BUCKET_NAME}/{REFERENCE_CHECKPOINT_KEY}"
