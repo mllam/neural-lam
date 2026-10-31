@@ -45,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix flux standardization statistics weighting for short final batches and exclude distributed padding samples [\#782](https://github.com/mllam/neural-lam/pull/782) @Karvy-Singh
 
+- Fix `fractional_plot_bundle` docstring describing `fraction` as a denominator of the figure width, when it is a multiplier applied to both the width and the height [\#774](https://github.com/mllam/neural-lam/pull/774) @nikhil3495
+
 ### Maintenance
 
 - Speed up the training tests by trimming Lightning Trainer and DataLoader overhead, and test the spawned DataLoader workers separately [\#812](https://github.com/mllam/neural-lam/pull/812) @Karvy-Singh
