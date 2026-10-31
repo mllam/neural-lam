@@ -70,9 +70,7 @@ class MDPDatastore(BaseDatastore):
         self._config_path = Path(config_path).resolve()
         self._root_path = self._config_path.parent
         self._config = mdp.Config.from_yaml_file(self._config_path)
-        fp_ds = self._root_path / self._config_path.name.replace(
-            ".yaml", ".zarr"
-        )
+        fp_ds = self._config_path.with_suffix(".zarr")
 
         _ds = None
         if reuse_existing and fp_ds.exists():

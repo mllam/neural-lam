@@ -38,6 +38,7 @@ import collections
 import dataclasses
 from datetime import timedelta
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 # Third-party
 import cartopy.crs as ccrs
@@ -306,6 +307,63 @@ def test_boundary_mask(datastore_name):
     if datastore.is_on_rectilinear_grid:
         grid_shape = datastore.grid_shape_state
         assert datastore.boundary_mask.size == grid_shape.x * grid_shape.y
+
+
+@pytest.mark.requires_real_data
+def test_mdp_datastore_yml_config_path(tmp_path):
+    """MDPDatastore derives .zarr path using with_suffix, resolving .yml configs
+    to .zarr instead of the config file itself (#762)."""
+    config_file = tmp_path / "danra.datastore.yml"
+    config_file.write_text("dummy: true\n")
+
+    splits_da = xr.DataArray(
+        np.array(
+            [
+                ["2020-01-01", "2020-01-02"],
+                ["2020-01-02", "2020-01-03"],
+                ["2020-01-03", "2020-01-04"],
+            ]
+        ),
+        dims=("split_name", "split_part"),
+        coords={
+            "split_name": ["train", "val", "test"],
+            "split_part": ["start", "end"],
+        },
+    )
+    mock_ds = xr.Dataset(
+        {
+            "state": (
+                ("time", "grid_index", "state_feature"),
+                np.zeros((1, 4, 1)),
+            ),
+            "splits": splits_da,
+        },
+        coords={"state_feature": ["u"]},
+    )
+
+    zarr_dir = tmp_path / "danra.datastore.zarr"
+    zarr_dir.mkdir()
+
+    mock_input = MagicMock()
+    mock_input.dim_mapping = {"grid_index": MagicMock(dims=["x", "y"])}
+    mock_config = MagicMock()
+    mock_config.inputs = {"grid": mock_input}
+
+    opened_paths = []
+
+    def mock_open_zarr(path, **kwargs):
+        opened_paths.append(Path(path).resolve())
+        return mock_ds
+
+    with (
+        patch(
+            "mllam_data_prep.Config.from_yaml_file", return_value=mock_config
+        ),
+        patch("xarray.open_zarr", side_effect=mock_open_zarr),
+    ):
+        _ = MDPDatastore(config_path=config_file, reuse_existing=True)
+
+    assert opened_paths == [zarr_dir.resolve()]
 
 
 def test_init_datastore_rejects_n_boundary_points_for_non_mdp():
