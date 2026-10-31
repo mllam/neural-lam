@@ -196,6 +196,14 @@ def test_v0_7_0_reference_checkpoint_loads_via_pooch(tmp_path):
     config, datastore, datastore_boundary = nlconfig.load_config_and_datastore(
         danra_config_path
     )
+    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
+    if not graph_dir_path.exists():
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            n_max_levels=1,
+        )
+
     loaded_model = load_forecasting_module_from_checkpoint(
         ckpt_path=ckpt_file,
         config=config,
