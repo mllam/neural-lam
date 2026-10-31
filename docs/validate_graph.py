@@ -1358,7 +1358,7 @@ def validate_graph_directory(
             try:
                 meta = yaml.safe_load(metainfo_file.read_text(encoding="utf-8"))
                 graph_format_spec_version = (
-                    None if meta is None else meta.get("spec_version")
+                    meta.get("spec_version") if isinstance(meta, dict) else None
                 )
             except yaml.YAMLError:
                 graph_format_spec_version = None
