@@ -11,7 +11,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-SKILLS_DIR = Path(__file__).resolve().parent.parent / ".agents" / "skills"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SKILLS_DIR = REPO_ROOT / ".agents" / "skills"
 SKILL_FILES = sorted(list(SKILLS_DIR.glob("*/SKILL.md")))
 
 EXPECTED_SKILLS = [
@@ -37,25 +38,6 @@ PLACEHOLDER_NAMES = {
     "MyCustomPredictor",
 }
 
-PROSE_REFERENCED_SYMBOLS = [
-    ("neural_lam.metrics", "DEFINED_METRICS"),
-    ("neural_lam.metrics", "get_metric"),
-    ("neural_lam.metrics", "mask_and_reduce_metric"),
-    ("neural_lam.loss_weighting", "get_manual_state_feature_weights"),
-    ("neural_lam.loss_weighting", "get_uniform_state_feature_weights"),
-    ("neural_lam.datastore", "DATASTORES"),
-    ("neural_lam.datastore", "DATASTORE_CLASSES"),
-    ("neural_lam.datastore.base", "BaseDatastore"),
-    ("neural_lam.models", "ForecasterModule"),
-    ("neural_lam.models", "MODELS"),
-    ("neural_lam.models.step_predictors.base", "StepPredictor"),
-    ("neural_lam.models.step_predictors.graph.base", "BaseGraphModel"),
-    ("neural_lam.api", "create_graph"),
-    ("neural_lam.api", "train"),
-    ("neural_lam.api", "evaluate"),
-    ("tests.dummy_datastore", "DummyDatastore"),
-]
-
 
 def parse_frontmatter(content: str) -> dict:
     """Extract YAML frontmatter from markdown file."""
@@ -68,6 +50,34 @@ def extract_python_blocks(content: str) -> list[str]:
     """Extract python code snippets from markdown."""
     pattern = r"```python\n(.*?)```"
     return re.findall(pattern, content, re.DOTALL)
+
+
+def extract_prose_symbols() -> list[str]:
+    """Dynamically extract code symbols mentioned in skill markdown files."""
+    symbol_pattern = re.compile(
+        r"`((?:neural_lam|tests)\.[a-zA-Z0-9_.]+)(?:\([^`]*\))?`"
+    )
+    found_symbols = set()
+    for skill_file in SKILL_FILES:
+        text = skill_file.read_text(encoding="utf-8")
+        for match in symbol_pattern.finditer(text):
+            found_symbols.add(match.group(1))
+    return sorted(list(found_symbols))
+
+
+def extract_prose_paths() -> list[str]:
+    """
+    Dynamically extract repo-relative paths mentioned in skill markdown files.
+    """
+    path_pattern = re.compile(
+        r"`((?:neural_lam|tests|docs)/[a-zA-Z0-9_./]+\.[a-zA-Z0-9_]+)`"
+    )
+    found_paths = set()
+    for skill_file in SKILL_FILES:
+        text = skill_file.read_text(encoding="utf-8")
+        for match in path_pattern.finditer(text):
+            found_paths.add(match.group(1))
+    return sorted(list(found_paths))
 
 
 def test_expected_skills_exist():
@@ -222,82 +232,44 @@ def test_skill_code_block_imports_exist(skill_file: Path):
                         )
 
 
-@pytest.mark.parametrize(
-    ("module_path", "symbol_name"),
-    PROSE_REFERENCED_SYMBOLS,
-)
-def test_skill_prose_referenced_symbols_exist(
-    module_path: str, symbol_name: str
-):
-    """Verify classes and registries mentioned in skill prose exist."""
-    module = importlib.import_module(module_path)
-    assert hasattr(module, symbol_name), (
-        f"Module '{module_path}' has no attribute '{symbol_name}'"
+@pytest.mark.parametrize("symbol", extract_prose_symbols())
+def test_skill_referenced_symbols_exist(symbol: str):
+    """
+    Verify code symbols in skills resolve to real modules or attributes.
+    """
+    parts = symbol.split(".")
+    try:
+        importlib.import_module(symbol)
+        return
+    except ImportError:
+        pass
+
+    module_name = ".".join(parts[:-1])
+    attr_name = parts[-1]
+    module = importlib.import_module(module_name)
+    assert hasattr(module, attr_name), (
+        f"Module '{module_name}' has no attribute '{attr_name}'"
+    )
+
+
+@pytest.mark.parametrize("rel_path", extract_prose_paths())
+def test_skill_referenced_paths_exist(rel_path: str):
+    """Verify file paths referenced in skills exist in the repository."""
+    target_path = REPO_ROOT / rel_path
+    assert target_path.exists(), (
+        f"Referenced path '{rel_path}' does not exist on disk"
     )
 
 
 @pytest.mark.requires_training
-def test_smoke_train_workflow_execution(tmp_path: Path):
-    """Verify that the end-to-end smoke-train workflow executes cleanly."""
-    # Standard library
-    import os
-
-    # First-party
-    from neural_lam import api
-    from neural_lam.config import DatastoreSelection, NeuralLAMConfig
-    from neural_lam.datastore import DATASTORES
-    from tests.dummy_datastore import DummyDatastore
-
-    os.environ["WANDB_MODE"] = "offline"
-    DATASTORES[DummyDatastore.SHORT_NAME] = DummyDatastore
-
-    datastore = DummyDatastore(n_grid_points=100, n_timesteps=15)
-    config = NeuralLAMConfig(
-        datastores={
-            "main": DatastoreSelection(
-                kind=datastore.SHORT_NAME,
-                config_path=str(datastore.root_path),
-            )
-        }
+def test_smoke_train_workflow_execution():
+    """Verify that verbatim smoke-train workflow executes cleanly."""
+    smoke_skill = SKILLS_DIR / "smoke-train" / "SKILL.md"
+    content = smoke_skill.read_text(encoding="utf-8")
+    blocks = extract_python_blocks(content)
+    assert len(blocks) == 1, (
+        f"Expected exactly 1 python block in {smoke_skill}, found {len(blocks)}"
     )
-    api.create_graph(datastore=datastore, name="1level", archetype="keisler")
-    runs_root = tmp_path / "runs"
-    train_run = api.train(
-        datastore=datastore,
-        config=config,
-        model="graph_lam",
-        graph="1level",
-        epochs=1,
-        ar_steps_train=1,
-        val_interval=1,
-        num_sanity_val_steps=0,
-        batch_size=1,
-        num_workers=0,
-        hidden_dim=4,
-        processor_layers=1,
-        hidden_layers=1,
-        runs_root=str(runs_root),
-        logger_run_name="smoke_train_skill_test",
-        val_steps_to_log=[1],
-    )
-    assert train_run.checkpoint_path is not None
-    assert train_run.checkpoint_path.exists()
 
-    eval_run = api.evaluate(
-        datastore=datastore,
-        config=config,
-        load=str(train_run.checkpoint_path),
-        model="graph_lam",
-        graph="1level",
-        hidden_dim=4,
-        processor_layers=1,
-        hidden_layers=1,
-        batch_size=1,
-        num_workers=0,
-        ar_steps_eval=2,
-        val_steps_to_log=[1],
-        create_gif=True,
-        runs_root=str(runs_root),
-        logger_run_name="smoke_eval_skill_test",
-    )
-    assert eval_run.run_dir.exists()
+    code = blocks[0]
+    exec(code, {"__name__": "__main__"})  # noqa: S102
