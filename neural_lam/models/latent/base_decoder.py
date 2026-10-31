@@ -89,15 +89,15 @@ class BaseGraphLatentDecoder(nn.Module):
         Parameters
         ----------
         original_grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Embedded grid input
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Embedded grid input
             features, used as the sender representation when encoding the
             grid onto the mesh.
         latent_rep : torch.Tensor
-            Shape ``(B, num_mesh_nodes, d_h)``. Latent sample embedded to
-            the internal dimensionality ``d_h``. Where this enters the
+            Shape ``(B, num_mesh_nodes, hidden_dim)``. Latent sample embedded to
+            the internal dimensionality ``hidden_dim``. Where this enters the
             message passing is up to the concrete decoder.
         residual_grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Residually updated grid
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Residually updated grid
             representation, used as the receiver representation when
             decoding the mesh back to the grid. This keeps a direct path
             from the grid input to the output.
@@ -109,7 +109,7 @@ class BaseGraphLatentDecoder(nn.Module):
         Returns
         -------
         torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Combined grid
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Combined grid
             representation, incorporating both the grid input and the
             latent sample.
         """
@@ -133,7 +133,7 @@ class BaseGraphLatentDecoder(nn.Module):
         Parameters
         ----------
         grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Embedded grid input
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Embedded grid input
             features (states, forcing and static features).
         latent_samples : torch.Tensor
             Shape ``(B, num_mesh_nodes, latent_dim)``. Sample of the

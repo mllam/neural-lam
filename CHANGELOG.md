@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add agent skills for common neural-lam workflows (`add-step-predictor`, `add-datastore`, `add-metric`, `add-loss`, `create-graph`, `smoke-train`, `prepare-pr`, `review-pr`) in `.agents/skills/` following the Agent Skills standard, with declarative pointers in `AGENTS.md`, and an anti-rot CI test suite in `tests/test_skills.py` [\#821](https://github.com/mllam/neural-lam/pull/821) @Sharkyii
 
+- Add deterministic and probabilistic forecaster/module interfaces with
+  shared autoregressive unrolling and forecaster-owned training objectives.
+  [\#700](https://github.com/mllam/neural-lam/pull/700) @Sir-Sloth-The-Lazy
+
 - Add the `hello_world_danra.py` marimo tutorial (prepare the DANRA example data, build a graph, train and evaluate `graph_lam` on CPU, all through `neural_lam.api`), executed at docs build time so the docs page shows its outputs; `train_model` now exits non-zero on errors (`@logger.catch(reraise=True)`) [\#577](https://github.com/mllam/neural-lam/pull/577) @Sharkyii
 
 - Add a high-level programmatic Python API (`neural_lam.api`) exposing typed keyword-only `train`, `evaluate` and `create_graph` functions; `train` and `evaluate` return a `Run` handle with the run's checkpoint and plot paths. The training CLI now parses into the typed run config dataclasses (`ModelConfig`, `TrainRunConfig`, `DataConfig`, `ComputeConfig`, `LoggingConfig`) and calls the same `neural_lam.train_model.fit` [\#715](https://github.com/mllam/neural-lam/pull/715) @GiGiKoneti
@@ -45,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Speed up the training tests by trimming Lightning Trainer and DataLoader overhead, and test the spawned DataLoader workers separately [\#812](https://github.com/mllam/neural-lam/pull/812) @Karvy-Singh
+
 - Fix the GPU CI job silently running on CPU: use an NVIDIA `g4dn.xlarge` cirun instance instead of the AMD `g4ad.xlarge`, install `--extra gpu-cu128` to match the runner's CUDA 12.2 driver, assert `torch.cuda.is_available()`, and run only the GPU-relevant tests there [\#802](https://github.com/mllam/neural-lam/pull/802) @varma1221
 
 - Add a `lychee` pre-commit hook checking Markdown links and section anchors (config in `.github/lychee.toml`, run once per push in CI) and a PR-template reminder to update `CONTRIBUTING.md` / `AGENTS.md` [\#738](https://github.com/mllam/neural-lam/pull/738) @KumarShivam1908
@@ -52,6 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `requires_real_data` and `requires_training` pytest markers (the latter replaces `slow`), an automatic `quick` marker for tests needing neither, and build the dummy graph once in the plotting tests, so `pytest -m quick` gives a fast check; import mlflow lazily in `CustomMLFlowLogger` so plain `import neural_lam` no longer loads it. [\#750](https://github.com/mllam/neural-lam/pull/750) @KumarShivam1908
 
 - Modernize linting and formatting toolchain by migrating `black`/`isort`/`flake8` to Ruff (with `ANN` rules enforcing type annotation coverage in `neural_lam/`) and adding `pyproject-fmt`, `python-check-blanket-noqa`, and `no-commit-to-branch` pre-commit hooks [\#614](https://github.com/mllam/neural-lam/pull/614) @Shivampal157
+
+- Rename remaining non-canonical dimension names (`d_*`, `N_*`, `M_*`) in shape annotations and docstrings to Dimension Glossary names [\#825](https://github.com/mllam/neural-lam/pull/825) @Omega-127
 
 ## [v0.7.0](https://github.com/mllam/neural-lam/releases/tag/v0.7.0)
 
@@ -67,6 +75,7 @@ It also contains a number of smaller improvements, bug fixes and maintenance upd
 - Add `--num_sanity_val_steps` CLI argument to control sanity validation steps before training [\#694](https://github.com/mllam/neural-lam/pull/694)
 
 - Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#675](https://github.com/mllam/neural-lam/pull/675) @GiGiKoneti
+
 
 - Add `PropagationNet` GNN layer that incentivises directional message
   propagation from sender to receiver nodes, and expose it alongside
@@ -87,18 +96,18 @@ It also contains a number of smaller improvements, bug fixes and maintenance upd
 ### Changed
 
 - Move data normalization from CPU (`WeatherDataset`) to GPU
-  (`ForecasterModule.on_after_batch_transfer`) for improved performance and
+  (`BaseForecastingModule.on_after_batch_transfer`) for improved performance and
   multi-GPU compatibility. `WeatherDataset` / `WeatherDataModule` no longer
   take a `standardize` argument.
   [\#239](https://github.com/mllam/neural-lam/pull/239) @Sharkyii
 
-- Split `ARModel` into `ForecasterModule`, `Forecaster` and
+- Split `ARModel` into `BaseForecastingModule`, `Forecaster` and
   `StepPredictor`, and reorganise `neural_lam.models` to mirror the new
   hierarchy (`forecasters/`, `step_predictors/`, `step_predictors/graph/`).
   Decouple `NeuralLAMConfig` from the predictor stack: `StepPredictor` and
   the graph-based predictors now take `output_clamping_lower` /
   `output_clamping_upper` dicts directly instead of the full config, so
-  `NeuralLAMConfig` no longer propagates below `ForecasterModule`.
+  `NeuralLAMConfig` no longer propagates below `BaseForecastingModule`.
   [\#208](https://github.com/mllam/neural-lam/pull/208)
   @Sir-Sloth-The-Lazy
 
