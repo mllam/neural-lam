@@ -32,7 +32,7 @@ from .dummy_datastore import DummyDatastore
 def _build_forecaster_module(
     datastore: DummyDatastore,
 ) -> DeterministicForecastingModule:
-    """Build the minimal `DeterministicForecastingModule` the checkpoint tests need."""
+    """Build the minimal forecasting module the checkpoint tests need."""
     graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
     if not graph_dir_path.exists():
         create_graph_from_datastore(
@@ -171,6 +171,7 @@ REFERENCE_CHECKPOINT_HASH = (
 )
 
 
+@pytest.mark.requires_real_data
 def test_v0_7_0_reference_checkpoint_loads_via_pooch(tmp_path):
     """
     Verify that an authentic v0.7.0 release checkpoint fetched via pooch
@@ -192,11 +193,14 @@ def test_v0_7_0_reference_checkpoint_loads_via_pooch(tmp_path):
     danra_config_path = (
         DATASTORE_EXAMPLES_ROOT_PATH / "mdp/danra_100m_winds/config.yaml"
     )
-    config, datastore = nlconfig.load_config_and_datastore(danra_config_path)
+    config, datastore, datastore_boundary = nlconfig.load_config_and_datastore(
+        danra_config_path
+    )
     loaded_model = load_forecasting_module_from_checkpoint(
         ckpt_path=ckpt_file,
         config=config,
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
     )
 
     assert loaded_model is not None
@@ -206,17 +210,17 @@ def test_v0_7_0_reference_checkpoint_loads_via_pooch(tmp_path):
     # Single forward step
     B, num_grid_nodes = 1, predictor.num_grid_nodes
     d_state = datastore.get_num_data_vars(category="state")
-    d_forcing = datastore.get_num_data_vars(category="forcing") * (
-        predictor.num_past_forcing_steps
-        + predictor.num_future_forcing_steps
-        + 1
+    d_forcing = (
+        predictor.grid_input_dim
+        - 2 * d_state
+        - predictor.grid_static_features.shape[1]
     )
     init_states = torch.ones(B, 2, num_grid_nodes, d_state)
     forcing_features = torch.ones(B, 1, num_grid_nodes, d_forcing)
     boundary_states = torch.ones(B, 1, num_grid_nodes, d_state)
 
     with torch.no_grad():
-        pred = loaded_model.forecaster(
+        pred, _ = loaded_model.forecaster(
             init_states, forcing_features, boundary_states
         )
 
