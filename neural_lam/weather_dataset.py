@@ -175,7 +175,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         Raises
         ------
         ValueError
-            If the datastore does not provide state data, if the configured
+            If ``split`` is not one of ``"train"``, ``"val"``, or ``"test"``,
+            if any forcing or boundary window parameter is negative, if the
+            datastore does not provide state data, if the configured
             ``ar_steps`` and forcing windows leave zero samples in ``split``,
             or if the state/forcing dimension order does not match the
             datastore's expected dimension order.
@@ -183,6 +185,24 @@ class WeatherDataset(torch.utils.data.Dataset):
             If ``datastore_boundary`` has ensemble forcing.
         """
         super().__init__()
+
+        valid_splits = ("train", "val", "test")
+        if split not in valid_splits:
+            raise ValueError(
+                f"split must be one of {valid_splits}, got '{split}'."
+            )
+
+        window_params = {
+            "num_past_forcing_steps": num_past_forcing_steps,
+            "num_future_forcing_steps": num_future_forcing_steps,
+            "num_past_boundary_steps": num_past_boundary_steps,
+            "num_future_boundary_steps": num_future_boundary_steps,
+        }
+        for param_name, val in window_params.items():
+            if isinstance(val, bool) or not isinstance(val, int) or val < 0:
+                raise ValueError(
+                    f"{param_name} must be a non-negative integer, got {val}."
+                )
 
         self.split = split
         self.ar_steps = ar_steps
@@ -979,15 +999,27 @@ class WeatherDataset(torch.utils.data.Dataset):
         target_times : torch.Tensor
             Times of the target steps, shape ``(pred_steps,)``.
 
+        Raises
+        ------
+        TypeError
+            If ``idx`` is not an integer.
+        IndexError
+            If ``idx`` is out of range for the dataset.
         """
+        if isinstance(idx, bool) or not isinstance(idx, int):
+            raise TypeError(
+                f"WeatherDataset indices must be integers, got "
+                f"{type(idx).__name__}."
+            )
+
         n_samples = len(self)
-        if idx < 0:
-            idx += n_samples
-        if not 0 <= idx < n_samples:
+        resolved_idx = idx + n_samples if idx < 0 else idx
+        if not 0 <= resolved_idx < n_samples:
             raise IndexError(
                 f"index {idx} out of range for WeatherDataset of length "
                 f"{n_samples}"
             )
+        idx = resolved_idx
 
         (
             da_init_states,

@@ -321,15 +321,56 @@ def test_dataset_out_of_range_raises_index_error():
     )
     n = len(dataset)
 
-    with pytest.raises(IndexError):
+    with pytest.raises(
+        IndexError, match=f"index {n} out of range for WeatherDataset"
+    ):
         _ = dataset[n]
-    with pytest.raises(IndexError):
+    with pytest.raises(
+        IndexError, match=f"index {-n - 1} out of range for WeatherDataset"
+    ):
         _ = dataset[-n - 1]
 
     # Negative indexing within bounds resolves to the same sample as the
     # corresponding positive index.
     dataset[-1]
     dataset[n - 1]
+
+
+@pytest.mark.parametrize("invalid_key", ["0", 1.5, True, False, [0], None])
+def test_weather_dataset_non_integer_index_raises_type_error(invalid_key):
+    """Test that non-integer indices raise TypeError."""
+    datastore = DummyDatastore(n_grid_points=4, n_timesteps=10)
+    dataset = WeatherDataset(datastore=datastore)
+    with pytest.raises(
+        TypeError,
+        match="WeatherDataset indices must be integers",
+    ):
+        _ = dataset[invalid_key]
+
+
+@pytest.mark.parametrize(
+    "param",
+    [
+        "num_past_forcing_steps",
+        "num_future_forcing_steps",
+        "num_past_boundary_steps",
+        "num_future_boundary_steps",
+    ],
+)
+@pytest.mark.parametrize("invalid_val", [-1, -5, "1", 1.5, True])
+def test_weather_dataset_window_parameter_validation_raises(param, invalid_val):
+    """Test that negative or non-integer window parameters raise ValueError."""
+    datastore = DummyDatastore(n_grid_points=4, n_timesteps=10)
+    with pytest.raises(ValueError, match="must be a non-negative integer"):
+        WeatherDataset(datastore=datastore, **{param: invalid_val})
+
+
+@pytest.mark.parametrize("invalid_split", ["foo", "eval", "training", ""])
+def test_weather_dataset_invalid_split_raises(invalid_split):
+    """Test that an invalid split name raises ValueError."""
+    datastore = DummyDatastore(n_grid_points=4, n_timesteps=10)
+    with pytest.raises(ValueError, match="split must be one of"):
+        WeatherDataset(datastore=datastore, split=invalid_split)
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
