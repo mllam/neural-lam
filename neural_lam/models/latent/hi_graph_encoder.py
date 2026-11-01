@@ -44,13 +44,13 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
         latent_dim : int
             Dimensionality of the latent variable at each mesh node.
         g2m_edge_index : torch.Tensor
-            Shape ``(2, M_g2m)``. Edge index of grid-to-mesh edges.
+            Shape ``(2, num_edges_g2m)``. Edge index of grid-to-mesh edges.
         m2m_edge_index : BufferList
             Per-level edge indices of intra-level mesh edges, each of shape
-            ``(2, M_m2m[l])``.
+            ``(2, num_edges_m2m[l])``.
         mesh_up_edge_index : BufferList
             Per-level edge indices of upward inter-level mesh edges, each of
-            shape ``(2, M_up[l])``.
+            shape ``(2, num_edges_mesh_up[l])``.
         hidden_dim : int
             Dimensionality of internal node and edge representations.
         intra_level_layers : int
@@ -136,13 +136,14 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
         Parameters
         ----------
         grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Grid input representation.
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Grid input
+            representation.
         graph_emb : dict
             Embedded graph node and edge features, with at least entries
-            ``mesh``: list of ``(B, num_mesh_nodes[l], d_h)``,
-            ``g2m``: ``(B, M_g2m, d_h)``,
-            ``m2m``: list of ``(B, M_m2m[l], d_h)`` and
-            ``mesh_up``: list of ``(B, M_up[l], d_h)``.
+            ``mesh``: list of ``(B, num_mesh_nodes[l], hidden_dim)``,
+            ``g2m``: ``(B, num_edges_g2m, hidden_dim)``,
+            ``m2m``: list of ``(B, num_edges_m2m[l], hidden_dim)`` and
+            ``mesh_up``: list of ``(B, num_edges_mesh_up[l], hidden_dim)``.
         **kwargs
             Ignored.
 
