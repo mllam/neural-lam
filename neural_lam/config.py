@@ -283,6 +283,9 @@ class ModelConfig:
         Number of hidden layers in MLPs.
     processor_layers : int, default 4
         Number of GNN layers in processor GNN.
+    same_level_processor_layers : list of int or None, default None
+        Number of same-level GNN layers at each HiLAM level,
+        ordered from finest to coarsest.
     mesh_aggr : str, default "sum"
         Aggregation method for m2m GNN layers ("sum" or "mean").
     output_std : bool, default False
@@ -302,6 +305,7 @@ class ModelConfig:
     hidden_dim: int = 64
     hidden_layers: int = 1
     processor_layers: int = 4
+    same_level_processor_layers: list[int] | None = None
     mesh_aggr: str = "sum"
     output_std: bool = False
     g2m_gnn_type: str = "InteractionNet"
