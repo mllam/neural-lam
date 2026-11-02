@@ -1,0 +1,79 @@
+name: AI first-pass PR review
+
+# Split into two jobs so the job holding the LLM API secret (`analyse`) only has
+# read access to GitHub, while the job with `pull-requests: write` (`publish`)
+# holds no API secret and never calls a model.
+on:
+  pull_request_target:
+    types: [opened, ready_for_review]
+
+permissions: {}
+
+jobs:
+  analyse:
+    if: >-
+      vars.AI_REVIEW_ENABLED == 'true' &&
+      !github.event.pull_request.draft &&
+      github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    environment: ai-review
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      # pull_request_target checks out the default branch, never the PR head
+      - name: Checkout default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Analyse PR
+        run: >-
+          python3 -I .github/ai_review/analyse.py
+          --repo "$GITHUB_REPOSITORY"
+          --pr "$PR_NUMBER"
+          --output result.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          AI_REVIEW_PROVIDER: ${{ vars.AI_REVIEW_PROVIDER }}
+          AI_REVIEW_MODEL: ${{ vars.AI_REVIEW_MODEL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+      - name: Upload analysis result
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ai-review-result
+          path: result.json
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: analyse
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download analysis result
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ai-review-result
+
+      - name: Publish review
+        run: >-
+          python3 -I .github/ai_review/publish.py result.json
+          --repo "$GITHUB_REPOSITORY"
+          --pr "$PR_NUMBER"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
