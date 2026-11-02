@@ -16,7 +16,8 @@ class PersistencePredictor(StepPredictor):
     At each AR step the predicted next state is simply the current state,
     i.e. ``X_{t+1} = X_t``.  This provides a persistence (no-change)
     baseline that can be evaluated through the standard
-    ``ForecasterModule`` / ``ARForecaster`` pipeline.
+    ``DeterministicForecastingModule`` / ``DeterministicARForecaster``
+    pipeline.
     """
 
     def __init__(

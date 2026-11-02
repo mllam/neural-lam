@@ -320,7 +320,8 @@ class BaseDatastore(abc.ABC):
         Returns
         -------
         np.ndarray
-            The x, y coordinates of the dataset with shape `[n_grid_points, 2]`.
+            The x, y coordinates of the dataset with shape
+            `[num_grid_nodes, 2]`.
         """
 
     @property
