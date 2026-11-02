@@ -663,8 +663,8 @@ class BaseDatastore(abc.ABC):
                         "Multiple dimensions ending with '_feature' found in "
                         f"dataarray: {da_or_ds_stacked}. Cannot infer category."
                     )
-                category = dim.split("_")[0]
+                category = dim.removesuffix("_feature")
 
         dim_order = self.expected_dim_order(category=category)
 
-        return da_or_ds_stacked.transpose(*dim_order)
+        return da_or_ds_stacked.transpose(..., *dim_order)
