@@ -171,3 +171,13 @@ def test_load_config_and_datastore_forwards_n_boundary_points(tmp_path):
     grid_shape = datastore.grid_shape_state
     expected_interior = (grid_shape.x - 10) * (grid_shape.y - 10)
     assert int((datastore.boundary_mask.values == 0).sum()) == expected_interior
+
+
+def test_datastore_selection_rejects_negative_n_boundary_points():
+    """DatastoreSelection rejects negative n_boundary_points."""
+    with pytest.raises(
+        ValueError, match="n_boundary_points must be non-negative"
+    ):
+        nlconfig.DatastoreSelection(
+            kind="mdp", config_path="", n_boundary_points=-1
+        )

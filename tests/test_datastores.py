@@ -316,6 +316,30 @@ def test_init_datastore_rejects_n_boundary_points_for_non_mdp():
         )
 
 
+@pytest.mark.parametrize("invalid_n", [-1, -5])
+def test_init_datastore_rejects_negative_n_boundary_points(invalid_n):
+    """`init_datastore` rejects negative `n_boundary_points`."""
+    with pytest.raises(
+        ValueError, match="n_boundary_points must be non-negative"
+    ):
+        init_datastore(
+            datastore_kind="mdp", config_path="", n_boundary_points=invalid_n
+        )
+
+
+@pytest.mark.requires_real_data
+@pytest.mark.parametrize("invalid_n", [-1, -10])
+def test_mdp_datastore_rejects_negative_n_boundary_points(invalid_n):
+    """`MDPDatastore` rejects negative `n_boundary_points`."""
+    with pytest.raises(
+        ValueError, match="n_boundary_points must be non-negative"
+    ):
+        MDPDatastore(
+            config_path=DATASTORES_EXAMPLES["mdp"],
+            n_boundary_points=invalid_n,
+        )
+
+
 @pytest.mark.requires_real_data
 @pytest.mark.parametrize("n_boundary_points", [0, 1, 30])
 def test_mdp_boundary_mask_n_boundary_points(n_boundary_points):

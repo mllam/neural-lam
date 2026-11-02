@@ -52,6 +52,11 @@ class DatastoreSelection:
         """
         if self.kind not in DATASTORES:
             raise ValueError(f"Datastore kind {self.kind} is not implemented")
+        if self.n_boundary_points is not None and self.n_boundary_points < 0:
+            raise ValueError(
+                "n_boundary_points must be non-negative, got "
+                f"{self.n_boundary_points}"
+            )
 
 
 @dataclasses.dataclass

@@ -67,6 +67,12 @@ class MDPDatastore(BaseDatastore):
             train/val/test splits.
 
         """
+        if n_boundary_points < 0:
+            raise ValueError(
+                f"n_boundary_points must be non-negative, got "
+                f"{n_boundary_points}"
+            )
+
         self._config_path = Path(config_path).resolve()
         self._root_path = self._config_path.parent
         self._config = mdp.Config.from_yaml_file(self._config_path)
