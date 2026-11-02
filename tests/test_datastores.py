@@ -373,7 +373,10 @@ def test_get_xy(datastore_name):
         assert isinstance(xy_stacked, np.ndarray)
         assert isinstance(xy_unstacked, np.ndarray)
 
-        nx, ny = datastore.rectilinear_grid_shape.x, datastore.rectilinear_grid_shape.y
+        nx, ny = (
+            datastore.rectilinear_grid_shape.x,
+            datastore.rectilinear_grid_shape.y,
+        )
 
         # for stacked=True, the shape should be (n_grid_points, 2)
         assert xy_stacked.ndim == 2
@@ -397,7 +400,10 @@ def test_get_xy(datastore_name):
                     "Datastore does not implement `BaseCartesianDatastore`"
                 )
 
-            nx, ny = datastore.rectilinear_grid_shape.x, datastore.rectilinear_grid_shape.y
+            nx, ny = (
+                datastore.rectilinear_grid_shape.x,
+                datastore.rectilinear_grid_shape.y,
+            )
 
             lonlat = datastore.get_lat_lon(category="state")
             lonlat_grid = lonlat.reshape(nx, ny, 2)
@@ -472,7 +478,10 @@ def test_dataarray_shapes(datastore_name):
 
     reshaped_tensor = (
         torch.tensor(static_da.to_numpy(), dtype=torch.float32)
-        .reshape(datastore.rectilinear_grid_shape.x, datastore.rectilinear_grid_shape.y)
+        .reshape(
+            datastore.rectilinear_grid_shape.x,
+            datastore.rectilinear_grid_shape.y,
+        )
         .squeeze()
     )
 

@@ -471,7 +471,7 @@ class DummyDatastore(BaseDatastore):
         Returns
         -------
         CartesianGridShape:
-            The shape of the rectilinear grid, shared by all categories, which has `x` and
+            The shape of the rectilinear grid, which has `x` and
             `y` attributes.
         """
 
@@ -841,7 +841,10 @@ def set_framed_boundary(
     datastore: DummyDatastore, width: int = 1
 ) -> np.ndarray:
     """Replace the random boundary mask with a frame of `width` cells."""
-    shape = (datastore.rectilinear_grid_shape.x, datastore.rectilinear_grid_shape.y)
+    shape = (
+        datastore.rectilinear_grid_shape.x,
+        datastore.rectilinear_grid_shape.y,
+    )
     mask = np.ones(shape, dtype=int)
     mask[width:-width, width:-width] = 0
     # `grid_index` is the stacked ("x", "y") dimension, so a C-order flatten

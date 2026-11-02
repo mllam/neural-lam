@@ -390,7 +390,10 @@ def test_plot_spatial_error_crop_to_interior_changes_extent() -> None:
     """Check interior cropping forwards interior lon/lat bounds."""
     datastore = init_datastore_example("dummydata")
     n_grid = datastore.num_grid_points
-    grid_shape = (datastore.grid_shape_state.x, datastore.grid_shape_state.y)
+    grid_shape = (
+        datastore.rectilinear_grid_shape.x,
+        datastore.rectilinear_grid_shape.y,
+    )
 
     boundary_mask = np.ones(grid_shape, dtype=int)
     boundary_mask[2:-2, 2:-2] = 0
