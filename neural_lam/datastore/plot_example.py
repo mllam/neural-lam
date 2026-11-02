@@ -174,9 +174,10 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    assert args.datastore_config_path is not None, (
-        "Specify your datastore config with --datastore_config_path"
-    )
+    if args.datastore_config_path is None:
+        raise ValueError(
+            "Specify your datastore config with --datastore_config_path"
+        )
 
     selection = dict(args.selection)
     index_selection = dict(args.index_selection)
