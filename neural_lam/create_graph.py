@@ -443,7 +443,7 @@ def create_graph(
     nleaf = nx**nlev  # leaves at the bottom = nleaf**2
 
     mesh_levels = nlev - 1
-    if n_max_levels:
+    if n_max_levels is not None:
         # Limit the levels in mesh graph
         mesh_levels = min(mesh_levels, n_max_levels)
 
@@ -459,6 +459,12 @@ def create_graph(
             plt.show()
 
         G.append(g)
+
+    if not G:
+        raise ValueError(
+            "No mesh levels were generated. Ensure grid dimensions (xy shape) "
+            "are at least 9x9 and n_max_levels >= 1."
+        )
 
     if hierarchical:
         # Relabel nodes of each level with level index first
