@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Cache static mesh and edge feature embeddings across autoregressive rollout steps in `ARForecaster` for `GraphLAM` and hierarchical graph models [\#817](https://github.com/mllam/neural-lam/pull/817) @Sharkyii
+
 - Add deterministic and probabilistic forecaster/module interfaces with
   shared autoregressive unrolling and forecaster-owned training objectives.
   [\#700](https://github.com/mllam/neural-lam/pull/700) @Sir-Sloth-The-Lazy
