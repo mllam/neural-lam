@@ -393,6 +393,67 @@ def crps_gauss(
     )
 
 
+def crps_ens_fair(
+    ensemble: torch.Tensor,
+    target: torch.Tensor,
+    mask: torch.Tensor | None = None,
+    average_grid: bool = True,
+    sum_vars: bool = True,
+    ens_dim: int = 1,
+) -> torch.Tensor:
+    """Compute fair CRPS from independent ensemble samples.
+
+    Uses sorted ranks to compute the pairwise spread term with memory
+    linear in the number of members. Gradients are retained for training.
+
+    Parameters
+    ----------
+    ensemble : torch.Tensor
+        Target shape with an additional ensemble dimension of size ``S``
+        at ``ens_dim``, normally ``(B, S, pred_steps, num_grid_nodes,
+        num_state_vars)``. At least two independent members are required.
+    target : torch.Tensor
+        Shape ``(..., num_grid_nodes, num_state_vars)``. Ground truth.
+    mask : torch.Tensor or None, optional
+        Shape ``(num_grid_nodes,)``. Boolean mask selecting grid nodes.
+    average_grid : bool, optional
+        Average over selected grid nodes. Default True.
+    sum_vars : bool, optional
+        Sum over state variables. Default True.
+    ens_dim : int, optional
+        Ensemble dimension in ``ensemble``. Default 1.
+
+    Returns
+    -------
+    torch.Tensor
+        CRPS with the ensemble dimension removed, reduced according to
+        ``mask``, ``average_grid`` and ``sum_vars`` as for ``nll``.
+
+    Raises
+    ------
+    ValueError
+        If there are fewer than two members.
+    """
+    num_members = ensemble.shape[ens_dim]
+    if num_members < 2:
+        raise ValueError("Fair CRPS requires at least two ensemble members")
+    first = (ensemble - target.unsqueeze(ens_dim)).abs().mean(dim=ens_dim)
+    ordered = ensemble.sort(dim=ens_dim).values
+    rank_shape = [1] * ensemble.ndim
+    rank_shape[ens_dim] = num_members
+    ranks = torch.arange(
+        1,
+        num_members + 1,
+        device=ensemble.device,
+        dtype=ensemble.dtype,
+    ).view(rank_shape)
+    spread = ((2 * ranks - num_members - 1) * ordered).sum(dim=ens_dim)
+    entry_crps = first - spread / (num_members * (num_members - 1))
+    return mask_and_reduce_metric(
+        entry_crps, mask=mask, average_grid=average_grid, sum_vars=sum_vars
+    )
+
+
 DEFINED_METRICS: dict[str, Callable[..., torch.Tensor]] = {
     "mse": mse,
     "mae": mae,

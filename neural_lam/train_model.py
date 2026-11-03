@@ -126,6 +126,24 @@ def build_predictor(
         Predictor configured for its graph family.
     """
     if issubclass(predictor_class, (GraphEFM, GraphEFMMultiScale)):
+        defaults = ModelConfig()
+        ignored = {
+            name: getattr(defaults, name)
+            for name in (
+                "processor_layers",
+                "mesh_aggr",
+                "mesh_up_gnn_type",
+                "mesh_down_gnn_type",
+            )
+        }
+        ignored["loss"] = TrainRunConfig().loss
+        for name, default in ignored.items():
+            if getattr(args, name, default) != default:
+                logger.warning(
+                    "--{} has no effect for Graph-EFM; use the "
+                    "probabilistic configuration section instead.",
+                    name,
+                )
         prob = config.probabilistic
         prefix = (
             "intra_level" if issubclass(predictor_class, GraphEFM) else "m2m"
@@ -185,7 +203,6 @@ def build_forecaster_module(
     BaseForecaster,
     type[BaseForecastingModule],
     dict[str, Any],
-    str,
 ]:
     """Select the forecaster and Lightning module for a predictor.
 
@@ -208,8 +225,6 @@ def build_forecaster_module(
         Lightning module matching the forecast family.
     module_kwargs : dict[str, Any]
         Additional module settings, including evaluation ensemble size.
-    monitor : str
-        Validation objective used for checkpoint selection.
     """
     if isinstance(predictor, (GraphEFM, GraphEFMMultiScale)):
         prob = config.probabilistic
@@ -225,7 +240,6 @@ def build_forecaster_module(
             forecaster,
             ProbabilisticForecastingModule,
             {"eval_ensemble_size": prob.eval_ensemble_size},
-            "val_mean_loss",
         )
     return (
         DeterministicARForecaster(
@@ -233,7 +247,6 @@ def build_forecaster_module(
         ),
         DeterministicForecastingModule,
         {},
-        "val_mean_loss",
     )
 
 
@@ -264,7 +277,9 @@ def load_forecasting_module_from_checkpoint(
 
     The checkpoint must have been saved with args in hyper_parameters (i.e.
     created via train_model.main), so that model class and architecture kwargs
-    can be recovered automatically.
+    can be recovered automatically. Graph-EFM probabilistic settings are
+    restored from the saved config, falling back to the supplied config
+    only for checkpoints without those settings.
 
     Parameters
     ----------
@@ -286,8 +301,16 @@ def load_forecasting_module_from_checkpoint(
     ckpt = torch.load(ckpt_path, weights_only=False)
     args = ckpt["hyper_parameters"]["args"]
     predictor_class = MODELS[args.model]
+    is_graph_efm = issubclass(predictor_class, (GraphEFM, GraphEFMMultiScale))
+    if is_graph_efm:
+        saved_config = ckpt["hyper_parameters"].get("config")
+        saved_probabilistic = getattr(saved_config, "probabilistic", None)
+        if saved_probabilistic is not None:
+            config = dataclasses.replace(
+                config, probabilistic=saved_probabilistic
+            )
     predictor = build_predictor(predictor_class, args, config, datastore)
-    forecaster, module_class, _, _ = build_forecaster_module(
+    forecaster, module_class, _ = build_forecaster_module(
         args, config, datastore, predictor
     )
     return module_class.load_from_checkpoint(
@@ -296,6 +319,7 @@ def load_forecasting_module_from_checkpoint(
         datastore=datastore,
         datastore_boundary=datastore_boundary,
         weights_only=False,
+        **({"config": config} if is_graph_efm else {}),
     )
 
 
@@ -791,8 +815,8 @@ def fit(
             f"The {model_config.model} model cannot be trained. Run with "
             "--eval <val/test> to evaluate a baseline."
         )
-    forecaster, module_class, module_kwargs, val_monitor = (
-        build_forecaster_module(hparams, config, datastore, predictor)
+    forecaster, module_class, module_kwargs = build_forecaster_module(
+        hparams, config, datastore, predictor
     )
 
     model = module_class(
@@ -816,9 +840,17 @@ def fit(
     if logging_config.logger_run_name:
         run_name = logging_config.logger_run_name
     else:
+        if isinstance(forecaster, GraphEFMForecaster):
+            prob = config.probabilistic
+            layers = (
+                f"p{prob.prior_layers}-e{prob.encoder_layers}"
+                f"-d{prob.decoder_layers}"
+            )
+        else:
+            layers = str(model_config.processor_layers)
         run_name = (
             f"{prefix}{model_config.model}-"
-            f"{model_config.processor_layers}x{model_config.hidden_dim}-"
+            f"{layers}x{model_config.hidden_dim}-"
             f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
         )
 
@@ -835,7 +867,7 @@ def fit(
     val_checkpoint = pl.callbacks.ModelCheckpoint(
         dirpath=os.path.join(run_dir, "checkpoints"),
         filename="min_val_loss",
-        monitor=val_monitor,
+        monitor="val_mean_loss",
         mode="min",
         save_top_k=1,
         save_on_train_epoch_end=False,

@@ -241,22 +241,14 @@ class GraphEFMForecaster(BaseProbabilisticARForecaster):
             ensemble, _ = self.sample_ensemble(
                 init_states, forcing_features, target_states, self.crps_members
             )
-            # Fair CRPS uses independent prior trajectories.
-            first = (ensemble - target_states.unsqueeze(1)).abs().mean(dim=1)
-            ordered = ensemble.sort(dim=1).values
-            ranks = torch.arange(
-                1,
-                self.crps_members + 1,
-                device=ensemble.device,
-                dtype=ensemble.dtype,
-            ).view(1, -1, 1, 1, 1)
-            spread = ((2 * ranks - self.crps_members - 1) * ordered).sum(dim=1)
-            entry_crps = first - spread / (
-                self.crps_members * (self.crps_members - 1)
+            entry_crps = metrics.crps_ens_fair(
+                ensemble,
+                target_states,
+                mask=interior_mask_bool,
+                average_grid=False,
+                sum_vars=False,
             )
-            crps = (
-                entry_crps[:, :, interior_mask_bool].sum(dim=(1, 2, 3)).mean()
-            )
+            crps = entry_crps.sum(dim=(1, 2, 3)).mean()
             batch_loss = batch_loss + self.crps_weight * crps
             loss_components["crps"] = crps
         return batch_loss, loss_components

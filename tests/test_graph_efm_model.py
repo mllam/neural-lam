@@ -462,14 +462,13 @@ def test_train_model_assembly_selects_probabilistic_path(
     # Hyperparameters came from config.probabilistic, not the CLI args
     assert predictor.latent_dim == 4
 
-    forecaster, module_class, module_kwargs, val_monitor = (
-        build_forecaster_module(args, config, datastore, predictor)
+    forecaster, module_class, module_kwargs = build_forecaster_module(
+        args, config, datastore, predictor
     )
     assert isinstance(forecaster, GraphEFMForecaster)
     assert forecaster.kl_beta == 0.5
     assert module_class is ProbabilisticForecastingModule
     assert module_kwargs == {"eval_ensemble_size": 3}
-    assert val_monitor == "val_mean_loss"
 
 
 @pytest.mark.requires_training
@@ -492,10 +491,10 @@ def test_training_checkpoint_round_trip(graph_name, output_std, tmp_path):
 
     datastore, config = _datastore_and_config(graph_name)
     config.probabilistic = nlconfig.ProbabilisticConfig(
-        latent_dim=4,
+        latent_dim=8,
         prior_layers=1,
         encoder_layers=1,
-        decoder_layers=1,
+        decoder_layers=2,
         crps_weight=0.1,
         eval_ensemble_size=2,
     )
@@ -515,7 +514,7 @@ def test_training_checkpoint_round_trip(graph_name, output_std, tmp_path):
         config,
         datastore,
     )
-    forecaster, module_class, module_kwargs, _ = build_forecaster_module(
+    forecaster, module_class, module_kwargs = build_forecaster_module(
         args,
         config,
         datastore,
@@ -550,9 +549,26 @@ def test_training_checkpoint_round_trip(graph_name, output_std, tmp_path):
     assert trainer.global_step == 1
     checkpoint = tmp_path / "graph_efm.ckpt"
     trainer.save_checkpoint(checkpoint)
+    caller_config = nlconfig.NeuralLAMConfig(datastores=config.datastores)
     restored = load_forecasting_module_from_checkpoint(
-        str(checkpoint), config, datastore
+        str(checkpoint), caller_config, datastore
     )
+    assert caller_config.probabilistic == nlconfig.ProbabilisticConfig()
+    assert restored.forecaster.predictor.latent_dim == 8
+    for name, value in model.state_dict().items():
+        torch.testing.assert_close(restored.state_dict()[name], value)
+
+    # Older checkpoints may not contain experiment configuration.
+    saved = torch.load(checkpoint, weights_only=False)
+    del saved["hyper_parameters"]["config"]
+    legacy_checkpoint = tmp_path / "legacy_graph_efm.ckpt"
+    torch.save(saved, legacy_checkpoint)
+    legacy_restored = load_forecasting_module_from_checkpoint(
+        str(legacy_checkpoint), config, datastore
+    )
+    for name, value in model.state_dict().items():
+        torch.testing.assert_close(legacy_restored.state_dict()[name], value)
+
     assert isinstance(restored, ProbabilisticForecastingModule)
     assert restored.eval_ensemble_size == 2
     torch.manual_seed(4)
@@ -610,3 +626,138 @@ def test_decoder_std_remains_positive_for_large_negative_logits():
     assert torch.isfinite(nll).all()
     nll.sum().backward()
     assert torch.isfinite(linear.bias.grad).all()
+
+
+@pytest.mark.parametrize("graph_name", ["1level", "hierarchical"])
+def test_forward_reuses_optional_graph_embedding(graph_name, monkeypatch):
+    """Supplied graph embeddings preserve samples and avoid recomputation."""
+    # Standard library
+    from unittest.mock import Mock
+
+    datastore, _ = _datastore_and_config(graph_name)
+    predictor = _build_predictor(datastore, graph_name)
+    initial, forcing, _ = _example_batch(datastore, predictor, 2, 2)
+    torch.manual_seed(9)
+    expected, _ = predictor(initial[:, 1], initial[:, 0], forcing[:, 0])
+    embed = Mock(wraps=predictor.embedd_graph)
+    monkeypatch.setattr(predictor, "embedd_graph", embed)
+    graph_emb = predictor.embedd_graph(2)
+    torch.manual_seed(9)
+    actual, _ = predictor(
+        initial[:, 1], initial[:, 0], forcing[:, 0], graph_emb=graph_emb
+    )
+    torch.testing.assert_close(actual, expected)
+    prediction, _ = predictor(
+        actual, initial[:, 1], forcing[:, 1], graph_emb=graph_emb
+    )
+    prediction.sum().backward()
+    embed.assert_called_once_with(2)
+    assert predictor.grid_prev_embedder[0].weight.grad is not None
+    assert predictor.g2m_embedder[0].weight.grad is not None
+
+
+@pytest.mark.parametrize(
+    "model_name,predictor_class,graph_name",
+    [
+        ("graph_efm", GraphEFM, "hierarchical"),
+        ("graph_efm_ms", GraphEFMMultiScale, "1level"),
+    ],
+)
+@pytest.mark.parametrize(
+    "flag,value",
+    [
+        ("processor_layers", 7),
+        ("mesh_aggr", "mean"),
+        ("mesh_up_gnn_type", "PropagationNet"),
+        ("mesh_down_gnn_type", "PropagationNet"),
+        ("loss", "nll"),
+        (None, None),
+    ],
+)
+def test_ignored_graph_efm_options_warn(
+    model_name,
+    predictor_class,
+    graph_name,
+    flag,
+    value,
+    monkeypatch,
+):
+    """Report non-default deterministic options for Graph-EFM."""
+    # Standard library
+    from unittest.mock import Mock
+
+    # First-party
+    from neural_lam import train_model
+
+    datastore, config = _datastore_and_config(graph_name)
+    args = train_model.build_parser().parse_args(
+        ["--config_path", "unused.yaml"]
+    )
+    args.model = model_name
+    args.graph = graph_name
+    args.hidden_dim = 4
+    if flag is not None:
+        setattr(args, flag, value)
+    warning = Mock()
+    monkeypatch.setattr(train_model.logger, "warning", warning)
+    build_predictor(predictor_class, args, config, datastore)
+    if flag is None:
+        warning.assert_not_called()
+    else:
+        warning.assert_called_once()
+        assert warning.call_args.args[1] == flag
+        assert "has no effect" in warning.call_args.args[0]
+
+
+@pytest.mark.parametrize(
+    "model_name,graph_name",
+    [
+        ("graph_efm", "hierarchical"),
+        ("graph_efm_ms", "1level"),
+    ],
+)
+def test_graph_efm_run_name_uses_configured_layers(
+    model_name,
+    graph_name,
+    monkeypatch,
+    tmp_path,
+):
+    """Default run names identify actual prior, encoder and decoder depths."""
+    # First-party
+    from neural_lam import train_model
+
+    datastore, config = _datastore_and_config(graph_name)
+    config.probabilistic = nlconfig.ProbabilisticConfig(
+        prior_layers=1,
+        encoder_layers=2,
+        decoder_layers=3,
+    )
+    names = []
+
+    def capture_logger(**kwargs):
+        names.append(kwargs["run_name"])
+        raise RuntimeError("stop before trainer")
+
+    monkeypatch.setattr(
+        train_model.utils, "setup_training_logger", capture_logger
+    )
+    with pytest.raises(RuntimeError, match="stop before trainer"):
+        train_model.fit(
+            model_config=nlconfig.ModelConfig(
+                model=model_name,
+                graph=graph_name,
+                hidden_dim=4,
+            ),
+            train_config=nlconfig.TrainRunConfig(
+                ar_steps_train=1,
+                ar_steps_eval=1,
+                val_steps_to_log=[1],
+                train_steps_to_log=[1],
+            ),
+            data_config=nlconfig.DataConfig(),
+            compute_config=nlconfig.ComputeConfig(devices=1),
+            logging_config=nlconfig.LoggingConfig(runs_root=str(tmp_path)),
+            config=config,
+            datastore=datastore,
+        )
+    assert names[0].startswith(f"train-{model_name}-p1-e2-d3x4-")

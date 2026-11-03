@@ -527,6 +527,7 @@ class BaseGraphEFM(StepPredictor):
         prev_state: torch.Tensor,
         prev_prev_state: torch.Tensor,
         forcing: torch.Tensor,
+        graph_emb: dict[str, Any] | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """
         Sample one time step prediction: embed features, sample the latent
@@ -542,6 +543,10 @@ class BaseGraphEFM(StepPredictor):
             Shape ``(B, num_grid_nodes, num_state_vars)``. ``X_{t-1}``.
         forcing : torch.Tensor
             Shape ``(B, num_grid_nodes, num_windowed_forcing_vars)``.
+        graph_emb : dict[str, Any] or None, optional
+            Static embeddings from ``embedd_graph``. Reuse within one
+            rollout to avoid embedding the graph at each step. Computed
+            on demand when omitted; no embeddings persist across batches.
 
         Returns
         -------
@@ -555,7 +560,8 @@ class BaseGraphEFM(StepPredictor):
         # embed all features
         grid_prev_emb = self.embedd_grid(prev_state, prev_prev_state, forcing)
 
-        graph_emb = self.embedd_graph(prev_state.shape[0])
+        if graph_emb is None:
+            graph_emb = self.embedd_graph(prev_state.shape[0])
 
         # Compute prior
         prior_dist = self.prior_model(
