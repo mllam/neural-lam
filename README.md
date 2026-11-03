@@ -74,6 +74,9 @@ always uses a Gaussian likelihood, including its log-standard-deviation term.
 Without `--output_std`, observation scales come from the datastore's one-step
 difference statistics and configured feature weights.
 
+When loading a checkpoint for evaluation or resumed training, its saved
+probabilistic settings take precedence over the current YAML section.
+
 Add this optional section alongside `datastores` in the experiment YAML:
 
 ```yaml

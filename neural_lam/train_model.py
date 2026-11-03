@@ -15,6 +15,7 @@ from typing import Any, cast
 # for logging the model:
 import pytorch_lightning as pl
 import torch
+import yaml
 from lightning_fabric.utilities import seed
 from loguru import logger
 
@@ -265,6 +266,32 @@ class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
         )
 
 
+def _restore_probabilistic_config(
+    ckpt_hparams: dict[str, Any],
+    config: NeuralLAMConfig,
+) -> NeuralLAMConfig:
+    """Restore saved Graph-EFM settings without mutating the caller's config.
+
+    Parameters
+    ----------
+    ckpt_hparams : dict[str, Any]
+        Hyperparameters read from a model checkpoint.
+    config : NeuralLAMConfig
+        Current experiment configuration, used for legacy checkpoints.
+
+    Returns
+    -------
+    NeuralLAMConfig
+        Configuration with the saved probabilistic settings, or ``config``
+        unchanged if the checkpoint does not contain those settings.
+    """
+    saved_config = ckpt_hparams.get("config")
+    saved_probabilistic = getattr(saved_config, "probabilistic", None)
+    if saved_probabilistic is None:
+        return config
+    return dataclasses.replace(config, probabilistic=saved_probabilistic)
+
+
 def load_forecasting_module_from_checkpoint(
     ckpt_path: str,
     config: NeuralLAMConfig,
@@ -303,12 +330,7 @@ def load_forecasting_module_from_checkpoint(
     predictor_class = MODELS[args.model]
     is_graph_efm = issubclass(predictor_class, (GraphEFM, GraphEFMMultiScale))
     if is_graph_efm:
-        saved_config = ckpt["hyper_parameters"].get("config")
-        saved_probabilistic = getattr(saved_config, "probabilistic", None)
-        if saved_probabilistic is not None:
-            config = dataclasses.replace(
-                config, probabilistic=saved_probabilistic
-            )
+        config = _restore_probabilistic_config(ckpt["hyper_parameters"], config)
     predictor = build_predictor(predictor_class, args, config, datastore)
     forecaster, module_class, _ = build_forecaster_module(
         args, config, datastore, predictor
@@ -663,6 +685,9 @@ def fit(
     """
     Run training or evaluation using strongly-typed configuration dataclasses.
 
+    When loading Graph-EFM weights, the checkpoint's probabilistic settings
+    take precedence over the current experiment configuration.
+
     Parameters
     ----------
     model_config : ModelConfig
@@ -808,6 +833,25 @@ def fit(
     # Build predictor and forecaster externally, then inject into
     # DeterministicForecastingModule
     predictor_class = MODELS[model_config.model]
+    if train_config.load and issubclass(
+        predictor_class, (GraphEFM, GraphEFMMultiScale)
+    ):
+        ckpt_hparams = torch.load(train_config.load, weights_only=False).get(
+            "hyper_parameters", {}
+        )
+        restored_config = _restore_probabilistic_config(ckpt_hparams, config)
+        if config.probabilistic != restored_config.probabilistic:
+            has_probabilistic_section = True
+            if config_path is not None and Path(config_path).is_file():
+                with open(config_path, encoding="utf-8") as config_file:
+                    raw_config = yaml.safe_load(config_file) or {}
+                has_probabilistic_section = "probabilistic" in raw_config
+            if has_probabilistic_section:
+                logger.warning(
+                    "The checkpoint's probabilistic settings take precedence "
+                    "over the current Graph-EFM configuration."
+                )
+        config = restored_config
     predictor = build_predictor(predictor_class, hparams, config, datastore)
 
     if not train_config.eval and not predictor.trainable:
