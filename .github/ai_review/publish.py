@@ -16,30 +16,26 @@ from pathlib import Path
 from typing import Any
 
 REVIEW_MARKER = "<!-- neural-lam-ai-review -->"
+AI_TRIAGED_LABEL = "ai-triaged"
+NEEDS_TRIAGE_LABEL = "needs-triage"
 ALLOWED_URL_PREFIX = "https://github.com/mllam/"
 MAX_COMMENTS = 10
 MAX_COMMENT_CHARS = 1500
 MAX_SUMMARY_CHARS = 4000
+MAX_SUGGESTION_CHARS = 2000
 FOOTER = (
     f"\n\n---\n*Automated first-pass review; a maintainer will still review "
     f"and merge.*\n{REVIEW_MARKER}"
 )
 
 _HUNK_RE = re.compile(r"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
-# Matches only closed code blocks/spans so an unclosed fence cannot bypass
-# plain-text @mention stripping.
-_CLOSED_CODE_RE = re.compile(r"```[\s\S]*?```|`[^`\n]+`")
 _MD_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
 _MD_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 _REF_LINK_DEF_RE = re.compile(r"^\s*\[[^\]]+\]:\s*(\S+).*$", re.MULTILINE)
-_AUTOLINK_RE = re.compile(r"<(https?://[^>\s]+)>")
-_BARE_URL_RE = re.compile(r"https?://[^\s<>)\]]+")
-_HTML_COMMENT_RE = re.compile(r"<!--[\s\S]*?-->")
-_HTML_MEDIA_LINK_RE = re.compile(
-    r"<\s*/?\s*"
-    r"(?:a|img|picture|source|script|iframe|object|embed|link|meta)"
-    r"\b[^>]*>",
-    re.IGNORECASE,
+_BARE_URL_RE = re.compile(r"\b(?:https?://|www\.)[^\s<>)\]]+", re.IGNORECASE)
+_MAILTO_RE = re.compile(r"\bmailto:[^\s<>)\]]+", re.IGNORECASE)
+_EMAIL_RE = re.compile(
+    r"\b([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b"
 )
 _MENTION_RE = re.compile(
     r"(?<![\w`])@"
@@ -143,45 +139,57 @@ def _is_allowed_url(url: str) -> bool:
     )
 
 
-def _clean_urls(text: str) -> str:
-    text = _HTML_COMMENT_RE.sub("", text)
-    text = _HTML_MEDIA_LINK_RE.sub("", text)
+def clean(text: str, *, max_chars: int = MAX_COMMENT_CHARS) -> str:
+    """Sanitize prose: escape HTML, strip outside links and @mentions."""
+    # Escape entities and HTML tags first so no entities or raw tags can form
+    text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    # Remove markdown images
     text = _MD_IMAGE_RE.sub("", text)
+    # Allowed markdown links are preserved; others collapse to link text
     text = _MD_LINK_RE.sub(
         lambda m: m.group(0) if _is_allowed_url(m.group(2)) else m.group(1),
         text,
     )
+    # Strip external reference link definitions
     text = _REF_LINK_DEF_RE.sub(
         lambda m: m.group(0) if _is_allowed_url(m.group(1)) else "",
         text,
     )
-    text = _AUTOLINK_RE.sub(
-        lambda m: m.group(0) if _is_allowed_url(m.group(1)) else "",
-        text,
-    )
-    return _BARE_URL_RE.sub(
+    # Neutralize mailto: and emails
+    text = _MAILTO_RE.sub("", text)
+    text = _EMAIL_RE.sub(r"\1 at \2", text)
+    # Remove bare external URLs and autolinks
+    text = _BARE_URL_RE.sub(
         lambda m: m.group(0) if _is_allowed_url(m.group(0)) else "",
         text,
     )
+    # Neutralize @mentions
+    text = _MENTION_RE.sub(r"\1", text)
+    return text[:max_chars].rstrip()
 
 
-def clean(text: str, *, max_chars: int = MAX_COMMENT_CHARS) -> str:
-    """Strip `@mentions`, HTML media, and outside links while keeping code."""
-    parts: list[str] = []
-    pos = 0
-    for match in _CLOSED_CODE_RE.finditer(text):
-        prose = _MENTION_RE.sub(r"\1", _clean_urls(text[pos : match.start()]))
-        parts.append(prose)
-        parts.append(_clean_urls(match.group(0)))
-        pos = match.end()
-    parts.append(_MENTION_RE.sub(r"\1", _clean_urls(text[pos:])))
-    cleaned = "".join(parts).strip()
+def format_suggestion(suggestion: str) -> str:
+    """Format raw replacement code into a GitHub suggestion block.
 
-    if len(cleaned) > max_chars:
-        cleaned = cleaned[:max_chars].rstrip()
-        if cleaned.count("```") % 2 == 1:
-            cleaned = cleaned[: cleaned.rfind("```")].rstrip()
-    return cleaned
+    Drops the block if the code contains backtick or tilde fences, or if it
+    exceeds `MAX_SUGGESTION_CHARS`.
+    """
+    code = suggestion.strip("\r\n")
+    if not code:
+        return ""
+    if "```" in code or "~~~" in code or len(code) > MAX_SUGGESTION_CHARS:
+        return ""
+    return f"\n```suggestion\n{code}\n```"
+
+
+def add_label(repo: str, pr_number: int, label: str, token: str) -> None:
+    """Add a label to the pull request via GitHub REST API."""
+    gh_api(
+        f"/repos/{repo}/issues/{pr_number}/labels",
+        token,
+        method="POST",
+        payload={"labels": [label]},
+    )
 
 
 def already_reviewed(reviews: list[dict[str, Any]]) -> bool:
@@ -219,29 +227,33 @@ def build_review_payload(
             break
         if not isinstance(entry, dict):
             continue
-        path, line, body = (
+        path, line, body, suggestion = (
             entry.get("path"),
             entry.get("line"),
             entry.get("body"),
+            entry.get("suggestion", ""),
         )
         if (
             not isinstance(path, str)
             or isinstance(line, bool)
             or not isinstance(line, int)
             or not isinstance(body, str)
+            or not isinstance(suggestion, str)
             or line not in changed.get(path, set())
             or (path, line) in seen
         ):
             continue
         cleaned_body = clean(body, max_chars=MAX_COMMENT_CHARS)
-        if cleaned_body:
+        suggestion_block = format_suggestion(suggestion)
+        full_comment = f"{cleaned_body}{suggestion_block}".strip()
+        if full_comment:
             seen.add((path, line))
             comments.append(
                 {
                     "path": path,
                     "line": line,
                     "side": "RIGHT",
-                    "body": cleaned_body,
+                    "body": full_comment,
                 }
             )
 
@@ -289,6 +301,52 @@ def main(argv: list[str] | None = None) -> int:
     result = json.loads(args.result_path.read_text(encoding="utf-8"))
     if not isinstance(result, dict):
         raise ValueError("result.json must contain a JSON object")
+
+    head_sha = (os.environ.get("HEAD_SHA") or "").strip()
+    is_live = args.diff_file is None
+    token = (os.environ.get("GH_TOKEN") or "") if is_live else ""
+
+    if is_live:
+        if not args.repo or args.pr is None:
+            parser.error("either --diff-file or --repo and --pr are required")
+        base = f"/repos/{args.repo}/pulls/{args.pr}"
+        pr = json.loads(gh_api(base, token))
+        labels = {
+            lbl.get("name")
+            for lbl in (pr.get("labels") or [])
+            if isinstance(lbl, dict)
+        }
+
+        live_sha = str(pr["head"]["sha"])
+        head_sha = head_sha or live_sha
+        if live_sha != head_sha:
+            print("PR moved on since the analysis, not posting.")
+            return 0
+        if NEEDS_TRIAGE_LABEL in labels:
+            print(f"PR has the {NEEDS_TRIAGE_LABEL} label, not posting.")
+            return 0
+        reviews = json.loads(gh_api(f"{base}/reviews?per_page=100", token))
+        if already_reviewed(reviews):
+            print("PR already has an AI first-pass review, not posting.")
+            return 0
+
+        # Mark PR as ai-triaged so subsequent toggles skip calling the model
+        if result.get("triage") is not None and AI_TRIAGED_LABEL not in labels:
+            try:
+                add_label(args.repo, args.pr, AI_TRIAGED_LABEL, token)
+            except Exception as exc:
+                print(
+                    f"Warning: could not add {AI_TRIAGED_LABEL} label: {exc}",
+                    file=sys.stderr,
+                )
+
+        diff_text = gh_api(base, token, accept="application/vnd.github.diff")
+    else:
+        if not args.dry_run:
+            parser.error("--diff-file requires --dry-run")
+        diff_text = args.diff_file.read_text(encoding="utf-8")
+        head_sha = head_sha or str(result.get("head_sha") or "local")
+
     if result.get("status") != "review":
         reason = str(result.get("reason") or "skipped")
         print(
@@ -298,29 +356,6 @@ def main(argv: list[str] | None = None) -> int:
             end="" if args.dry_run else "\n",
         )
         return 0
-
-    head_sha = (os.environ.get("HEAD_SHA") or "").strip()
-    if args.diff_file is not None:
-        if not args.dry_run:
-            parser.error("--diff-file requires --dry-run")
-        diff_text = args.diff_file.read_text(encoding="utf-8")
-        head_sha = head_sha or str(result.get("head_sha") or "local")
-    else:
-        if not args.repo or args.pr is None:
-            parser.error("either --diff-file or --repo and --pr are required")
-        token = os.environ.get("GH_TOKEN") or ""
-        base = f"/repos/{args.repo}/pulls/{args.pr}"
-        pr = json.loads(gh_api(base, token))
-        live_sha = str(pr["head"]["sha"])
-        head_sha = head_sha or live_sha
-        if live_sha != head_sha:
-            print("PR moved on since the analysis, not posting.")
-            return 0
-        reviews = json.loads(gh_api(f"{base}/reviews?per_page=100", token))
-        if already_reviewed(reviews):
-            print("PR already has an AI first-pass review, not posting.")
-            return 0
-        diff_text = gh_api(base, token, accept="application/vnd.github.diff")
 
     payload = build_review_payload(result, diff_text, head_sha)
     if args.dry_run:
@@ -332,7 +367,7 @@ def main(argv: list[str] | None = None) -> int:
 
     gh_api(
         f"/repos/{args.repo}/pulls/{args.pr}/reviews",
-        os.environ.get("GH_TOKEN") or "",
+        token,
         method="POST",
         payload=payload,
     )

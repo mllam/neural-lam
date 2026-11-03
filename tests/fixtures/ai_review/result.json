@@ -11,12 +11,14 @@
       {
         "path": "tests/test_metrics.py",
         "line": 6,
-        "body": "Consider parametrizing negative inputs too:\n```suggestion\n@pytest.mark.parametrize(\"bad_step\", [0, -1])\ndef test_validate_lead_step_rejects_non_positive(bad_step):\n```"
+        "body": "Consider parametrizing negative inputs too:",
+        "suggestion": "@pytest.mark.parametrize(\"bad_step\", [0, -1])\ndef test_validate_lead_step_rejects_non_positive(bad_step):"
       },
       {
         "path": "neural_lam/metrics.py",
         "line": 999,
-        "body": "Out-of-hunk line that must be dropped by publish.py."
+        "body": "Out-of-hunk line that must be dropped by publish.py.",
+        "suggestion": ""
       }
     ]
   }

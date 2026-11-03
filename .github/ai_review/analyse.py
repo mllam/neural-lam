@@ -17,13 +17,15 @@ from pathlib import Path
 from typing import Any
 
 REVIEW_MARKER = "<!-- neural-lam-ai-review -->"
+AI_TRIAGED_LABEL = "ai-triaged"
 NEEDS_TRIAGE_LABEL = "needs-triage"
 MAX_FILES = 8
 MAX_CHANGED_LINES = 300
 MAX_FILE_CHARS = 12_000
 MAX_TOTAL_FILE_CHARS = 48_000
 MAX_DIFF_CHARS = 40_000
-MAX_OUTPUT_TOKENS = 4096
+MAX_OUTPUT_TOKENS = 16_000
+MODEL_TIMEOUT_SECONDS = 600
 
 DEFAULT_MODELS: dict[str, str] = {
     "anthropic": "claude-opus-5-5",
@@ -48,8 +50,9 @@ When reviewing a simple PR:
 - Report only concrete bugs, edge cases, missing tests, missing CHANGELOG entry,
   or missing type annotations / NumPy docstrings in `neural_lam/`.
 - Skip formatting handled by Ruff and avoid generic praise.
-- Set each inline `line` to a positive right-side line inside a diff hunk.
-- Use ```suggestion blocks only for exact single-line replacements.
+- Set each inline `line` to the right-side line number in the diff margin.
+- Set `body` to concise prose explanation (no code blocks or markdown fences).
+- Set `suggestion` to exact single-line replacement code, or "" if none.
 - Never include @mentions or external links."""
 
 TRIAGE_SCHEMA: dict[str, Any] = {
@@ -71,8 +74,9 @@ REVIEW_SCHEMA: dict[str, Any] = {
                     "path": {"type": "string"},
                     "line": {"type": "integer"},
                     "body": {"type": "string"},
+                    "suggestion": {"type": "string"},
                 },
-                "required": ["path", "line", "body"],
+                "required": ["path", "line", "body", "suggestion"],
                 "additionalProperties": False,
             },
         },
@@ -97,6 +101,7 @@ class Comment:
     path: str
     line: int
     body: str
+    suggestion: str = ""
 
 
 @dataclass(frozen=True)
@@ -131,12 +136,18 @@ def _post_json(
     path: str,
     headers: dict[str, str],
     payload: dict[str, Any],
+    timeout: int = MODEL_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """POST JSON over HTTPS and return the decoded response object."""
     req_headers = {"Content-Type": "application/json", **headers}
     body = json.dumps(payload).encode("utf-8")
     status, raw = https_request(
-        host, path, method="POST", headers=req_headers, body=body
+        host,
+        path,
+        method="POST",
+        headers=req_headers,
+        body=body,
+        timeout=timeout,
     )
     if not 200 <= status < 300:
         raise RuntimeError(f"{host}{path} returned HTTP {status}: {raw[:500]}")
@@ -203,6 +214,8 @@ def gate_failure(
     }
     if NEEDS_TRIAGE_LABEL in labels:
         return f"PR has the {NEEDS_TRIAGE_LABEL} label"
+    if AI_TRIAGED_LABEL in labels:
+        return f"PR has the {AI_TRIAGED_LABEL} label"
     if already_reviewed(reviews):
         return "PR already has an AI first-pass review"
     if not files:
@@ -274,7 +287,14 @@ def ask(
                 },
             },
         )
-        text = data["content"][0]["text"]
+        stop_reason = data.get("stop_reason")
+        if stop_reason != "end_turn":
+            raise RuntimeError(f"Anthropic stop_reason {stop_reason!r}")
+        text = next(
+            b["text"]
+            for b in data.get("content", [])
+            if b.get("type") == "text"
+        )
     elif provider == "openai":
         data = _post_json(
             "api.openai.com",
@@ -297,7 +317,11 @@ def ask(
                 },
             },
         )
-        text = data["choices"][0]["message"]["content"]
+        choice = data["choices"][0]
+        finish_reason = choice.get("finish_reason")
+        if finish_reason != "stop":
+            raise RuntimeError(f"OpenAI finish_reason {finish_reason!r}")
+        text = choice["message"]["content"]
     else:  # gemini
         quoted_model = urllib.parse.quote(model, safe="-._")
         data = _post_json(
@@ -316,7 +340,16 @@ def ask(
                 },
             },
         )
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        candidate = data["candidates"][0]
+        finish_reason = candidate.get("finishReason")
+        if finish_reason not in (None, "STOP"):
+            raise RuntimeError(f"Gemini finishReason {finish_reason!r}")
+        parts = candidate["content"]["parts"]
+        text = next(
+            p["text"]
+            for p in parts
+            if "text" in p and not p.get("thought", False)
+        )
 
     parsed = json.loads(text)
     if not isinstance(parsed, dict):
@@ -346,10 +379,16 @@ def parse_review(raw: dict[str, Any]) -> Review:
             or isinstance(item.get("line"), bool)
             or not isinstance(item.get("line"), int)
             or not isinstance(item.get("body"), str)
+            or not isinstance(item.get("suggestion", ""), str)
         ):
             raise ValueError(f"Invalid comment entry: {item!r}")
         comments.append(
-            Comment(path=item["path"], line=item["line"], body=item["body"])
+            Comment(
+                path=item["path"],
+                line=item["line"],
+                body=item["body"],
+                suggestion=item.get("suggestion", ""),
+            )
         )
     return Review(summary=summary, comments=comments)
 
@@ -385,6 +424,58 @@ def fetch_touched_files(
     return "\n\n".join(chunks)
 
 
+_HUNK_RE = re.compile(r"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+
+
+def number_diff_lines(diff_text: str) -> str:
+    """Prefix diff hunk lines with their right-side line numbers.
+
+    Context and addition lines display their 1-based target line number so
+    the model does not have to count offsets from hunk headers. Deletion lines
+    are prefixed with empty space so only target line numbers appear.
+    """
+    output: list[str] = []
+    right_line = rem_old = rem_new = 0
+
+    for raw_line in diff_text.splitlines():
+        if raw_line.startswith("diff --git "):
+            right_line = rem_old = rem_new = 0
+            output.append(raw_line)
+        elif raw_line.startswith("@@ ") and rem_old == 0 and rem_new == 0:
+            match = _HUNK_RE.match(raw_line)
+            if match is not None:
+                rem_old = int(match.group(1)) if match.group(1) else 1
+                right_line = int(match.group(2))
+                rem_new = int(match.group(3)) if match.group(3) else 1
+            output.append(raw_line)
+        elif rem_old > 0 or rem_new > 0:
+            if raw_line.startswith("\\"):
+                output.append(f"       {raw_line}")
+                continue
+            if raw_line.startswith("+") and rem_new > 0:
+                output.append(f"{right_line:5d}: {raw_line}")
+                right_line += 1
+                rem_new -= 1
+            elif raw_line.startswith("-") and rem_old > 0:
+                output.append(f"     : {raw_line}")
+                rem_old -= 1
+            elif (
+                (raw_line.startswith(" ") or raw_line == "")
+                and rem_old > 0
+                and rem_new > 0
+            ):
+                output.append(f"{right_line:5d}: {raw_line}")
+                right_line += 1
+                rem_old -= 1
+                rem_new -= 1
+            else:
+                rem_old = rem_new = 0
+                output.append(raw_line)
+        else:
+            output.append(raw_line)
+    return "\n".join(output)
+
+
 def build_prompt(
     pr: dict[str, Any],
     diff_text: str,
@@ -394,7 +485,8 @@ def build_prompt(
     """Assemble the rubric, escaped `<pr>` payload, and task instruction."""
     title = escape_pr_tag(str(pr.get("title") or ""))
     body = escape_pr_tag(str(pr.get("body") or ""))[:4_000]
-    diff = escape_pr_tag(diff_text[:MAX_DIFF_CHARS])
+    numbered_diff = number_diff_lines(diff_text)
+    diff = escape_pr_tag(numbered_diff[:MAX_DIFF_CHARS])
     files = escape_pr_tag(files_text)
     return (
         f"{RUBRIC}\n\n<pr>\nTitle: {title}\nDescription:\n{body}\n\n"
@@ -474,7 +566,8 @@ def run_analysis(
                 pr,
                 diff_text,
                 files_text,
-                "Review this PR. Use suggestion blocks for concrete fixes.",
+                "Review this PR. Supply concise prose in body and raw "
+                "replacement code in suggestion (empty string if none).",
             ),
             REVIEW_SCHEMA,
             "review",
@@ -522,13 +615,16 @@ def main(argv: list[str] | None = None) -> int:
         head_sha = head_sha or str(pr["head"]["sha"])
         files = json.loads(gh_api(f"{base}/files?per_page=100", token))
         reviews = json.loads(gh_api(f"{base}/reviews?per_page=100", token))
-        diff_text = gh_api(base, token, accept="application/vnd.github.diff")
-        files_text = (
-            fetch_touched_files(args.repo, head_sha, files, token)
-            if passes_gate(pr, files, reviews)
+        if (
+            passes_gate(pr, files, reviews)
             and pr.get("head", {}).get("sha") == head_sha
-            else ""
-        )
+        ):
+            diff_text = gh_api(
+                base, token, accept="application/vnd.github.diff"
+            )
+            files_text = fetch_touched_files(args.repo, head_sha, files, token)
+        else:
+            diff_text = files_text = ""
 
     result = run_analysis(pr, files, reviews, diff_text, files_text, head_sha)
     serialized = json.dumps(result, indent=2) + "\n"

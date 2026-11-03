@@ -79,6 +79,7 @@ def make_files(
         (make_pr(user_type="Bot"), make_files(), [], "bot"),
         (make_pr(login="dependabot[bot]"), make_files(), [], "bot"),
         (make_pr(labels=["needs-triage"]), make_files(), [], "needs-triage"),
+        (make_pr(labels=["ai-triaged"]), make_files(), [], "ai-triaged"),
         (
             make_pr(),
             make_files(),
@@ -137,6 +138,29 @@ def test_build_prompt_escapes_pr_closing_tag():
     assert "</PR>" not in prompt
 
 
+def test_number_diff_lines():
+    sample_diff = (
+        "diff --git a/file.py b/file.py\n"
+        "--- a/file.py\n"
+        "+++ b/file.py\n"
+        "@@ -10,3 +20,4 @@ def func():\n"
+        " ctx1\n"
+        "-old\n"
+        "+new1\n"
+        "+new2\n"
+        " ctx2"
+    )
+    numbered = analyse.number_diff_lines(sample_diff)
+    lines = numbered.splitlines()
+    assert lines[0] == "diff --git a/file.py b/file.py"
+    assert lines[3] == "@@ -10,3 +20,4 @@ def func():"
+    assert lines[4] == "   20:  ctx1"
+    assert lines[5] == "     : -old"
+    assert lines[6] == "   21: +new1"
+    assert lines[7] == "   22: +new2"
+    assert lines[8] == "   23:  ctx2"
+
+
 @pytest.mark.parametrize(
     ("provider", "env_key", "expected_host", "raw_response"),
     [
@@ -147,11 +171,13 @@ def test_build_prompt_escapes_pr_closing_tag():
             json.dumps(
                 {
                     "content": [
+                        {"type": "thinking", "thinking": "", "signature": "x"},
                         {
                             "type": "text",
                             "text": '{"simple": true, "reason": "ok"}',
-                        }
-                    ]
+                        },
+                    ],
+                    "stop_reason": "end_turn",
                 }
             ),
         ),
@@ -165,7 +191,8 @@ def test_build_prompt_escapes_pr_closing_tag():
                         {
                             "message": {
                                 "content": '{"simple": false, "reason": "big"}'
-                            }
+                            },
+                            "finish_reason": "stop",
                         }
                     ]
                 }
@@ -183,7 +210,8 @@ def test_build_prompt_escapes_pr_closing_tag():
                                 "parts": [
                                     {"text": '{"simple": true, "reason": "ok"}'}
                                 ]
-                            }
+                            },
+                            "finishReason": "STOP",
                         }
                     ]
                 }
@@ -222,6 +250,58 @@ def test_ask_provider_routing(
     assert "test-secret" not in captured["path"]
 
 
+def test_ask_anthropic_error_on_non_end_turn(monkeypatch):
+    monkeypatch.setenv("AI_REVIEW_PROVIDER", "anthropic")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-secret")
+    raw = json.dumps(
+        {
+            "content": [{"type": "text", "text": "{}"}],
+            "stop_reason": "max_tokens",
+        }
+    )
+    monkeypatch.setattr(analyse, "https_request", lambda *a, **k: (200, raw))
+    with pytest.raises(
+        RuntimeError, match="Anthropic stop_reason 'max_tokens'"
+    ):
+        analyse.ask("prompt", analyse.TRIAGE_SCHEMA, "triage")
+
+
+def test_ask_openai_error_on_non_stop(monkeypatch):
+    monkeypatch.setenv("AI_REVIEW_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-secret")
+    raw = json.dumps(
+        {
+            "choices": [
+                {
+                    "message": {"content": "{}"},
+                    "finish_reason": "length",
+                }
+            ]
+        }
+    )
+    monkeypatch.setattr(analyse, "https_request", lambda *a, **k: (200, raw))
+    with pytest.raises(RuntimeError, match="OpenAI finish_reason 'length'"):
+        analyse.ask("prompt", analyse.TRIAGE_SCHEMA, "triage")
+
+
+def test_ask_gemini_error_on_non_stop(monkeypatch):
+    monkeypatch.setenv("AI_REVIEW_PROVIDER", "gemini")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-secret")
+    raw = json.dumps(
+        {
+            "candidates": [
+                {
+                    "content": {"parts": [{"text": "{}"}]},
+                    "finishReason": "MAX_TOKENS",
+                }
+            ]
+        }
+    )
+    monkeypatch.setattr(analyse, "https_request", lambda *a, **k: (200, raw))
+    with pytest.raises(RuntimeError, match="Gemini finishReason 'MAX_TOKENS'"):
+        analyse.ask("prompt", analyse.TRIAGE_SCHEMA, "triage")
+
+
 def test_ask_rejects_unknown_provider(monkeypatch):
     monkeypatch.setenv("AI_REVIEW_PROVIDER", "unknown-llm")
     with pytest.raises(ValueError, match="Unsupported AI_REVIEW_PROVIDER"):
@@ -243,6 +323,7 @@ def test_run_analysis_on_recorded_diff_with_mocked_ask(monkeypatch, tmp_path):
                     "path": "neural_lam/metrics.py",
                     "line": 13,
                     "body": "Clear validation check.",
+                    "suggestion": "if step < 1:",
                 }
             ],
         }
@@ -259,6 +340,7 @@ def test_run_analysis_on_recorded_diff_with_mocked_ask(monkeypatch, tmp_path):
     saved = json.loads(out_file.read_text(encoding="utf-8"))
     assert saved["status"] == "review"
     assert saved["review"]["comments"][0]["line"] == 13
+    assert saved["review"]["comments"][0]["suggestion"] == "if step < 1:"
 
 
 def test_run_analysis_stops_after_non_simple_triage(monkeypatch):
@@ -282,6 +364,7 @@ def test_run_analysis_stops_after_non_simple_triage(monkeypatch):
     )
     assert calls == ["triage"]
     assert result["status"] == "skipped"
+    assert result["triage"]["simple"] is False
 
 
 def test_run_analysis_skips_when_head_moved(monkeypatch):
@@ -315,29 +398,40 @@ def test_right_side_lines_on_recorded_diff():
             ["@sadamov", "@mllam"],
         ),
         (
-            "Use decorator:\n```suggestion\n"
-            "@pytest.mark.parametrize('x', [1])\n```",
-            ["@pytest.mark.parametrize"],
-            [],
+            "Entities: &#64;user &#x40;user &commat;user",
+            ["&amp;#64;user", "&amp;#x40;user", "&amp;commat;user"],
+            ["@user"],
         ),
-        ("Unclosed ```suggestion\nping @victim", ["victim"], ["@victim"]),
+        (
+            "> ping @victim in quote\n- list item @victim2",
+            ["victim", "victim2"],
+            ["@victim", "@victim2"],
+        ),
+        (
+            "Check www.example.com/x and HTTPS://example.com/x and http://test.com",
+            ["Check", "and"],
+            ["www.example.com", "HTTPS://", "http://test.com"],
+        ),
+        (
+            'Nested tags: <<a<a> href="//example.com">link</a>',
+            ['&lt;&lt;a&lt;a&gt; href="//example.com"&gt;link&lt;/a&gt;'],
+            ["<a", "<img"],
+        ),
+        (
+            "Contact info: user@example.com or mailto:admin@example.com",
+            ["user at example.com"],
+            ["user@example.com", "mailto:"],
+        ),
         (
             "See [#836](https://github.com/mllam/neural-lam/pull/836), "
             "[spoof](https://github.com/mllam/../evil/repo), "
-            "[ext](https://evil.example/x), https://evil.example/raw, "
-            "![img](https://github.com/mllam/neural-lam/raw/main/x.png) "
-            "<script>alert(1)</script>",
+            "[ext](https://evil.example/x)",
             [
                 "[#836](https://github.com/mllam/neural-lam/pull/836)",
                 "spoof",
                 "ext",
             ],
-            ["evil.example", "../evil", "![img]", "<script>"],
-        ),
-        (
-            "Check x<y and z>0 <!-- neural-lam-ai-review -->.",
-            ["x<y and z>0"],
-            ["neural-lam-ai-review"],
+            ["evil.example", "../evil"],
         ),
     ],
 )
@@ -349,11 +443,18 @@ def test_clean_sanitization(raw, expected_present, expected_absent):
         assert token not in cleaned
 
 
-def test_clean_truncation_never_leaves_unclosed_fence():
-    body = "Header\n```suggestion\n" + ("x = 1\n" * 400) + "```"
-    cleaned = publish.clean(body, max_chars=120)
-    assert len(cleaned) <= 120
-    assert cleaned.count("```") % 2 == 0
+def test_format_suggestion_drops_backticks_and_tildes():
+    assert publish.format_suggestion("") == ""
+    assert publish.format_suggestion("x = 1") == "\n```suggestion\nx = 1\n```"
+    assert publish.format_suggestion("```\nx = 1\n```") == ""
+    assert publish.format_suggestion("~~~\nx = 1\n~~~") == ""
+    assert publish.format_suggestion("x" * 2500) == ""
+
+
+def test_suggestion_preserves_urls_in_code():
+    code = 'URL = "https://docs.xarray.dev/en/stable"'
+    block = publish.format_suggestion(code)
+    assert 'URL = "https://docs.xarray.dev/en/stable"' in block
 
 
 def test_publish_dry_run_isolated_subprocess():
@@ -381,21 +482,25 @@ def test_publish_dry_run_isolated_subprocess():
     assert "999" not in out
 
 
-def test_publish_live_posts_fixed_comment_and_checks_sha(monkeypatch):
+def test_publish_live_posts_fixed_comment_and_labels_ai_triaged(monkeypatch):
     diff_text = (FIXTURES_DIR / "simple_bugfix.diff").read_text(
         encoding="utf-8"
     )
     posted: list[dict[str, Any]] = []
+    labels_added: list[str] = []
 
     def fake_gh_api(path, token, *, method="GET", accept="", payload=None):
         if method == "POST":
+            if "/labels" in path:
+                labels_added.extend(payload.get("labels", []))
+                return "[]"
             posted.append(payload)
             return "{}"
         if path.endswith("/reviews?per_page=100"):
             return "[]"
         if accept == "application/vnd.github.diff":
             return diff_text
-        return json.dumps({"head": {"sha": "abc1234def5678"}})
+        return json.dumps({"head": {"sha": "abc1234def5678"}, "labels": []})
 
     monkeypatch.setattr(publish, "gh_api", fake_gh_api)
     monkeypatch.setenv("HEAD_SHA", "abc1234def5678")
@@ -411,16 +516,45 @@ def test_publish_live_posts_fixed_comment_and_checks_sha(monkeypatch):
         ]
     )
     assert rc == 0
+    assert "ai-triaged" in labels_added
     assert len(posted) == 1
     assert posted[0]["event"] == "COMMENT"
     assert len(posted[0]["comments"]) == 1
+    assert "```suggestion" in posted[0]["comments"][0]["body"]
+
+
+def test_publish_live_skips_when_needs_triage_present(monkeypatch):
+    def fake_gh_api(path, token, *, method="GET", accept="", payload=None):
+        if method == "POST":
+            pytest.fail("Should not post review when needs-triage is present")
+        return json.dumps(
+            {
+                "head": {"sha": "abc1234def5678"},
+                "labels": [{"name": "needs-triage"}],
+            }
+        )
+
+    monkeypatch.setattr(publish, "gh_api", fake_gh_api)
+    monkeypatch.setenv("HEAD_SHA", "abc1234def5678")
+    monkeypatch.setenv("GH_TOKEN", "ghs_dummy")
+
+    rc = publish.main(
+        [
+            str(FIXTURES_DIR / "result.json"),
+            "--repo",
+            "mllam/neural-lam",
+            "--pr",
+            "850",
+        ]
+    )
+    assert rc == 0
 
 
 def test_publish_live_aborts_if_pr_head_moved(monkeypatch):
     def fake_gh_api(path, token, *, method="GET", accept="", payload=None):
         if method == "POST":
             pytest.fail("Should not post when PR head moved")
-        return json.dumps({"head": {"sha": "moved_sha_999"}})
+        return json.dumps({"head": {"sha": "moved_sha_999"}, "labels": []})
 
     monkeypatch.setattr(publish, "gh_api", fake_gh_api)
     monkeypatch.setenv("HEAD_SHA", "abc1234def5678")
@@ -444,6 +578,13 @@ def test_workflow_security_invariants():
     assert triggers == ["opened", "ready_for_review"]
     assert wf["permissions"] == {}
 
+    concurrency = wf.get("concurrency") or wf[True].get("concurrency")
+    assert (
+        concurrency["group"]
+        == "ai-review-${{ github.event.pull_request.number }}"
+    )
+    assert concurrency["cancel-in-progress"] is False
+
     analyse_job = wf["jobs"]["analyse"]
     assert "vars.AI_REVIEW_ENABLED == 'true'" in analyse_job["if"]
     assert analyse_job["environment"] == "ai-review"
@@ -458,6 +599,7 @@ def test_workflow_security_invariants():
     assert publish_job["permissions"] == {
         "contents": "read",
         "pull-requests": "write",
+        "issues": "write",
     }
     publish_env = publish_job["steps"][-1].get("env", {})
     assert not any("API_KEY" in k for k in publish_env)
