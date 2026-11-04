@@ -64,6 +64,47 @@ Still, some restrictions are inevitable:
 </p>
 
 
+## Graph-EFM ensemble forecasting
+
+Use `--model graph_efm` with a hierarchical graph, or `--model graph_efm_ms`
+with a flat multiscale graph. Both train with a target-conditioned Gaussian
+negative ELBO and sample forecasts from the latent prior at evaluation time.
+The `--loss` option selects the deterministic models' objective; Graph-EFM
+always uses a Gaussian likelihood, including its log-standard-deviation term.
+Without `--output_std`, observation scales come from the datastore's one-step
+difference statistics and configured feature weights.
+
+When loading a checkpoint for evaluation or resumed training, its saved
+probabilistic settings take precedence over the current YAML section.
+
+Add this optional section alongside `datastores` in the experiment YAML:
+
+```yaml
+probabilistic:
+  latent_dim: 64
+  prior_layers: 2
+  encoder_layers: 2
+  decoder_layers: 4
+  learn_prior: true
+  prior_dist: isotropic
+  kl_beta: 1.0
+  crps_weight: 0.0
+  crps_members: 2
+  eval_ensemble_size: 5
+```
+
+Omit `latent_dim` to use `--hidden_dim`. Layer counts control same-level message
+passing for hierarchical graphs and mesh processing for flat graphs.
+A positive `crps_weight` adds fair sample CRPS from `crps_members` independent
+prior trajectories (at least two), separately from the posterior ELBO rollout.
+Both objectives sum over forecast steps and state variables; likelihood and
+CRPS use interior grid nodes, while KL sums over latent mesh nodes.
+Setting `kl_beta: 0` skips the prior in the posterior rollout; CRPS, when enabled,
+still trains the prior. Validation and testing use `eval_ensemble_size` members
+and report ensemble-mean RMSE; validation checkpoints monitor `val_mean_loss`,
+the same objective used for training. Ensemble plotting and further ensemble
+verification metrics are separate follow-ups.
+
 # Installing Neural-LAM
 
 When installing `neural-lam` you have a choice of either installing directly with `pip` or using the `uv` package manager.

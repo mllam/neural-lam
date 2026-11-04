@@ -1,0 +1,968 @@
+"""Integration tests for the full Graph-EFM model.
+
+Exercises the pieces that turn the Graph-EFM single-step predictors into a
+trainable model: the ``GraphEFMForecaster`` ELBO objective, its inherited
+ensemble sampling, the ``ProbabilisticForecastingModule`` wrapping, and the
+config-aware assembly path in ``train_model`` (``build_predictor`` /
+``build_forecaster_module``). Predictors are built on the real example
+datastore with a freshly created graph, mirroring
+``tests/test_graph_efm_predictor.py``.
+"""
+
+# Standard library
+from argparse import Namespace
+from pathlib import Path
+
+# Third-party
+import pytest
+import torch
+
+# First-party
+from neural_lam import config as nlconfig
+from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.models import (
+    GraphEFM,
+    GraphEFMForecaster,
+    GraphEFMMultiScale,
+    ProbabilisticForecastingModule,
+)
+from neural_lam.train_model import build_forecaster_module, build_predictor
+from tests.conftest import init_datastore_example
+
+pytestmark = pytest.mark.requires_real_data
+
+NUM_PAST_FORCING_STEPS = 1
+NUM_FUTURE_FORCING_STEPS = 1
+
+
+def _datastore_and_config(graph_name):
+    """
+    Build the example datastore + config and ensure ``graph_name`` exists.
+
+    Parameters
+    ----------
+    graph_name : str
+        Graph directory name; ``"hierarchical"`` builds a multi-level graph,
+        anything else a flat one.
+
+    Returns
+    -------
+    datastore : BaseDatastore
+        The example ``mdp`` datastore.
+    config : NeuralLAMConfig
+        A configuration selecting that datastore.
+    """
+    datastore = init_datastore_example("mdp")
+    config = nlconfig.NeuralLAMConfig(
+        datastores={
+            "interior": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=str(datastore.root_path)
+            )
+        }
+    )
+
+    hierarchical = graph_name == "hierarchical"
+    n_max_levels = 3 if hierarchical else 1
+    graph_dir_path = Path(datastore.root_path) / "graph" / graph_name
+    if not graph_dir_path.exists():
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            hierarchical=hierarchical,
+            n_max_levels=n_max_levels,
+        )
+    return datastore, config
+
+
+def _build_predictor(datastore, graph_name, output_std=False):
+    """
+    Construct a small Graph-EFM predictor for ``graph_name``.
+
+    Parameters
+    ----------
+    datastore : BaseDatastore
+        Datastore to build the predictor on.
+    graph_name : str
+        Graph directory name selecting the flat vs hierarchical variant.
+    output_std : bool, default False
+        Whether the decoder outputs its own std.
+
+    Returns
+    -------
+    BaseGraphEFM
+        The constructed predictor.
+    """
+    if graph_name == "hierarchical":
+        predictor_class = GraphEFM
+        layer_kwargs = {
+            "prior_intra_level_layers": 1,
+            "encoder_intra_level_layers": 1,
+            "decoder_intra_level_layers": 1,
+        }
+    else:
+        predictor_class = GraphEFMMultiScale
+        layer_kwargs = {
+            "prior_m2m_layers": 1,
+            "encoder_m2m_layers": 1,
+            "decoder_m2m_layers": 1,
+        }
+    return predictor_class(
+        datastore=datastore,
+        graph_name=graph_name,
+        hidden_dim=4,
+        hidden_layers=1,
+        latent_dim=4,
+        learn_prior=True,
+        prior_dist="isotropic",
+        num_past_forcing_steps=NUM_PAST_FORCING_STEPS,
+        num_future_forcing_steps=NUM_FUTURE_FORCING_STEPS,
+        output_std=output_std,
+        **layer_kwargs,
+    )
+
+
+def _example_batch(datastore, predictor, batch_size=2, pred_steps=3):
+    """
+    Build a synthetic ``(init_states, forcing_features, target_states)`` batch.
+
+    Parameters
+    ----------
+    datastore : BaseDatastore
+        Datastore providing variable counts.
+    predictor : BaseGraphEFM
+        Predictor providing the grid node count.
+    batch_size : int, default 2
+        Number of samples in the batch.
+    pred_steps : int, default 3
+        Rollout length.
+
+    Returns
+    -------
+    init_states : torch.Tensor
+        Shape ``(B, 2, num_grid_nodes, d_state)``.
+    forcing_features : torch.Tensor
+        Shape ``(B, pred_steps, num_grid_nodes, d_forcing)``.
+    target_states : torch.Tensor
+        Shape ``(B, pred_steps, num_grid_nodes, d_state)``.
+    """
+    num_grid_nodes = predictor.num_grid_nodes
+    d_state = datastore.get_num_data_vars(category="state")
+    d_forcing = datastore.get_num_data_vars(category="forcing") * (
+        NUM_PAST_FORCING_STEPS + NUM_FUTURE_FORCING_STEPS + 1
+    )
+    torch.manual_seed(0)
+    init_states = torch.randn(batch_size, 2, num_grid_nodes, d_state)
+    forcing_features = torch.randn(
+        batch_size, pred_steps, num_grid_nodes, d_forcing
+    )
+    target_states = torch.randn(batch_size, pred_steps, num_grid_nodes, d_state)
+    return init_states, forcing_features, target_states
+
+
+@pytest.mark.parametrize("graph_name", ["1level", "hierarchical"])
+def test_forecaster_forward_and_ensemble_shapes(graph_name):
+    """The forecaster unrolls a prior-sampled rollout and stacks members into
+    an ensemble of the documented shape."""
+    datastore, config = _datastore_and_config(graph_name)
+    predictor = _build_predictor(datastore, graph_name)
+    forecaster = GraphEFMForecaster(predictor, datastore, config=config)
+
+    B, pred_steps, num_members = 2, 3, 4
+    init_states, forcing_features, target_states = _example_batch(
+        datastore, predictor, batch_size=B, pred_steps=pred_steps
+    )
+    d_state = target_states.shape[-1]
+    num_grid_nodes = predictor.num_grid_nodes
+
+    prediction, pred_std = forecaster(
+        init_states, forcing_features, target_states
+    )
+    assert prediction.shape == (B, pred_steps, num_grid_nodes, d_state)
+    assert pred_std is None  # output_std=False predictor
+
+    ensemble, per_member_std = forecaster.sample_ensemble(
+        init_states, forcing_features, target_states, num_members=num_members
+    )
+    assert ensemble.shape == (
+        B,
+        num_members,
+        pred_steps,
+        num_grid_nodes,
+        d_state,
+    )
+    assert per_member_std is None
+    # Members carry independent latent samples
+    assert not torch.allclose(ensemble[:, 0], ensemble[:, 1])
+
+
+@pytest.mark.parametrize("graph_name", ["1level", "hierarchical"])
+def test_predictor_posterior_step_contract(graph_name):
+    """Posterior training reuses graph embeddings and can skip the prior."""
+    datastore, _ = _datastore_and_config(graph_name)
+    predictor = _build_predictor(datastore, graph_name)
+    init_states, forcing_features, target_states = _example_batch(
+        datastore, predictor, batch_size=2, pred_steps=1
+    )
+    prev_prev_state, prev_state = init_states[:, 0], init_states[:, 1]
+    forcing, target_state = forcing_features[:, 0], target_states[:, 0]
+    d_state = target_state.shape[-1]
+    num_grid_nodes = predictor.num_grid_nodes
+
+    graph_emb = predictor.embedd_graph(2)
+    assert {"g2m", "m2g", "mesh"} <= set(graph_emb)
+
+    pred_mean, pred_std = predictor(prev_state, prev_prev_state, forcing)
+    assert pred_mean.shape == (2, num_grid_nodes, d_state)
+    assert pred_std is None
+
+    # Training path with KL: both distributions present
+    prior, posterior, _, _ = predictor.posterior_step(
+        prev_state,
+        prev_prev_state,
+        forcing,
+        target_state,
+        graph_emb,
+        compute_prior=True,
+    )
+    assert prior is not None
+    assert posterior is not None
+
+    # Training path without KL: prior skipped
+    prior, posterior, _, _ = predictor.posterior_step(
+        prev_state,
+        prev_prev_state,
+        forcing,
+        target_state,
+        graph_emb,
+        compute_prior=False,
+    )
+    assert prior is None
+    assert posterior is not None
+
+
+def test_predictor_clamps_predicted_mean():
+    """With output clamping configured for a feature, Graph-EFM keeps the
+    predicted mean for that feature within the configured bounds, clamping it
+    like the deterministic models do."""
+    datastore, _ = _datastore_and_config("1level")
+    state_names = datastore.get_vars_names(category="state")
+    lower, upper = -0.5, 0.5
+    predictor = GraphEFMMultiScale(
+        datastore=datastore,
+        graph_name="1level",
+        hidden_dim=4,
+        hidden_layers=1,
+        latent_dim=4,
+        prior_m2m_layers=1,
+        encoder_m2m_layers=1,
+        decoder_m2m_layers=1,
+        output_clamping_lower={state_names[0]: lower},
+        output_clamping_upper={state_names[0]: upper},
+    )
+    # The first state feature has a two-sided (sigmoid) clamp registered
+    assert predictor.clamp_lower_upper_idx.tolist() == [0]
+    lower_n = (lower - predictor.state_mean[0]) / predictor.state_std[0]
+    upper_n = (upper - predictor.state_mean[0]) / predictor.state_std[0]
+
+    B = 2
+    num_grid_nodes = predictor.num_grid_nodes
+    d_state = len(state_names)
+    d_forcing = datastore.get_num_data_vars(category="forcing") * (
+        NUM_PAST_FORCING_STEPS + NUM_FUTURE_FORCING_STEPS + 1
+    )
+    torch.manual_seed(0)
+    prev_state = torch.randn(B, num_grid_nodes, d_state)
+    # The current value of the clamped feature must be within its bounds so
+    # the inverse clamp is finite; the midpoint is a safe choice.
+    prev_state[..., 0] = (lower_n + upper_n) / 2
+    prev_prev_state = torch.randn(B, num_grid_nodes, d_state)
+    forcing = torch.randn(B, num_grid_nodes, d_forcing)
+
+    pred_mean, _ = predictor(prev_state, prev_prev_state, forcing)
+
+    clamped_feature = pred_mean[..., 0]
+    assert torch.all(clamped_feature > lower_n)
+    assert torch.all(clamped_feature < upper_n)
+
+
+def test_hierarchical_zero_intra_level_layers_runs():
+    """A hierarchical GraphEFM with no intra-level layers uses an empty m2m
+    placeholder; forward must still run (regression for m2m handling)."""
+    datastore, _ = _datastore_and_config("hierarchical")
+    predictor = GraphEFM(
+        datastore=datastore,
+        graph_name="hierarchical",
+        hidden_dim=4,
+        hidden_layers=1,
+        latent_dim=4,
+        prior_intra_level_layers=0,
+        encoder_intra_level_layers=0,
+        decoder_intra_level_layers=0,
+    )
+    assert not predictor.embedd_m2m
+
+    B = 2
+    num_grid_nodes = predictor.num_grid_nodes
+    d_state = datastore.get_num_data_vars(category="state")
+    d_forcing = datastore.get_num_data_vars(category="forcing") * (
+        NUM_PAST_FORCING_STEPS + NUM_FUTURE_FORCING_STEPS + 1
+    )
+    torch.manual_seed(0)
+    prev_state = torch.randn(B, num_grid_nodes, d_state)
+    prev_prev_state = torch.randn(B, num_grid_nodes, d_state)
+    forcing = torch.randn(B, num_grid_nodes, d_forcing)
+
+    pred_mean, _ = predictor(prev_state, prev_prev_state, forcing)
+    assert pred_mean.shape == (B, num_grid_nodes, d_state)
+
+
+@pytest.mark.parametrize("graph_name", ["1level", "hierarchical"])
+def test_elbo_training_loss_gradient_flow(graph_name):
+    """compute_training_loss returns a finite scalar ELBO with likelihood/KL
+    components, and gradients flow back into the predictor."""
+    datastore, config = _datastore_and_config(graph_name)
+    predictor = _build_predictor(datastore, graph_name)
+    forecaster = GraphEFMForecaster(
+        predictor, datastore, config=config, kl_beta=1.0
+    )
+
+    init_states, forcing_features, target_states = _example_batch(
+        datastore, predictor
+    )
+    interior_mask_bool = forecaster.interior_mask[0, :, 0].to(torch.bool)
+
+    torch.manual_seed(0)
+    batch_loss, loss_components = forecaster.compute_training_loss(
+        init_states,
+        forcing_features,
+        target_states,
+        interior_mask_bool=interior_mask_bool,
+    )
+
+    assert batch_loss.shape == ()
+    assert torch.isfinite(batch_loss)
+    assert set(loss_components) == {"elbo_likelihood", "elbo_kl", "elbo"}
+    assert (loss_components["elbo_kl"] >= 0).all()
+
+    batch_loss.backward()
+    grads = [p.grad for p in predictor.parameters() if p.grad is not None]
+    assert grads, "no gradients reached the predictor"
+    assert any(torch.any(g != 0) for g in grads)
+
+
+@pytest.mark.parametrize("graph_name", ["1level", "hierarchical"])
+def test_elbo_kl_beta_zero_skips_kl(graph_name):
+    """With kl_beta=0 the loss is the negative likelihood alone and no KL
+    component is reported (pure auto-encoder training)."""
+    datastore, config = _datastore_and_config(graph_name)
+    predictor = _build_predictor(datastore, graph_name)
+    forecaster = GraphEFMForecaster(
+        predictor, datastore, config=config, kl_beta=0.0
+    )
+
+    init_states, forcing_features, target_states = _example_batch(
+        datastore, predictor
+    )
+    interior_mask_bool = forecaster.interior_mask[0, :, 0].to(torch.bool)
+
+    torch.manual_seed(0)
+    batch_loss, loss_components = forecaster.compute_training_loss(
+        init_states,
+        forcing_features,
+        target_states,
+        interior_mask_bool=interior_mask_bool,
+    )
+
+    assert set(loss_components) == {"elbo_likelihood"}
+    torch.testing.assert_close(batch_loss, -loss_components["elbo_likelihood"])
+    batch_loss.backward()  # still differentiable
+
+
+@pytest.mark.requires_training
+def test_module_training_and_validation_steps():
+    """The ProbabilisticForecastingModule delegates training to the forecaster
+    ELBO and scores an ensemble mean during validation."""
+    datastore, config = _datastore_and_config("1level")
+    predictor = _build_predictor(datastore, "1level")
+    forecaster = GraphEFMForecaster(
+        predictor, datastore, config=config, kl_beta=1.0
+    )
+    model = ProbabilisticForecastingModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        eval_ensemble_size=2,
+    )
+
+    B, pred_steps = 2, 3
+    init_states, forcing_features, target_states = _example_batch(
+        datastore, predictor, batch_size=B, pred_steps=pred_steps
+    )
+    batch_times = torch.zeros(B, pred_steps)
+    batch = (init_states, target_states, forcing_features, None, batch_times)
+
+    torch.manual_seed(0)
+    train_loss = model.training_step(batch)
+    assert train_loss.shape == ()
+    assert torch.isfinite(train_loss)
+
+    model.validation_step(batch, 0)
+    (entry_mses,) = model.val_metrics["ens_mse"]
+    d_state = target_states.shape[-1]
+    assert entry_mses.shape == (B, pred_steps, d_state)
+    assert torch.all(torch.isfinite(entry_mses))
+
+
+@pytest.mark.parametrize(
+    "model_name, predictor_class, graph_name",
+    [
+        ("graph_efm", GraphEFM, "hierarchical"),
+        ("graph_efm_ms", GraphEFMMultiScale, "1level"),
+    ],
+)
+def test_train_model_assembly_selects_probabilistic_path(
+    model_name, predictor_class, graph_name
+):
+    """train_model's build_predictor/build_forecaster_module route the
+    graph_efm* models through the probabilistic assembly, reading the
+    Graph-EFM hyperparameters from the ``probabilistic`` config section and
+    producing the right predictor, forecaster, module class and checkpoint
+    monitor."""
+    datastore, _ = _datastore_and_config(graph_name)
+    config = nlconfig.NeuralLAMConfig(
+        datastores={
+            "interior": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=str(datastore.root_path)
+            )
+        },
+        probabilistic=nlconfig.ProbabilisticConfig(
+            latent_dim=4,
+            prior_layers=1,
+            encoder_layers=1,
+            decoder_layers=1,
+            kl_beta=0.5,
+            eval_ensemble_size=3,
+        ),
+    )
+    args = Namespace(
+        model=model_name,
+        graph=graph_name,
+        hidden_dim=4,
+        hidden_layers=1,
+        num_past_forcing_steps=NUM_PAST_FORCING_STEPS,
+        num_future_forcing_steps=NUM_FUTURE_FORCING_STEPS,
+        output_std=False,
+        g2m_gnn_type="InteractionNet",
+        m2g_gnn_type="InteractionNet",
+        loss="mse",
+    )
+
+    predictor = build_predictor(predictor_class, args, config, datastore)
+    assert isinstance(predictor, predictor_class)
+    # Hyperparameters came from config.probabilistic, not the CLI args
+    assert predictor.latent_dim == 4
+
+    forecaster, module_class, module_kwargs = build_forecaster_module(
+        args, config, datastore, predictor
+    )
+    assert isinstance(forecaster, GraphEFMForecaster)
+    assert forecaster.kl_beta == 0.5
+    assert module_class is ProbabilisticForecastingModule
+    assert module_kwargs == {"eval_ensemble_size": 3}
+
+
+@pytest.mark.requires_training
+@pytest.mark.parametrize(
+    "graph_name,output_std",
+    [
+        ("1level", False),
+        ("1level", True),
+        ("hierarchical", False),
+    ],
+)
+def test_training_checkpoint_round_trip(graph_name, output_std, tmp_path):
+    """Train both graph families and reload their checkpoints."""
+    # Third-party
+    import pytorch_lightning as pl
+    from torch.utils.data import DataLoader, TensorDataset
+
+    # First-party
+    from neural_lam.train_model import load_forecasting_module_from_checkpoint
+
+    datastore, config = _datastore_and_config(graph_name)
+    config.probabilistic = nlconfig.ProbabilisticConfig(
+        latent_dim=8,
+        prior_layers=1,
+        encoder_layers=1,
+        decoder_layers=2,
+        crps_weight=0.1,
+        eval_ensemble_size=2,
+    )
+    args = Namespace(
+        model="graph_efm" if graph_name == "hierarchical" else "graph_efm_ms",
+        graph=graph_name,
+        hidden_dim=4,
+        hidden_layers=1,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        output_std=output_std,
+        loss="wmse",
+    )
+    predictor = build_predictor(
+        GraphEFM if graph_name == "hierarchical" else GraphEFMMultiScale,
+        args,
+        config,
+        datastore,
+    )
+    forecaster, module_class, module_kwargs = build_forecaster_module(
+        args,
+        config,
+        datastore,
+        predictor,
+    )
+    model = module_class(
+        forecaster,
+        config,
+        datastore,
+        args=args,
+        **module_kwargs,
+    )
+    initial, forcing, target = _example_batch(datastore, predictor, 2, 2)
+    dataset = TensorDataset(
+        initial,
+        target,
+        forcing,
+        torch.empty(2, 2, predictor.num_grid_nodes, 0),
+        torch.zeros(2, 2),
+    )
+    trainer = pl.Trainer(
+        accelerator="cpu",
+        devices=1,
+        max_steps=1,
+        logger=False,
+        enable_checkpointing=False,
+        enable_progress_bar=False,
+        enable_model_summary=False,
+        num_sanity_val_steps=0,
+    )
+    trainer.fit(model, train_dataloaders=DataLoader(dataset, batch_size=2))
+    assert trainer.global_step == 1
+    checkpoint = tmp_path / "graph_efm.ckpt"
+    trainer.save_checkpoint(checkpoint)
+    caller_config = nlconfig.NeuralLAMConfig(datastores=config.datastores)
+    restored = load_forecasting_module_from_checkpoint(
+        str(checkpoint), caller_config, datastore
+    )
+    assert caller_config.probabilistic == nlconfig.ProbabilisticConfig()
+    assert restored.forecaster.predictor.latent_dim == 8
+    for name, value in model.state_dict().items():
+        torch.testing.assert_close(restored.state_dict()[name], value)
+
+    # Older checkpoints may not contain experiment configuration.
+    saved = torch.load(checkpoint, weights_only=False)
+    del saved["hyper_parameters"]["config"]
+    legacy_checkpoint = tmp_path / "legacy_graph_efm.ckpt"
+    torch.save(saved, legacy_checkpoint)
+    legacy_restored = load_forecasting_module_from_checkpoint(
+        str(legacy_checkpoint), config, datastore
+    )
+    for name, value in model.state_dict().items():
+        torch.testing.assert_close(legacy_restored.state_dict()[name], value)
+
+    assert isinstance(restored, ProbabilisticForecastingModule)
+    assert restored.eval_ensemble_size == 2
+    torch.manual_seed(4)
+    expected, expected_std = model.forecaster(initial, forcing, target)
+    torch.manual_seed(4)
+    actual, actual_std = restored.forecaster(initial, forcing, target)
+    torch.testing.assert_close(actual, expected)
+    if output_std:
+        torch.testing.assert_close(actual_std, expected_std)
+
+
+def test_posterior_and_prior_share_increment_rescaling(monkeypatch):
+    """Prior and posterior sampling share increment rescaling."""
+    datastore, _ = _datastore_and_config("1level")
+    predictor = _build_predictor(datastore, "1level", output_std=True)
+    initial, forcing, target = _example_batch(datastore, predictor, 2, 1)
+    previous = initial[:, 1]
+    monkeypatch.setattr(
+        predictor.decoder,
+        "forward",
+        lambda *args: (
+            torch.ones_like(previous),
+            torch.full_like(previous, 0.5),
+        ),
+    )
+    predictor.diff_mean.fill_(2.0)
+    predictor.diff_std.fill_(3.0)
+    prediction, std = predictor(previous, initial[:, 0], forcing[:, 0])
+    _, _, posterior_prediction, posterior_std = predictor.posterior_step(
+        previous,
+        initial[:, 0],
+        forcing[:, 0],
+        target[:, 0],
+    )
+    torch.testing.assert_close(prediction, previous + 5)
+    torch.testing.assert_close(posterior_prediction, previous + 5)
+    torch.testing.assert_close(std, posterior_std)
+
+
+def test_decoder_std_remains_positive_for_large_negative_logits():
+    """Decoder underflow cannot produce zero Gaussian observation scales."""
+    datastore, _ = _datastore_and_config("1level")
+    predictor = _build_predictor(datastore, "1level", output_std=True)
+    num_vars = datastore.get_num_data_vars("state")
+    linear = torch.nn.Linear(4, 2 * num_vars)
+    with torch.no_grad():
+        linear.weight.zero_()
+        linear.bias.zero_()
+        linear.bias[num_vars:] = -1000
+    predictor.decoder.param_map = linear
+    initial, forcing, _ = _example_batch(datastore, predictor, 2, 1)
+    prediction, std = predictor(initial[:, 1], initial[:, 0], forcing[:, 0])
+    assert torch.all(std > 0)
+    nll = -torch.distributions.Normal(prediction, std).log_prob(prediction)
+    assert torch.isfinite(nll).all()
+    nll.sum().backward()
+    assert torch.isfinite(linear.bias.grad).all()
+
+
+@pytest.mark.parametrize("graph_name", ["1level", "hierarchical"])
+def test_forward_reuses_optional_graph_embedding(graph_name, monkeypatch):
+    """Supplied graph embeddings preserve samples and avoid recomputation."""
+    # Standard library
+    from unittest.mock import Mock
+
+    datastore, _ = _datastore_and_config(graph_name)
+    predictor = _build_predictor(datastore, graph_name)
+    initial, forcing, _ = _example_batch(datastore, predictor, 2, 2)
+    torch.manual_seed(9)
+    expected, _ = predictor(initial[:, 1], initial[:, 0], forcing[:, 0])
+    embed = Mock(wraps=predictor.embedd_graph)
+    monkeypatch.setattr(predictor, "embedd_graph", embed)
+    graph_emb = predictor.embedd_graph(2)
+    torch.manual_seed(9)
+    actual, _ = predictor(
+        initial[:, 1], initial[:, 0], forcing[:, 0], graph_emb=graph_emb
+    )
+    torch.testing.assert_close(actual, expected)
+    prediction, _ = predictor(
+        actual, initial[:, 1], forcing[:, 1], graph_emb=graph_emb
+    )
+    prediction.sum().backward()
+    embed.assert_called_once_with(2)
+    assert predictor.grid_prev_embedder[0].weight.grad is not None
+    assert predictor.g2m_embedder[0].weight.grad is not None
+
+
+@pytest.mark.parametrize(
+    "model_name,predictor_class,graph_name",
+    [
+        ("graph_efm", GraphEFM, "hierarchical"),
+        ("graph_efm_ms", GraphEFMMultiScale, "1level"),
+    ],
+)
+@pytest.mark.parametrize(
+    "flag,value",
+    [
+        ("processor_layers", 7),
+        ("mesh_aggr", "mean"),
+        ("mesh_up_gnn_type", "PropagationNet"),
+        ("mesh_down_gnn_type", "PropagationNet"),
+        ("loss", "nll"),
+        (None, None),
+    ],
+)
+def test_ignored_graph_efm_options_warn(
+    model_name,
+    predictor_class,
+    graph_name,
+    flag,
+    value,
+    monkeypatch,
+):
+    """Report non-default deterministic options for Graph-EFM."""
+    # Standard library
+    from unittest.mock import Mock
+
+    # First-party
+    from neural_lam import train_model
+
+    datastore, config = _datastore_and_config(graph_name)
+    args = train_model.build_parser().parse_args(
+        ["--config_path", "unused.yaml"]
+    )
+    args.model = model_name
+    args.graph = graph_name
+    args.hidden_dim = 4
+    if flag is not None:
+        setattr(args, flag, value)
+    warning = Mock()
+    monkeypatch.setattr(train_model.logger, "warning", warning)
+    build_predictor(predictor_class, args, config, datastore)
+    if flag is None:
+        warning.assert_not_called()
+    else:
+        warning.assert_called_once()
+        assert warning.call_args.args[1] == flag
+        assert "has no effect" in warning.call_args.args[0]
+
+
+@pytest.mark.parametrize(
+    "model_name,graph_name",
+    [
+        ("graph_efm", "hierarchical"),
+        ("graph_efm_ms", "1level"),
+    ],
+)
+def test_graph_efm_run_name_uses_configured_layers(
+    model_name,
+    graph_name,
+    monkeypatch,
+    tmp_path,
+):
+    """Default run names identify actual prior, encoder and decoder depths."""
+    # First-party
+    from neural_lam import train_model
+
+    datastore, config = _datastore_and_config(graph_name)
+    config.probabilistic = nlconfig.ProbabilisticConfig(
+        prior_layers=1,
+        encoder_layers=2,
+        decoder_layers=3,
+    )
+    names = []
+
+    def capture_logger(**kwargs):
+        names.append(kwargs["run_name"])
+        raise RuntimeError("stop before trainer")
+
+    monkeypatch.setattr(
+        train_model.utils, "setup_training_logger", capture_logger
+    )
+    with pytest.raises(RuntimeError, match="stop before trainer"):
+        train_model.fit(
+            model_config=nlconfig.ModelConfig(
+                model=model_name,
+                graph=graph_name,
+                hidden_dim=4,
+            ),
+            train_config=nlconfig.TrainRunConfig(
+                ar_steps_train=1,
+                ar_steps_eval=1,
+                val_steps_to_log=[1],
+                train_steps_to_log=[1],
+            ),
+            data_config=nlconfig.DataConfig(),
+            compute_config=nlconfig.ComputeConfig(devices=1),
+            logging_config=nlconfig.LoggingConfig(runs_root=str(tmp_path)),
+            config=config,
+            datastore=datastore,
+        )
+    assert names[0].startswith(f"train-{model_name}-p1-e2-d3x4-")
+
+
+@pytest.fixture(scope="module", params=["1level", "hierarchical"])
+def cli_graph_efm_checkpoint(request, tmp_path_factory):
+    """Save a one-step dummy-data model with non-default latent settings."""
+    # Third-party
+    import pytorch_lightning as pl
+    from torch.utils.data import DataLoader, TensorDataset
+
+    # First-party
+    from neural_lam import api, train_model
+    from tests.dummy_datastore import DummyDatastore
+
+    graph_name = request.param
+    datastore = DummyDatastore(n_grid_points=100, n_timesteps=15)
+    graph_kwargs = (
+        {"level_refinement_factor": 2, "mesh_grid_distance_ratio": 1.5}
+        if graph_name == "hierarchical"
+        else {}
+    )
+    api.create_graph(
+        datastore=datastore,
+        name=graph_name,
+        archetype="hierarchical" if graph_name == "hierarchical" else "keisler",
+        **graph_kwargs,
+    )
+    config = nlconfig.NeuralLAMConfig(
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=str(datastore.root_path),
+            )
+        },
+        probabilistic=nlconfig.ProbabilisticConfig(
+            latent_dim=8,
+            prior_layers=1,
+            encoder_layers=1,
+            decoder_layers=2,
+            eval_ensemble_size=2,
+        ),
+    )
+    model_name = "graph_efm" if graph_name == "hierarchical" else "graph_efm_ms"
+    args = train_model.build_parser().parse_args(
+        [
+            "--config_path",
+            "unused.yaml",
+            "--model",
+            model_name,
+            "--graph",
+            graph_name,
+            "--hidden_dim",
+            "4",
+        ]
+    )
+    predictor = build_predictor(
+        train_model.MODELS[model_name], args, config, datastore
+    )
+    forecaster, module_class, module_kwargs = build_forecaster_module(
+        args,
+        config,
+        datastore,
+        predictor,
+    )
+    model = module_class(
+        forecaster, config, datastore, args=args, **module_kwargs
+    )
+    initial, forcing, target = _example_batch(datastore, predictor, 2, 1)
+    dataset = TensorDataset(
+        initial,
+        target,
+        forcing,
+        torch.empty(2, 1, predictor.num_grid_nodes, 0),
+        torch.zeros(2, 1),
+    )
+    trainer = pl.Trainer(
+        accelerator="cpu",
+        devices=1,
+        max_steps=1,
+        logger=False,
+        enable_checkpointing=False,
+        enable_progress_bar=False,
+        enable_model_summary=False,
+        num_sanity_val_steps=0,
+    )
+    trainer.fit(model, train_dataloaders=DataLoader(dataset, batch_size=2))
+    assert trainer.global_step == 1
+    checkpoint = tmp_path_factory.mktemp(f"cli_{model_name}") / "source.ckpt"
+    trainer.save_checkpoint(checkpoint)
+    return datastore, config, checkpoint, model_name, graph_name
+
+
+@pytest.mark.requires_training
+@pytest.mark.parametrize(
+    "mode,section",
+    [
+        ("test", "different"),
+        ("test", "equal"),
+        ("test", "omitted"),
+        ("test", "legacy"),
+        (None, "different"),
+    ],
+)
+def test_cli_restores_probabilistic_checkpoint_settings(
+    cli_graph_efm_checkpoint,
+    mode,
+    section,
+    monkeypatch,
+    tmp_path,
+):
+    """CLI evaluation and resume build models with checkpoint architecture."""
+    # Standard library
+    from unittest.mock import Mock
+
+    # Third-party
+    import yaml
+
+    # First-party
+    from neural_lam import train_model
+
+    datastore, saved_config, checkpoint, model_name, graph_name = (
+        cli_graph_efm_checkpoint
+    )
+    caller_config = nlconfig.NeuralLAMConfig(
+        datastores=saved_config.datastores,
+        probabilistic=(
+            saved_config.probabilistic
+            if section in {"equal", "legacy"}
+            else nlconfig.ProbabilisticConfig()
+        ),
+    )
+    if section == "legacy":
+        saved = torch.load(checkpoint, weights_only=False)
+        del saved["hyper_parameters"]["config"]
+        checkpoint = tmp_path / "legacy.ckpt"
+        torch.save(saved, checkpoint)
+    raw_config = yaml.safe_load(caller_config.to_yaml())
+    if section == "omitted":
+        del raw_config["probabilistic"]
+    config_path = tmp_path / "experiment.yaml"
+    config_path.write_text(yaml.safe_dump(raw_config))
+
+    real_trainer = train_model.pl.Trainer
+    trainers = []
+
+    def build_test_trainer(**kwargs):
+        trainer = real_trainer(
+            **kwargs,
+            limit_train_batches=1,
+            limit_val_batches=1,
+            limit_test_batches=1,
+            enable_progress_bar=False,
+            enable_model_summary=False,
+        )
+        trainers.append(trainer)
+        return trainer
+
+    warning = Mock()
+    monkeypatch.setattr(train_model.pl, "Trainer", build_test_trainer)
+    monkeypatch.setattr(train_model.logger, "warning", warning)
+    (tmp_path / "loaded").mkdir()
+    result = train_model.fit(
+        model_config=nlconfig.ModelConfig(
+            model=model_name,
+            graph=graph_name,
+            hidden_dim=4,
+        ),
+        train_config=nlconfig.TrainRunConfig(
+            epochs=2,
+            batch_size=2,
+            ar_steps_train=1,
+            ar_steps_eval=1,
+            val_steps_to_log=[1],
+            num_sanity_val_steps=0,
+            eval=mode,
+            load=str(checkpoint),
+        ),
+        data_config=nlconfig.DataConfig(num_workers=0),
+        compute_config=nlconfig.ComputeConfig(devices=1),
+        logging_config=nlconfig.LoggingConfig(
+            runs_root=str(tmp_path), logger_run_name="loaded"
+        ),
+        config=caller_config,
+        datastore=datastore,
+        config_path=str(config_path),
+    )
+    evaluated = trainers[0].lightning_module
+    assert evaluated.forecaster.predictor.latent_dim == 8
+    assert evaluated.hparams.config.probabilistic == saved_config.probabilistic
+    assert result.checkpoint_path is not None
+    if section == "different":
+        warning.assert_called_once()
+        assert (
+            "checkpoint's probabilistic settings take precedence"
+            in warning.call_args.args[0]
+        )
+    else:
+        warning.assert_not_called()
+    if mode == "test":
+        source_weights = torch.load(checkpoint, weights_only=False)[
+            "state_dict"
+        ]
+        for name, value in evaluated.state_dict().items():
+            torch.testing.assert_close(value, source_weights[name])
+    else:
+        assert trainers[0].global_step > 1
