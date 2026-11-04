@@ -37,7 +37,7 @@ def create_flat_graph(datastore):
 @pytest.fixture(scope="module")
 def graph_datastore():
     """Create a small datastore and flat graph shared by transfer tests."""
-    datastore = DummyDatastore(n_grid_points=25)
+    datastore = DummyDatastore(n_grid_points=81)
     create_flat_graph(datastore)
     return datastore
 
@@ -45,8 +45,8 @@ def graph_datastore():
 @pytest.fixture(scope="module")
 def different_feature_datastores():
     """Create source and target datastores with different state variables."""
-    source_datastore = DummyDatastore(n_grid_points=25)
-    target_datastore = ReducedStateDummyDatastore(n_grid_points=25)
+    source_datastore = DummyDatastore(n_grid_points=81)
+    target_datastore = ReducedStateDummyDatastore(n_grid_points=81)
     create_flat_graph(source_datastore)
     create_flat_graph(target_datastore)
     return source_datastore, target_datastore
