@@ -22,6 +22,7 @@ from .step_predictors.graph.hi_lam import HiLAM
 from .step_predictors.graph.hi_lam_parallel import HiLAMParallel
 from .step_predictors.graph.hierarchical import BaseHiGraphModel
 from .step_predictors.persistence import PersistencePredictor
+from .transfer import initialize_graph_lam_from_checkpoint
 
 # NOTE: GraphEFM/GraphEFMMultiScale are intentionally NOT registered in
 # MODELS yet.
