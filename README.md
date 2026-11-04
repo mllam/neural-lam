@@ -513,6 +513,7 @@ A few of the key ones are outlined below:
 * `--ar_steps_train`: Number of time steps to unroll for when making predictions and computing the loss
 * `--ar_steps_eval`: Number of time steps to unroll for during validation steps
 * `--loss`: Which of the loss functions in `neural_lam/metrics.py` to train on
+* `--gradient_checkpointing`: Recompute the activations of each autoregressive step in the backward pass instead of storing them, lowers peak memory when `--ar_steps_train` > 1 at the cost of extra compute
 
 Checkpoints of trained models are stored under `runs/<run-name>/checkpoints/`, alongside Lightning and logger outputs for the same run.
 The implemented models are:
