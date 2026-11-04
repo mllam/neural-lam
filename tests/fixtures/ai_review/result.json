@@ -1,0 +1,25 @@
+{
+  "status": "review",
+  "head_sha": "abc1234def5678",
+  "triage": {
+    "simple": true,
+    "reason": "Small boundary check fix with a unit test."
+  },
+  "review": {
+    "summary": "The `step < 1` check fixes the zero-index bug (related to [#836](https://github.com/mllam/neural-lam/pull/836)). Ping @maintainer and visit [tracker](https://evil.example/leak) ![px](https://evil.example/p.png) <img src=\"https://evil.example/x\">. Please also add a `CHANGELOG.md` entry.",
+    "comments": [
+      {
+        "path": "tests/test_metrics.py",
+        "line": 6,
+        "body": "Consider parametrizing negative inputs too:",
+        "suggestion": "@pytest.mark.parametrize(\"bad_step\", [0, -1])\ndef test_validate_lead_step_rejects_non_positive(bad_step):"
+      },
+      {
+        "path": "neural_lam/metrics.py",
+        "line": 999,
+        "body": "Out-of-hunk line that must be dropped by publish.py.",
+        "suggestion": ""
+      }
+    ]
+  }
+}
