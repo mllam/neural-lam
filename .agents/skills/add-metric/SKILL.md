@@ -17,7 +17,7 @@ Metric functions in `neural_lam.metrics` follow the standard callable contract:
 def my_metric(
     pred: torch.Tensor,
     target: torch.Tensor,
-    pred_std: torch.Tensor,
+    pred_std: torch.Tensor | None = None,
     mask: torch.Tensor | None = None,
     average_grid: bool = True,
     sum_vars: bool = True,
@@ -26,7 +26,7 @@ def my_metric(
 ```
 - `pred`: Model prediction tensor of shape `(..., N, num_variables)`.
 - `target`: Ground truth target tensor of shape `(..., N, num_variables)`.
-- `pred_std`: Predicted standard deviation or weighting tensor (can be ignored or replaced with ones for deterministic metrics).
+- `pred_std`: Predicted standard deviation or weighting tensor. Deterministic evaluation metrics declare `pred_std: torch.Tensor | None = None` (optional/unused). Distribution-scoring metrics declare `pred_std: torch.Tensor` without default (checked via `neural_lam.metrics.requires_pred_std`).
 - `mask`: Optional boolean spatial mask of shape `(N,)` over active grid nodes.
 - `average_grid`: If `True`, average across the grid dimension `N`.
 - `sum_vars`: If `True`, sum across the variable dimension `num_variables`.
@@ -35,7 +35,9 @@ def my_metric(
 Inspect these implementations in `neural_lam/metrics.py`:
 - **Smallest deterministic reference**: `mae` in `neural_lam/metrics.py`.
 - **Weighted baseline reference**: `wmse` in `neural_lam/metrics.py`.
+- **Probabilistic objective references**: `crps_gauss` and `nll` in `neural_lam/metrics.py`.
 - **Spatial reduction utility**: `mask_and_reduce_metric` in `neural_lam/metrics.py`.
+- **Uncertainty requirement check**: `neural_lam.metrics.requires_pred_std` in `neural_lam/metrics.py`.
 
 ## 2. Register in `DEFINED_METRICS`
 Register the metric function in `neural_lam.metrics.DEFINED_METRICS` in `neural_lam/metrics.py`:

@@ -8,7 +8,7 @@ description: Implement, configure, and test a training loss function with spatia
 Follow this recipe to implement and register a training loss function with spatial masking and state-feature weighting.
 
 ## 1. Implement Loss in `metrics.py`
-In Neural-LAM, training losses share the standard callable metric interface and are resolved via `neural_lam.metrics.get_metric(loss_name)` inside `ForecasterModule`.
+In Neural-LAM, training losses share the standard callable metric interface and are resolved via `neural_lam.metrics.get_metric(loss_name)` inside `BaseDeterministicForecaster` (or custom forecasters) and scored through `forecaster.compute_loss_from_forecast`.
 - Implement your loss function in `neural_lam/metrics.py`.
 - Use `mask_and_reduce_metric` to apply spatial masking and tensor reductions across grid and variable dimensions.
 
@@ -27,15 +27,16 @@ def my_loss(
 ```
 - `pred`: Predictions of shape `(..., N, num_variables)`.
 - `target`: Ground truth targets of shape `(..., N, num_variables)`.
-- `pred_std`: Predicted scale/variance or feature weights of shape `(..., N, num_variables)`.
+- `pred_std`: Predicted scale/variance or feature weights of shape `(..., N, num_variables)` (required for distribution-scoring and weighted losses, detected via `neural_lam.metrics.requires_pred_std`).
 - `mask`: Spatial mask of shape `(N,)` isolating interior grid nodes from boundary nodes.
 
 ### Reference Implementations & Weighting Pointers
 Inspect these implementations as canonical references:
 - **Weighted MSE loss reference**: `wmse` in `neural_lam/metrics.py`.
 - **Weighted MAE loss reference**: `wmae` in `neural_lam/metrics.py`.
-- **State-feature weighting utilities**: `neural_lam.loss_weighting.get_uniform_state_feature_weights` and `neural_lam.loss_weighting.get_manual_state_feature_weights` in `neural_lam/loss_weighting.py`.
-- **Forecaster integration**: `neural_lam.models.ForecasterModule` in `neural_lam/models/module.py`.
+- **Probabilistic objective references**: `crps_gauss` and `nll` in `neural_lam/metrics.py`.
+- **State-feature weighting utilities**: `neural_lam.loss_weighting.get_per_var_std`, `neural_lam.loss_weighting.get_uniform_state_feature_weights`, and `neural_lam.loss_weighting.get_manual_state_feature_weights` in `neural_lam/loss_weighting.py`.
+- **Forecaster integration**: `neural_lam.models.BaseDeterministicForecaster` in `neural_lam/models/forecasters/deterministic.py` and `neural_lam.models.DeterministicForecastingModule` in `neural_lam/models/modules/deterministic.py`.
 
 ## 2. Register in `DEFINED_METRICS`
 Add the loss key to `DEFINED_METRICS` in `neural_lam/metrics.py` so it can be passed via `--loss <name>` or `api.train(loss="<name>")`.

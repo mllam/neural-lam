@@ -33,6 +33,7 @@ def forward(
 Inspect these minimal implementations as canonical references:
 - **Smallest minimal implementation**: `neural_lam.models.step_predictors.persistence.PersistencePredictor` in `neural_lam/models/step_predictors/persistence.py`.
 - **Graph model implementation**: `neural_lam.models.step_predictors.graph.graph_lam.GraphLAM` in `neural_lam/models/step_predictors/graph/graph_lam.py`.
+- **Forecaster & module pipeline**: Step predictors are unrolled across lead times by `neural_lam.models.DeterministicARForecaster` in `neural_lam/models/forecasters/deterministic.py` and evaluated inside `neural_lam.models.DeterministicForecastingModule` in `neural_lam/models/modules/deterministic.py`.
 
 ## 2. Register in `MODELS`
 Register the model class in `neural_lam.models.MODELS` in `neural_lam/models/__init__.py` with its CLI identifier string.
