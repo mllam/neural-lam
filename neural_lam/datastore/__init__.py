@@ -2,20 +2,48 @@
 
 # Standard library
 from pathlib import Path
+from typing import Callable, TypeVar
 
 # Local
 from .base import BaseDatastore  # noqa: F401
 from .mdp import MDPDatastore  # noqa: F401
 from .npyfilesmeps import NpyFilesDatastoreMEPS  # noqa: F401
 
-DATASTORE_CLASSES = [
-    MDPDatastore,
-    NpyFilesDatastoreMEPS,
-]
+T = TypeVar("T", bound=type[BaseDatastore])
 
-DATASTORES = {
-    datastore.SHORT_NAME: datastore for datastore in DATASTORE_CLASSES
-}
+DATASTORES: dict[str, type[BaseDatastore]] = {}
+
+
+def register_datastore(name: str) -> Callable[[T], T]:
+    """
+    Decorator to register a BaseDatastore class in the DATASTORES registry.
+
+    Parameters
+    ----------
+    name : str
+        The short name identifier for the datastore backend.
+
+    Returns
+    -------
+    Callable
+        Decorator registering the datastore class under ``name``.
+    """
+
+    def decorator(cls: T) -> T:
+        """Register the datastore class."""
+        if name in DATASTORES:
+            raise ValueError(
+                f"Datastore '{name}' is already registered to "
+                f"{DATASTORES[name]}"
+            )
+        DATASTORES[name] = cls
+        return cls
+
+    return decorator
+
+
+register_datastore(MDPDatastore.SHORT_NAME)(MDPDatastore)
+register_datastore(NpyFilesDatastoreMEPS.SHORT_NAME)(NpyFilesDatastoreMEPS)
 
 
 def init_datastore(
@@ -58,7 +86,10 @@ def init_datastore(
         )
 
     if n_boundary_points is None:
-        return DatastoreClass(config_path=config_path)
+        datastore: BaseDatastore = DatastoreClass(
+            config_path=config_path  # ty: ignore[unknown-argument]
+        )
+        return datastore
 
     if DatastoreClass is not MDPDatastore:
         raise ValueError(
