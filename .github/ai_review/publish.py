@@ -32,7 +32,7 @@ _HUNK_RE = re.compile(r"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 _MD_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
 _MD_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 _REF_LINK_DEF_RE = re.compile(r"^\s*\[[^\]]+\]:\s*(\S+).*$", re.MULTILINE)
-_BARE_URL_RE = re.compile(r"\b(?:https?://|www\.)[^\s<>)\]]+", re.IGNORECASE)
+_BARE_URL_RE = re.compile(r"(?:https?://|www\.)[^\s<>)\]]+", re.IGNORECASE)
 _MAILTO_RE = re.compile(r"\bmailto:[^\s<>)\]]+", re.IGNORECASE)
 _EMAIL_RE = re.compile(
     r"\b([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b"
@@ -340,7 +340,11 @@ def main(argv: list[str] | None = None) -> int:
                     file=sys.stderr,
                 )
 
-        diff_text = gh_api(base, token, accept="application/vnd.github.diff")
+        diff_text = (
+            gh_api(base, token, accept="application/vnd.github.diff")
+            if result.get("status") == "review"
+            else ""
+        )
     else:
         if not args.dry_run:
             parser.error("--diff-file requires --dry-run")

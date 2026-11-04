@@ -408,9 +408,16 @@ def test_right_side_lines_on_recorded_diff():
             ["@victim", "@victim2"],
         ),
         (
-            "Check www.example.com/x and HTTPS://example.com/x and http://test.com",
+            "Check www.example.com/x and HTTPS://example.com/x and "
+            "http://test.com and _www.example.org/y_ and _https://test.org/z_",
             ["Check", "and"],
-            ["www.example.com", "HTTPS://", "http://test.com"],
+            [
+                "www.example.com",
+                "HTTPS://",
+                "http://test.com",
+                "www.example.org",
+                "test.org",
+            ],
         ),
         (
             'Nested tags: <<a<a> href="//example.com">link</a>',
