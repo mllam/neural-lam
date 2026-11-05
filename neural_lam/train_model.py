@@ -360,6 +360,12 @@ def build_parser() -> ArgumentParser:
         "--lr", type=float, default=1e-3, help="learning rate"
     )
     train_group.add_argument(
+        "--gradient_clip_val",
+        type=float,
+        default=None,
+        help="Gradient clipping threshold. If not set, no clipping is applied",
+    )
+    train_group.add_argument(
         "--val_interval",
         type=int,
         default=1,
@@ -748,6 +754,7 @@ def fit(
         callbacks=[val_checkpoint, latest_checkpoint],
         check_val_every_n_epoch=train_config.val_interval,
         precision=cast("Any", compute_config.precision),
+        gradient_clip_val=train_config.gradient_clip_val,
         num_sanity_val_steps=train_config.num_sanity_val_steps,
     )
 
