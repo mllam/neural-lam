@@ -38,7 +38,7 @@ NUM_PAST_FORCING_STEPS = 1
 NUM_FUTURE_FORCING_STEPS = 1
 
 
-def build_trainer(sanity_check=False):
+def build_trainer(sanity_check=False, gradient_clip_val=None):
     """Build a one-epoch trainer on whatever devices are available."""
     if torch.cuda.is_available():
         device_name = "cuda"
@@ -73,6 +73,7 @@ def build_trainer(sanity_check=False):
         enable_checkpointing=False,
         logger=False,
         enable_progress_bar=False,
+        gradient_clip_val=gradient_clip_val,
     )
     return trainer
 
@@ -109,6 +110,7 @@ def run_simple_training(
     metrics_watch=None,
     var_leads_metrics_watch=None,
     datastore_boundary=None,
+    gradient_clip_val=None,
 ):
     """
     Run one epoch of a simple model training setup using the given datastore.
@@ -129,7 +131,8 @@ def run_simple_training(
     if var_leads_metrics_watch is None:
         var_leads_metrics_watch = {}
 
-    trainer = build_trainer(sanity_check=sanity_check)
+    trainer = build_trainer(sanity_check=sanity_check,
+                            gradient_clip_val=gradient_clip_val,)
 
     graph_name = "1level"
 
@@ -201,6 +204,17 @@ def test_training(datastore_name):
         # the sanity loop is the validation that already runs for every
         # datastore after the train batches, minus the logging
         sanity_check=datastore_name == DummyDatastore.SHORT_NAME,
+    )
+
+
+def test_training_with_gradient_clipping():
+    datastore = init_datastore_example(DummyDatastore.SHORT_NAME)
+
+    run_simple_training(
+        datastore,
+        set_output_std=False,
+        sanity_check=True,
+        gradient_clip_val=1.0,
     )
 
 
