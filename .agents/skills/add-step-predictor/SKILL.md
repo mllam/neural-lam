@@ -13,7 +13,7 @@ Implement your model in `neural_lam/models/step_predictors/<model_name>.py`:
 - For graph-based mesh models, inherit from `neural_lam.models.step_predictors.graph.base.BaseGraphModel`.
 
 ### Conventions & Interface Contract
-- **Constructor**: `__init__(self, datastore, **kwargs)` must accept the datastore instance and absorb CLI / configuration kwargs (e.g. `output_std`, `hidden_dim`, `processor_layers`).
+- **Constructor**: `neural_lam.train_model.build_predictor` passes the same kwargs to every model (`datastore`, `graph_name`, `hidden_dim`, `output_std`, ...). Accept the ones you use, absorb the rest with `**_kwargs: object`, and forward only `datastore`, `output_std`, `output_clamping_lower` and `output_clamping_upper` to `super().__init__`, which takes no `**kwargs`.
 - **Forward Signature**:
 ```python
 def forward(

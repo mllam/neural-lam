@@ -105,5 +105,5 @@ with tempfile.TemporaryDirectory() as tmp_dir:
 Execute the smoke-train test in the test suite:
 
 ```bash
-CUDA_VISIBLE_DEVICES="" uv run pytest tests/test_skills.py -k test_smoke_train_workflow_execution
+CUDA_VISIBLE_DEVICES="" uv run pytest "tests/test_skills.py::test_skill_snippet_runs[smoke-train]"
 ```

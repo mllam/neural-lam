@@ -13,8 +13,8 @@ Always fetch both top-level discussion and inline code review comments per `AGEN
 # Top-level thread and PR description
 gh pr view <PR_NUMBER> --comments
 
-# Inline code review comments
-gh api repos/mllam/neural-lam/pulls/<PR_NUMBER>/comments
+# Inline code review comments (the API returns 30 per page)
+gh api --paginate repos/mllam/neural-lam/pulls/<PR_NUMBER>/comments
 ```
 Never repeat a question already answered or an approach already rejected in the thread.
 
@@ -26,9 +26,7 @@ Follow the checklists defined in `CONTRIBUTING.md#pull-requests` and `.github/pu
 ## 3. Communication & Feedback
 Adhere to the communication standards in `AGENTS.md#communication`:
 - Keep feedback terse: one sentence per point, no preamble, no filler.
-- Use GitHub markdown suggestion blocks for concrete code adjustments:
-  ````markdown
-  ```suggestion
-      self.loss = metrics.get_metric(loss)
+- Use GitHub markdown suggestion blocks for concrete code adjustments. A suggestion replaces the selected lines verbatim, so keep their original indentation:
+  
   ```
   ````

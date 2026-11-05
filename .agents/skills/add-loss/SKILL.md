@@ -35,7 +35,7 @@ Inspect these implementations as canonical references:
 - **Weighted MSE loss reference**: `wmse` in `neural_lam/metrics.py`.
 - **Weighted MAE loss reference**: `wmae` in `neural_lam/metrics.py`.
 - **Probabilistic objective references**: `crps_gauss` and `nll` in `neural_lam/metrics.py`.
-- **State-feature weighting utilities**: `neural_lam.loss_weighting.get_per_var_std`, `neural_lam.loss_weighting.get_uniform_state_feature_weights`, and `neural_lam.loss_weighting.get_manual_state_feature_weights` in `neural_lam/loss_weighting.py`.
+- **State-feature weighting**: `neural_lam.loss_weighting.get_per_var_std` folds the `training.state_feature_weighting` weights into the `per_var_std` the forecaster passes as `pred_std`, so do not apply them again inside the loss.
 - **Forecaster integration**: `neural_lam.models.BaseDeterministicForecaster` in `neural_lam/models/forecasters/deterministic.py` and `neural_lam.models.DeterministicForecastingModule` in `neural_lam/models/modules/deterministic.py`.
 
 ## 2. Register in `DEFINED_METRICS`

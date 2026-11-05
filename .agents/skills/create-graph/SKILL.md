@@ -52,16 +52,7 @@ python -m neural_lam.create_graph_with_wmg \
   --archetype hierarchical
 ```
 
-## 4. Validate Index and Tensor Alignment
-Ensure created graph tensors conform to spec requirements:
-- `m2m_edge_index.pt`: Shape `(2, num_m2m_edges)` with indices bounded by `[0, num_mesh_nodes - 1]`.
-- `g2m_edge_index.pt`: Shape `(2, num_g2m_edges)` mapping `grid_index -> mesh_index`.
-- `m2g_edge_index.pt`: Shape `(2, num_m2g_edges)` mapping `mesh_index -> grid_index`.
-- Static features (`m2m_features.pt`, `mesh_features.pt`, etc.) match expected edge counts.
+## 4. Validate Against the Graph Storage Spec
+`docs/validate_graph.py` checks a graph directory against the spec and exits non-zero on failure:
 
-## 5. Verification Check
-Run the graph creation test suite:
-
-```bash
-uv run pytest tests/test_graph_creation.py
 ```

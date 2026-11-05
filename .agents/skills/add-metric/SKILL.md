@@ -42,7 +42,9 @@ Inspect these implementations in `neural_lam/metrics.py`:
 ## 2. Register in `DEFINED_METRICS`
 Register the metric function in `neural_lam.metrics.DEFINED_METRICS` in `neural_lam/metrics.py`:
 - Add a lowercase string key mapping to your callable (e.g. `"my_metric": my_metric`).
-- Accessible via `neural_lam.metrics.get_metric("my_metric")`.
+- Accessible via `neural_lam.metrics.get_metric("my_metric")` and as `--loss my_metric`.
+
+Registering alone does not log it in `--eval`: `test_step` of `neural_lam.models.DeterministicForecastingModule` in `neural_lam/models/modules/deterministic.py` only computes `("mse", "mae")`, without `pred_std`. Add the key to that loop and to `self.test_metrics` in `__init__`. `aggregate_and_plot_metrics` then multiplies it by the state std (taking the square root first for names containing `mse`), so it must be in standardized state units.
 
 ## 3. Extend Unit Tests
 Add verification tests in `tests/test_probabilistic_objectives.py`:

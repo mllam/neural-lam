@@ -25,7 +25,7 @@ Run code formatting and linters per `CONTRIBUTING.md#before-you-push`.
 
 When working in a Git worktree, use `--git-common-dir` to point to the main repository's `.venv` and avoid re-syncing dependencies:
 ```bash
-UV_PROJECT_ENVIRONMENT="$(git rev-parse --path-format=absolute --git-common-dir)/../.venv" UV_NO_SYNC=1 pre-commit run --all-files
+UV_PROJECT_ENVIRONMENT="$(git rev-parse --path-format=absolute --git-common-dir)/../.venv" UV_NO_SYNC=1 uv run pre-commit run --all-files
 ```
 
 In the main checkout:
@@ -35,8 +35,10 @@ uv run pre-commit run --all-files
 
 ## 4. Run Tests
 Follow the test tiers in `CONTRIBUTING.md#before-you-push`:
-- **Fast dev feedback**: `CUDA_VISIBLE_DEVICES="" uv run pytest -m "not requires_real_data and not requires_training"`
-- **Pre-push requirement**: `uv run pytest tests/` (or skip remote data downloads on CPU runners: `CUDA_VISIBLE_DEVICES="" uv run pytest -m "not requires_real_data"`).
+- **Fast dev feedback**: `uv run pytest -m quick`
+- **Pre-push requirement**: `uv run pytest -vv -s --doctest-modules`, as CI runs it.
+
+On a multi-GPU machine prefix `CUDA_VISIBLE_DEVICES=""` to keep pytest on the CPU.
 
 ## 5. Review Diff and AI Attribution
 - Inspect the full diff (`git diff`) to ensure no stray files or debugging artifacts remain.

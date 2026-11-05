@@ -38,6 +38,12 @@ PLACEHOLDER_NAMES = {
     "MyCustomPredictor",
 }
 
+# Skills whose python snippets run as they are, executed verbatim below
+RUNNABLE_SKILLS = [
+    "create-graph",
+    pytest.param("smoke-train", marks=pytest.mark.requires_training),
+]
+
 
 def parse_frontmatter(content: str) -> dict:
     """Extract YAML frontmatter from markdown file."""
@@ -261,15 +267,11 @@ def test_skill_referenced_paths_exist(rel_path: str):
     )
 
 
-@pytest.mark.requires_training
-def test_smoke_train_workflow_execution():
-    """Verify that verbatim smoke-train workflow executes cleanly."""
-    smoke_skill = SKILLS_DIR / "smoke-train" / "SKILL.md"
-    content = smoke_skill.read_text(encoding="utf-8")
-    blocks = extract_python_blocks(content)
-    assert len(blocks) == 1, (
-        f"Expected exactly 1 python block in {smoke_skill}, found {len(blocks)}"
-    )
-
-    code = blocks[0]
-    exec(code, {"__name__": "__main__"})  # noqa: S102
+@pytest.mark.parametrize("skill", RUNNABLE_SKILLS)
+def test_skill_snippet_runs(skill: str, monkeypatch):
+    """Run the python snippets of a skill verbatim."""
+    # Restores WANDB_MODE after the smoke-train snippet overrides it
+    monkeypatch.setenv("WANDB_MODE", "disabled")
+    content = (SKILLS_DIR / skill / "SKILL.md").read_text(encoding="utf-8")
+    for code in extract_python_blocks(content):
+        exec(code, {"__name__": "__main__"})  # noqa: S102
