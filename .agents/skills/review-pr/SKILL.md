@@ -27,6 +27,8 @@ Follow the checklists defined in `CONTRIBUTING.md#pull-requests` and `.github/pu
 Adhere to the communication standards in `AGENTS.md#communication`:
 - Keep feedback terse: one sentence per point, no preamble, no filler.
 - Use GitHub markdown suggestion blocks for concrete code adjustments. A suggestion replaces the selected lines verbatim, so keep their original indentation:
-  
+  ````markdown
+  ```suggestion
+          self.loss = metrics.get_metric(loss)
   ```
   ````

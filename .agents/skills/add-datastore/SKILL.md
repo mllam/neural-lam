@@ -35,4 +35,6 @@ The tests in `tests/test_datastores.py` and the dataset, graph and training test
 
 ## 4. Verification Check
 Run every test parametrised over the new datastore:
+```bash
+uv run pytest tests -k <short_name>
 ```

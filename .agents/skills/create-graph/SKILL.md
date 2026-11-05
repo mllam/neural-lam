@@ -55,4 +55,13 @@ python -m neural_lam.create_graph_with_wmg \
 ## 4. Validate Against the Graph Storage Spec
 `docs/validate_graph.py` checks a graph directory against the spec and exits non-zero on failure:
 
+```bash
+uv run python docs/validate_graph.py <datastore_root>/graph/<name>
+```
+
+## 5. Verification Check
+Run the graph creation tests that need no example data:
+
+```bash
+uv run pytest tests/test_graph_creation.py -m quick
 ```
