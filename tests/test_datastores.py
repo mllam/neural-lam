@@ -418,17 +418,20 @@ def test_mdp_geographic_spatial_coordinates(tmp_path):
     )
     datastore = MDPDatastore(config_path=config_path, n_boundary_points=2)
 
-    assert list(datastore.spatial_coordinates) == ["longitude", "latitude"]
     assert datastore.grid_shape_state.x == 10
     assert datastore.grid_shape_state.y == 8
-    assert datastore.get_dataarray("state", split="train") is not None
-    # 10 x 8 grid with a 2-point frame leaves a 6 x 4 interior
-    assert int(datastore.boundary_mask.sum()) == 10 * 8 - 6 * 4
+    assert datastore.get_xy("state", stacked=False).shape == (10, 8, 2)
+    # 10 x 8 grid with a 2-point frame around a 6 x 4 interior
+    np.testing.assert_array_equal(
+        datastore.boundary_mask.values.reshape(10, 8),
+        np.pad(np.zeros((6, 4), dtype=int), 2, constant_values=1),
+    )
 
 
 @pytest.mark.requires_real_data
 @pytest.mark.parametrize(
-    "x_dim, y_dim", [("x", "y"), ("longitude", "latitude")]
+    "x_dim, y_dim",
+    [("x", "y"), ("longitude", "latitude"), ("rlon", "rlat")],
 )
 def test_mdp_reversed_spatial_coordinates_raises(tmp_path, x_dim, y_dim):
     """Stacking `grid_index` y-first would silently swap x and y in
@@ -436,6 +439,7 @@ def test_mdp_reversed_spatial_coordinates_raises(tmp_path, x_dim, y_dim):
     config_path = _write_mdp_grid_config(tmp_path, x_dim, y_dim, [y_dim, x_dim])
     with pytest.raises(ValueError, match="x-like dimension must come first"):
         MDPDatastore(config_path=config_path)
+    assert not config_path.with_suffix(".zarr").exists()
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())

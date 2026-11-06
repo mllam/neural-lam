@@ -74,6 +74,33 @@ class MDPDatastore(BaseDatastore):
             ".yaml", ".zarr"
         )
 
+        # find out the dimension order for the stacking to grid-index
+        dim_order = None
+        for input_dataset in self._config.inputs.values():
+            dim_order_ = input_dataset.dim_mapping["grid_index"].dims
+            if dim_order is None:
+                dim_order = dim_order_
+            else:
+                assert dim_order == dim_order_, (
+                    "all inputs must have the same dimension order"
+                )
+
+        if dim_order is None:
+            raise ValueError("Could not determine dim_order from inputs.")
+        # get_xy and grid_shape_state treat the first dimension as x. Checked
+        # before the zarr is built, so a rejected config never writes one
+        y_like = ("y", "lat", "latitude", "rlat")
+        x_like = ("x", "lon", "longitude", "rlon")
+        if dim_order[0] in y_like and dim_order[1] in x_like:
+            raise ValueError(
+                f"`grid_index` is stacked from {list(dim_order)}, but the "
+                "x-like dimension must come first, e.g. "
+                f"{[dim_order[1], dim_order[0]]}. Reorder `dim_mapping."
+                "grid_index.dims` in the datastore config and delete "
+                f"{fp_ds} if it was already built."
+            )
+        self.spatial_coordinates = dim_order
+
         _ds = None
         if reuse_existing and fp_ds.exists():
             # check that the zarr directory is newer than the config file
@@ -130,33 +157,6 @@ class MDPDatastore(BaseDatastore):
             log_on_rank_zero(
                 f" {split:<8s}: {da_split_start} to {da_split_end}"
             )
-
-        # find out the dimension order for the stacking to grid-index
-        dim_order = None
-        for input_dataset in self._config.inputs.values():
-            dim_order_ = input_dataset.dim_mapping["grid_index"].dims
-            if dim_order is None:
-                dim_order = dim_order_
-            else:
-                assert dim_order == dim_order_, (
-                    "all inputs must have the same dimension order"
-                )
-
-        if dim_order is None:
-            raise ValueError("Could not determine dim_order from inputs.")
-        # get_xy and grid_shape_state treat the first dimension as x
-        if dim_order[0] in ("y", "lat", "latitude") and dim_order[1] in (
-            "x",
-            "lon",
-            "longitude",
-        ):
-            raise ValueError(
-                f"`grid_index` is stacked from {list(dim_order)}, but the "
-                "x-like dimension must come first, e.g. "
-                f"{[dim_order[1], dim_order[0]]}. Reorder `dim_mapping."
-                "grid_index.dims` in the datastore config."
-            )
-        self.spatial_coordinates = dim_order
 
     def _config_for_creation(self) -> mdp.Config:
         """Return the config to build the dataset from, with a relative
