@@ -118,14 +118,17 @@ def test_api_train_and_evaluate_roundtrip(shared_env, tmp_path, model, graph):
     assert eval_run.example_plots(1).exists()
 
 
-def test_api_evaluate_persistence(shared_env, tmp_path):
+def test_api_evaluate_persistence(shared_env, tmp_path, monkeypatch):
     """Test evaluate with non-trainable baseline model persistence."""
     datastore, config = shared_env
+    # On CPU an explicit `--devices 1` is a process count (#393)
+    monkeypatch.setattr("torch.cuda.is_available", lambda: False)
     eval_run = api.evaluate(
         datastore=datastore,
         config=config,
         model="persistence",
         graph="1level",
+        devices=["1"],
         batch_size=1,
         num_workers=0,
         ar_steps_eval=2,
@@ -237,6 +240,30 @@ def test_fit_config_datastore_validation():
             config=None,
             datastore=None,
             config_path=None,
+        )
+
+
+@pytest.mark.parametrize("devices", [["0"], ["-1"], ["0", "1"]])
+def test_fit_cpu_devices_validation(monkeypatch, devices):
+    """On CPU, `--devices` must be 'auto' or one positive process count."""
+    monkeypatch.setattr("torch.cuda.is_available", lambda: False)
+    ds = DummyDatastore(n_grid_points=25, n_timesteps=5)
+    cfg = nlconfig.NeuralLAMConfig(
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=ds.SHORT_NAME, config_path=str(ds.root_path)
+            )
+        }
+    )
+    with pytest.raises(ValueError, match="is not valid on CPU"):
+        train_model.fit(
+            model_config=nlconfig.ModelConfig(),
+            train_config=nlconfig.TrainRunConfig(),
+            data_config=nlconfig.DataConfig(),
+            compute_config=nlconfig.ComputeConfig(devices=devices),
+            logging_config=nlconfig.LoggingConfig(),
+            config=cfg,
+            datastore=ds,
         )
 
 
