@@ -240,7 +240,8 @@ def build_parser() -> ArgumentParser:
         help="Devices to use for training. Can be the string 'auto' or a list "
         "of integer id's corresponding to the desired devices, e.g. "
         "'--devices 0 1'. Note that this cannot be used with SLURM, instead "
-        "set 'ntasks-per-node' in the slurm setup",
+        "set 'ntasks-per-node' in the slurm setup. On CPU the value is a "
+        "single process count, not a device id",
     )
     runtime_group.add_argument(
         "--precision",
@@ -659,6 +660,16 @@ def fit(
             raise ValueError("devices should be 'auto' or a list of integers")
     else:
         devices = compute_config.devices
+
+    # Lightning's CPU accelerator takes a process count, not device ids
+    if device_name == "cpu" and isinstance(devices, list):
+        if len(devices) != 1 or devices[0] < 1:
+            raise ValueError(
+                f"--devices {' '.join(map(str, devices))} is not valid on "
+                "CPU: give 'auto' or a single positive process count, e.g. "
+                "'--devices 1'"
+            )
+        devices = devices[0]
 
     hparams = Namespace(
         **dataclasses.asdict(model_config),
