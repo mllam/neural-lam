@@ -290,7 +290,7 @@ def mae(
 def bias(
     pred: torch.Tensor,
     target: torch.Tensor,
-    pred_std: torch.Tensor,
+    pred_std: torch.Tensor | None = None,
     mask: torch.Tensor | None = None,
     average_grid: bool = True,
     sum_vars: bool = True,
@@ -308,9 +308,10 @@ def bias(
     target : torch.Tensor
         Shape ``(..., N, num_variables)``. Ground-truth target. Dims: same as
         ``pred``.
-    pred_std : torch.Tensor
-        Shape ``(..., N, num_variables)`` or ``(num_variables,)``. Unused;
-        kept for a signature consistent with the other metrics.
+    pred_std : torch.Tensor or None, optional
+        Unused. Accepted so that a caller holding any metric can pass one
+        the same way; optional here, unlike in the metrics that score a
+        distribution. Default ``None``.
     mask : torch.Tensor or None, optional
         Shape ``(N,)``. Boolean mask over grid nodes. ``None`` uses all
         nodes.
