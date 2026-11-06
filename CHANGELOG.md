@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix evaluation crashing while plotting example predictions on eval splits shorter than 6 time steps, by building the coordinate-only `WeatherDataset` in `ForecasterModule._create_dataarray_from_tensor` with the smallest sample window instead of the default one [\#814](https://github.com/mllam/neural-lam/pull/814) @AshNicolus
+
 - Fix `InteractionNet` and `PropagationNet` dimension mismatches when `hidden_dim` differs from `input_dim` [\#836](https://github.com/mllam/neural-lam/pull/836) @Karvy-Singh
 
 - Fix shifted test spatial loss map titles and `spatial_loss_maps/loss_t{n}.pdf` filenames when `val_steps_to_log` contains steps outside the evaluation rollout [\#752](https://github.com/mllam/neural-lam/pull/752) @vikramsingh920
