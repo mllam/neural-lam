@@ -67,6 +67,11 @@ class HiLAM(BaseHiGraphModel):
             Lower clamping limits for state variables.
         output_clamping_upper : dict, optional
             Upper clamping limits for state variables.
+
+        Raises
+        ------
+        ValueError
+            If the loaded graph is flat.
         """
         super().__init__(
             datastore=datastore,

@@ -69,6 +69,11 @@ class GraphLAM(BaseGraphModel):
             Lower clamping limits for state variables.
         output_clamping_upper : dict, optional
             Upper clamping limits for state variables.
+
+        Raises
+        ------
+        ValueError
+            If the loaded graph is hierarchical.
         """
         super().__init__(
             datastore=datastore,
@@ -84,10 +89,6 @@ class GraphLAM(BaseGraphModel):
             output_clamping_upper=output_clamping_upper,
             g2m_gnn_type=g2m_gnn_type,
             m2g_gnn_type=m2g_gnn_type,
-        )
-
-        assert not self.hierarchical, (
-            "GraphLAM does not use a hierarchical mesh graph"
         )
 
         # grid_dim from data + static + batch_static
@@ -186,3 +187,24 @@ class GraphLAM(BaseGraphModel):
             mesh_rep, m2m_emb_expanded
         )  # (B, num_mesh_nodes, hidden_dim)
         return mesh_rep
+
+    def check_graph_type(self, graph_name: str) -> None:
+        """
+        Verify the loaded graph is flat.
+
+        Parameters
+        ----------
+        graph_name : str
+            Name of the graph directory that was loaded, for the error
+            message.
+
+        Raises
+        ------
+        ValueError
+            If the loaded graph is hierarchical.
+        """
+        if self.hierarchical:
+            raise ValueError(
+                f"{type(self).__name__} requires a flat mesh graph, "
+                f"but graph '{graph_name}' is hierarchical"
+            )
