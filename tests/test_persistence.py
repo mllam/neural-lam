@@ -122,8 +122,15 @@ def test_persistence_training_error():
     mock_args.metrics_watch = []
     mock_args.var_leads_metrics_watch = "{}"
     mock_args.ar_steps_eval = 10
+    mock_args.ar_steps_train = 1
+    mock_args.train_steps_to_log = []
     mock_args.model = "persistence"
     mock_args.devices = ["auto"]
+    mock_args.restore_opt = False
+    mock_args.pretrained_checkpoint = None
+    mock_args.pretrained_components = []
+    mock_args.freeze_components = []
+    mock_args.allow_missing_compatibility_metadata = False
 
     mock_predictor = MagicMock()
     mock_predictor.trainable = False

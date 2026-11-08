@@ -50,6 +50,8 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
         metrics_watch: list[str] | None = None,
         var_leads_metrics_watch: dict[int, list[int]] | None = None,
         args: Any | None = None,
+        pretrained_components: list[str] | None = None,
+        allow_missing_compatibility_metadata: bool = False,
     ) -> None:
         """
         Initialize the module and store the evaluation ensemble size.
@@ -98,6 +100,13 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
         args : argparse.Namespace, optional
             Pre-refactor ``ARModel`` checkpoint hyperparameters; see
             ``BaseForecastingModule.__init__``.
+        pretrained_components : list of str, optional
+            Dotted paths of components to initialize from the checkpoint being
+            loaded. This transient setting only acts when passed explicitly;
+            it is not restored from the saved ``args`` namespace.
+        allow_missing_compatibility_metadata : bool, default False
+            Whether selective initialization may proceed when a checkpoint
+            predates compatibility metadata. Known mismatches remain errors.
 
         Raises
         ------
@@ -117,6 +126,10 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
             train_steps_to_log=train_steps_to_log,
             metrics_watch=metrics_watch,
             var_leads_metrics_watch=var_leads_metrics_watch,
+            pretrained_components=pretrained_components,
+            allow_missing_compatibility_metadata=(
+                allow_missing_compatibility_metadata
+            ),
             args=args,
         )
         if eval_ensemble_size < 1:

@@ -515,6 +515,44 @@ A few of the key ones are outlined below:
 * `--loss`: Which of the loss functions in `neural_lam/metrics.py` to train on
 
 Checkpoints of trained models are stored under `runs/<run-name>/checkpoints/`, alongside Lightning and logger outputs for the same run.
+
+### Transfer learning
+
+Selected model components can initialize a fresh training run from a trusted
+Lightning checkpoint. Components are identified by their dotted module paths;
+for example, this transfers GraphLAM's processor and mesh embedders while
+leaving dataset-dependent input and output layers newly initialized:
+
+```bash
+python -m neural_lam.train_model \
+    --config_path <target-config> \
+    --model graph_lam \
+    --graph <target-graph> \
+    --pretrained_checkpoint <source-checkpoint> \
+    --pretrained_components \
+        forecaster.predictor.processor \
+        forecaster.predictor.mesh_embedder \
+        forecaster.predictor.m2m_embedder
+```
+
+Add `--freeze_components forecaster.predictor.processor` to keep the
+transferred processor parameters fixed during training. Freezing is a run
+setting rather than checkpoint state, so repeat it when resuming a run that
+should remain frozen.
+
+`--pretrained_checkpoint` starts a fresh run with a new optimizer, epoch and
+trainer state. It is therefore distinct from, and cannot be combined with,
+`--load`, which resumes a complete training checkpoint. Every selected
+component must exist in both models with exactly matching state keys and tensor
+shapes. Selective transfer also requires matching graph structure and features.
+For graph-based models, Neural-LAM compares fingerprints of the registered graph
+tensors and grid-node count; this does not verify broader dataset or feature
+semantics. Checkpoints created before this metadata was introduced are rejected
+by default. To use a trusted legacy checkpoint after verifying its graph, add
+`--allow_missing_compatibility_metadata`; this emits a warning and makes the
+caller responsible for compatibility. A stored fingerprint mismatch can never
+be overridden. Cross-topology transfer is not supported.
+
 The implemented models are:
 
 ### Graph-LAM

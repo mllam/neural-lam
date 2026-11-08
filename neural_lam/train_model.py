@@ -2,6 +2,7 @@
 
 # Standard library
 import dataclasses
+import inspect
 import json
 import os
 import random
@@ -83,6 +84,22 @@ class Run:
     def example_plots(self, example_i: int) -> Path:
         """Frames and GIF of example ``example_i`` (1-based, create_gif)."""
         return self.plot_dir / f"example_plots_{example_i}"
+
+
+def _checkpoint_loading_kwargs() -> dict[str, bool]:
+    """Return checkpoint-loading options supported by this Lightning version.
+
+    Returns
+    -------
+    dict of str to bool
+        ``weights_only=False`` when Lightning exposes that loader argument,
+        otherwise an empty mapping for versions whose reader already defaults
+        to full checkpoint loading.
+    """
+    parameters = inspect.signature(
+        DeterministicForecastingModule.load_from_checkpoint
+    ).parameters
+    return {"weights_only": False} if "weights_only" in parameters else {}
 
 
 def build_predictor(
@@ -178,12 +195,15 @@ def load_forecasting_module_from_checkpoint(
     forecaster = DeterministicARForecaster(
         predictor, datastore, config=config, loss=args.loss
     )
-    return DeterministicForecastingModule.load_from_checkpoint(
+    checkpoint_loader = cast(
+        "Any", DeterministicForecastingModule.load_from_checkpoint
+    )
+    return checkpoint_loader(
         ckpt_path,
         forecaster=forecaster,
         datastore=datastore,
         datastore_boundary=datastore_boundary,
-        weights_only=False,
+        **_checkpoint_loading_kwargs(),
     )
 
 
@@ -251,12 +271,36 @@ def build_parser() -> ArgumentParser:
     runtime_group.add_argument(
         "--load",
         type=str,
-        help="Path to load model parameters from",
+        help="Checkpoint path used for full training resume or evaluation",
     )
     runtime_group.add_argument(
         "--restore_opt",
         action="store_true",
         help="If optimizer state should be restored with model",
+    )
+    runtime_group.add_argument(
+        "--pretrained_checkpoint",
+        type=str,
+        help="Checkpoint used to initialize selected components for a fresh "
+        "training run",
+    )
+    runtime_group.add_argument(
+        "--pretrained_components",
+        nargs="+",
+        default=[],
+        help="Dotted module paths to initialize from --pretrained_checkpoint",
+    )
+    runtime_group.add_argument(
+        "--freeze_components",
+        nargs="+",
+        default=[],
+        help="Dotted module paths whose parameters should be frozen",
+    )
+    runtime_group.add_argument(
+        "--allow_missing_compatibility_metadata",
+        action="store_true",
+        help="Allow a legacy pretrained checkpoint without compatibility "
+        "metadata; the caller assumes graph compatibility responsibility",
     )
 
     # Model architecture
@@ -553,6 +597,44 @@ def fit(
     Run
         Object containing paths to run outputs and saved checkpoints.
     """
+    if (
+        train_config.pretrained_checkpoint is not None
+        and not train_config.pretrained_checkpoint.strip()
+    ):
+        raise ValueError("pretrained_checkpoint must not be empty.")
+    has_pretrained_checkpoint = train_config.pretrained_checkpoint is not None
+    has_pretrained_components = bool(train_config.pretrained_components)
+    if has_pretrained_checkpoint != has_pretrained_components:
+        raise ValueError(
+            "pretrained_checkpoint and pretrained_components must be set "
+            "together."
+        )
+    if has_pretrained_checkpoint and train_config.load:
+        raise ValueError(
+            "pretrained_checkpoint cannot be combined with load: pretrained "
+            "initialization starts a fresh run, while load resumes a run."
+        )
+    if has_pretrained_checkpoint and train_config.eval:
+        raise ValueError(
+            "pretrained_checkpoint is only supported for training, not "
+            "evaluation."
+        )
+    if has_pretrained_checkpoint and train_config.restore_opt:
+        raise ValueError(
+            "restore_opt cannot be used with pretrained_checkpoint because "
+            "pretrained initialization starts with a fresh optimizer."
+        )
+    if (
+        train_config.allow_missing_compatibility_metadata
+        and not has_pretrained_checkpoint
+    ):
+        raise ValueError(
+            "allow_missing_compatibility_metadata requires "
+            "pretrained_checkpoint and pretrained_components."
+        )
+    if train_config.eval and train_config.freeze_components:
+        raise ValueError("freeze_components is only supported for training.")
+
     for phase, max_steps in [
         ("train", train_config.ar_steps_train),
         ("val", train_config.ar_steps_eval),
@@ -682,7 +764,7 @@ def fit(
         predictor, datastore, config=config, loss=train_config.loss
     )
 
-    model = DeterministicForecastingModule(
+    module_kwargs: dict[str, Any] = dict(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
@@ -697,6 +779,30 @@ def fit(
         var_leads_metrics_watch=train_config.var_leads_metrics_watch,
         args=hparams,
     )
+    if train_config.pretrained_checkpoint is not None:
+        checkpoint_loader = cast(
+            "Any", DeterministicForecastingModule.load_from_checkpoint
+        )
+        model = checkpoint_loader(
+            train_config.pretrained_checkpoint,
+            map_location="cpu",
+            strict=True,
+            pretrained_components=train_config.pretrained_components,
+            allow_missing_compatibility_metadata=(
+                train_config.allow_missing_compatibility_metadata
+            ),
+            **_checkpoint_loading_kwargs(),
+            **module_kwargs,
+        )
+    else:
+        model = DeterministicForecastingModule(**module_kwargs)
+
+    if train_config.freeze_components:
+        model.freeze_components(train_config.freeze_components)
+        if not any(parameter.requires_grad for parameter in model.parameters()):
+            raise ValueError(
+                "freeze_components leaves no trainable parameters."
+            )
 
     prefix = f"eval-{train_config.eval}-" if train_config.eval else "train-"
     if logging_config.logger_run_name:

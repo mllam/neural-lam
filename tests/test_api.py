@@ -195,6 +195,31 @@ def test_config_parity(monkeypatch, tmp_path):
         assert r == p
         assert a == p
 
+    # 3. Non-default selective-loading options have CLI/API parity
+    captured.clear()
+    component = "forecaster.predictor.processor"
+    args = parser.parse_args(
+        [
+            "--config_path",
+            "dummy.yaml",
+            "--pretrained_checkpoint",
+            "source.ckpt",
+            "--pretrained_components",
+            component,
+            "--freeze_components",
+            component,
+            "--allow_missing_compatibility_metadata",
+        ]
+    )
+    train_model.run(args)
+    api.train(
+        pretrained_checkpoint="source.ckpt",
+        pretrained_components=[component],
+        freeze_components=[component],
+        allow_missing_compatibility_metadata=True,
+    )
+    assert captured[0][1] == captured[1][1]
+
 
 def test_fit_config_datastore_validation():
     """Verify config and datastore must be provided together or via path."""
