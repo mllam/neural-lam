@@ -142,59 +142,102 @@ class TestPropagationNetStructure:
         """PropagationNet should always use mean aggregation,
         regardless of what is passed."""
         edge_index = _make_edge_index(5, 4, 10)
-        net = PropagationNet(edge_index, input_dim=8, aggr="sum")
+        net = PropagationNet(edge_index, feature_dim=8, aggr="sum")
         assert net.aggr == "mean"
 
     def test_interaction_net_respects_aggr(self):
         """InteractionNet should use whatever aggregation is passed."""
         edge_index = _make_edge_index(5, 4, 10)
-        net_sum = InteractionNet(edge_index.clone(), input_dim=8, aggr="sum")
-        net_mean = InteractionNet(edge_index.clone(), input_dim=8, aggr="mean")
+        net_sum = InteractionNet(edge_index.clone(), feature_dim=8, aggr="sum")
+        net_mean = InteractionNet(
+            edge_index.clone(), feature_dim=8, aggr="mean"
+        )
         assert net_sum.aggr == "sum"
         assert net_mean.aggr == "mean"
 
     def test_mlp_input_dimensions(self):
-        """Edge MLP should accept 3*input_dim, aggr MLP should accept
-        2*input_dim."""
-        d_h = 16
+        """MLP inputs should concatenate the expected feature tensors."""
+        feature_dim = 16
         edge_index = _make_edge_index(5, 4, 10)
-        pnet = PropagationNet(edge_index, input_dim=d_h)
+        pnet = PropagationNet(edge_index, feature_dim=feature_dim)
 
-        # Edge MLP: first layer input should be 3 * d_h
+        # Edge MLP receives edge, sender, and receiver features.
         edge_mlp_first = pnet.edge_mlp[0]
-        assert edge_mlp_first.in_features == 3 * d_h
+        assert edge_mlp_first.in_features == 3 * feature_dim
 
-        # Aggr MLP: first layer input should be 2 * d_h
+        # Aggregation MLP receives receiver and aggregated edge features.
         aggr_mlp_first = pnet.aggr_mlp[0]
-        assert aggr_mlp_first.in_features == 2 * d_h
+        assert aggr_mlp_first.in_features == 2 * feature_dim
 
     @pytest.mark.parametrize("gnn_class", [InteractionNet, PropagationNet])
-    @pytest.mark.parametrize("hidden_layers", [0, 2])
-    def test_hidden_dim_only_sets_hidden_width(self, gnn_class, hidden_layers):
-        """hidden_dim only sets the MLP hidden width, outputs keep input_dim."""
-        n_send, n_rec, n_edges = 5, 4, 10
-        input_dim, hidden_dim = 4, 8
-        edge_index = _make_edge_index(n_send, n_rec, n_edges)
+    @pytest.mark.parametrize("hidden_layers", [0, 1, 3])
+    @pytest.mark.parametrize("chunked", [False, True])
+    @pytest.mark.parametrize("update_edges", [False, True])
+    def test_hidden_dim_only_controls_hidden_layers(
+        self, gnn_class, hidden_layers, chunked, update_edges
+    ):
+        """Hidden width must not change node or edge representation width."""
+        n_send, n_rec = 3, 2
+        feature_dim, hidden_dim = 4, 8
+        edge_index = _make_fully_connected_edge_index(n_send, n_rec)
+        n_edges = edge_index.shape[1]
+
+        chunk_kwargs = (
+            {
+                "edge_chunk_sizes": [2, 4],
+                "aggr_chunk_sizes": [1, 1],
+            }
+            if chunked
+            else {}
+        )
+
         gnn = gnn_class(
             edge_index,
-            input_dim=input_dim,
+            feature_dim=feature_dim,
             hidden_dim=hidden_dim,
             hidden_layers=hidden_layers,
+            update_edges=update_edges,
+            **chunk_kwargs,
         )
 
-        for mlp in (gnn.edge_mlp, gnn.aggr_mlp):
-            linears = [m for m in mlp if isinstance(m, torch.nn.Linear)]
-            assert [m.out_features for m in linears] == (
-                [hidden_dim] * hidden_layers + [input_dim]
+        for mlp, first_dim in (
+            (gnn.edge_mlp, 3 * feature_dim),
+            (gnn.aggr_mlp, 2 * feature_dim),
+        ):
+            expected_dims = (
+                [first_dim] + [hidden_dim] * hidden_layers + [feature_dim]
             )
+            mlps = mlp.mlps if chunked else [mlp]
 
-        rec_out, edge_out = gnn(
-            torch.randn(n_send, input_dim),
-            torch.randn(n_rec, input_dim),
-            torch.randn(n_edges, input_dim),
+            for sub_mlp in mlps:
+                linear_layers = [
+                    layer
+                    for layer in sub_mlp
+                    if isinstance(layer, torch.nn.Linear)
+                ]
+                actual_dims = [
+                    (layer.in_features, layer.out_features)
+                    for layer in linear_layers
+                ]
+                assert actual_dims == list(
+                    zip(expected_dims[:-1], expected_dims[1:])
+                )
+
+        result = gnn(
+            torch.randn(n_send, feature_dim),
+            torch.randn(n_rec, feature_dim),
+            torch.randn(n_edges, feature_dim),
         )
-        assert rec_out.shape == (n_rec, input_dim)
-        assert edge_out.shape == (n_edges, input_dim)
+
+        if update_edges:
+            rec_out, edge_out = result
+            assert edge_out.shape == (n_edges, feature_dim)
+            assert torch.isfinite(edge_out).all()
+        else:
+            rec_out = result
+
+        assert rec_out.shape == (n_rec, feature_dim)
+        assert torch.isfinite(rec_out).all()
 
     def test_node_index_offset_convention(self):
         """After construction, sender indices in edge_index should be
@@ -202,7 +245,7 @@ class TestPropagationNetStructure:
         are [num_rec, num_rec + num_send)."""
         n_send, n_rec, n_edges = 5, 4, 10
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
-        pnet = PropagationNet(edge_index, input_dim=8)
+        pnet = PropagationNet(edge_index, feature_dim=8)
 
         stored_ei = pnet.edge_index
         # Receiver indices should be in [0, num_rec)
@@ -229,12 +272,12 @@ class TestPropagationNetForwardPass:
         for update_edges in [True, False]:
             inet = InteractionNet(
                 edge_index.clone(),
-                input_dim=d_h,
+                feature_dim=d_h,
                 update_edges=update_edges,
             )
             pnet = PropagationNet(
                 edge_index.clone(),
-                input_dim=d_h,
+                feature_dim=d_h,
                 update_edges=update_edges,
             )
 
@@ -264,7 +307,7 @@ class TestPropagationNetForwardPass:
         edge_index = _make_fully_connected_edge_index(n_send, n_rec)
         n_edges = edge_index.shape[1]
 
-        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=True)
+        pnet = PropagationNet(edge_index, feature_dim=d_h, update_edges=True)
 
         # Zero out edge MLP so edge_mlp(...) = 0
         # Then message = x_j + 0 = x_j
@@ -297,7 +340,7 @@ class TestPropagationNetForwardPass:
         n_send, n_rec, n_edges, d_h = 3, 2, 6, 4
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
+        pnet = PropagationNet(edge_index, feature_dim=d_h, update_edges=False)
 
         # Zero out aggr_mlp so aggr_mlp(...) = 0
         # Then rec_new = agg_msgs + 0 = agg_msgs (for PropagationNet)
@@ -334,10 +377,10 @@ class TestPropagationNetForwardPass:
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
         inet = InteractionNet(
-            edge_index.clone(), input_dim=d_h, update_edges=True
+            edge_index.clone(), feature_dim=d_h, update_edges=True
         )
         pnet = PropagationNet(
-            edge_index.clone(), input_dim=d_h, update_edges=True
+            edge_index.clone(), feature_dim=d_h, update_edges=True
         )
         pnet.load_state_dict(inet.state_dict())
 
@@ -364,7 +407,7 @@ class TestEdgeUpdateBehavior:
         """update_edges=True should return (rec_rep, edge_rep) tuple."""
         n_send, n_rec, n_edges, d_h = 5, 4, 10, 8
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
-        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=True)
+        pnet = PropagationNet(edge_index, feature_dim=d_h, update_edges=True)
 
         send_rep = torch.randn(n_send, d_h)
         rec_rep = torch.randn(n_rec, d_h)
@@ -380,7 +423,7 @@ class TestEdgeUpdateBehavior:
         """update_edges=False should return only rec_rep tensor."""
         n_send, n_rec, n_edges, d_h = 5, 4, 10, 8
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
-        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
+        pnet = PropagationNet(edge_index, feature_dim=d_h, update_edges=False)
 
         send_rep = torch.randn(n_send, d_h)
         rec_rep = torch.randn(n_rec, d_h)
@@ -396,7 +439,7 @@ class TestEdgeUpdateBehavior:
         n_send, n_rec, n_edges, d_h = 5, 4, 10, 8
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=True)
+        pnet = PropagationNet(edge_index, feature_dim=d_h, update_edges=True)
 
         torch.manual_seed(42)
         send_rep = torch.randn(n_send, d_h)
@@ -431,7 +474,7 @@ class TestBatchedProcessing:
         n_send, n_rec, n_edges, d_h, B = 5, 4, 10, 8, 3
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=True)
+        pnet = PropagationNet(edge_index, feature_dim=d_h, update_edges=True)
 
         torch.manual_seed(42)
         send_rep = torch.randn(B, n_send, d_h)
@@ -447,7 +490,7 @@ class TestBatchedProcessing:
         n_send, n_rec, n_edges, d_h = 5, 4, 10, 8
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
+        pnet = PropagationNet(edge_index, feature_dim=d_h, update_edges=False)
 
         torch.manual_seed(42)
         send_rep_0 = torch.randn(1, n_send, d_h)
@@ -492,7 +535,7 @@ class TestChunkSupport:
 
         pnet = PropagationNet(
             edge_index,
-            input_dim=d_h,
+            feature_dim=d_h,
             update_edges=True,
             edge_chunk_sizes=[n_edges_a, n_edges_b],
             aggr_chunk_sizes=[n_rec // 2, n_rec - n_rec // 2],
@@ -515,11 +558,11 @@ class TestChunkSupport:
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
         pnet_plain = PropagationNet(
-            edge_index.clone(), input_dim=d_h, update_edges=False
+            edge_index.clone(), feature_dim=d_h, update_edges=False
         )
         pnet_chunked = PropagationNet(
             edge_index.clone(),
-            input_dim=d_h,
+            feature_dim=d_h,
             update_edges=False,
             edge_chunk_sizes=[6, 6],
         )
@@ -549,7 +592,7 @@ class TestGradientFlow:
         n_send, n_rec, n_edges, d_h = 5, 4, 10, 8
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
+        pnet = PropagationNet(edge_index, feature_dim=d_h, update_edges=False)
 
         send_rep = torch.randn(n_send, d_h, requires_grad=True)
         rec_rep = torch.randn(n_rec, d_h, requires_grad=True)
@@ -569,7 +612,7 @@ class TestGradientFlow:
         n_send, n_rec, n_edges, d_h = 3, 2, 6, 4
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
+        pnet = PropagationNet(edge_index, feature_dim=d_h, update_edges=False)
 
         send_rep = torch.randn(n_send, d_h, requires_grad=True)
         rec_rep = torch.randn(n_rec, d_h, requires_grad=True)
@@ -604,7 +647,7 @@ class TestGradientFlow:
         n_send, n_rec, n_edges, d_h = 5, 4, 10, 8
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=True)
+        pnet = PropagationNet(edge_index, feature_dim=d_h, update_edges=True)
 
         send_rep = torch.randn(n_send, d_h, requires_grad=True)
         rec_rep = torch.randn(n_rec, d_h, requires_grad=True)
@@ -634,7 +677,7 @@ class TestGraphStructureCompatibility:
         n_edges = 200
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
+        pnet = PropagationNet(edge_index, feature_dim=d_h, update_edges=False)
 
         send_rep = torch.randn(n_send, d_h)
         rec_rep = torch.randn(n_rec, d_h)
@@ -649,7 +692,7 @@ class TestGraphStructureCompatibility:
         d_h = 8
         edge_index = torch.tensor([[0], [0]])
 
-        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
+        pnet = PropagationNet(edge_index, feature_dim=d_h, update_edges=False)
 
         send_rep = torch.randn(1, d_h)
         rec_rep = torch.randn(1, d_h)
@@ -669,7 +712,7 @@ class TestGraphStructureCompatibility:
         # Receivers 0 and 2 get edges, receiver 1 is disconnected
         edge_index = torch.tensor([[0, 1], [0, 2]])
 
-        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
+        pnet = PropagationNet(edge_index, feature_dim=d_h, update_edges=False)
 
         torch.manual_seed(42)
         send_rep = torch.randn(2, d_h)
@@ -697,7 +740,7 @@ class TestGraphStructureCompatibility:
         indices = torch.arange(n_nodes)
         edge_index = torch.stack([indices, indices])
 
-        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
+        pnet = PropagationNet(edge_index, feature_dim=d_h, update_edges=False)
 
         send_rep = torch.randn(n_nodes, d_h)
         rec_rep = torch.randn(n_nodes, d_h)
@@ -728,7 +771,7 @@ class TestNumericalStability:
             layers.append(
                 PropagationNet(
                     edge_index.clone(),
-                    input_dim=d_h,
+                    feature_dim=d_h,
                     update_edges=True,
                 )
             )
@@ -760,7 +803,7 @@ class TestNumericalStability:
         n_edges = 500
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
+        pnet = PropagationNet(edge_index, feature_dim=d_h, update_edges=False)
 
         send_rep = torch.randn(n_send, d_h)
         rec_rep = torch.randn(n_rec, d_h)
