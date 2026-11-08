@@ -1,6 +1,8 @@
 """Base class for graph-based step predictors."""
 
 # Standard library
+import hashlib
+from functools import cached_property
 
 # Third-party
 import torch
@@ -27,6 +29,20 @@ class BaseGraphModel(StepPredictor):
     mesh_static_features: torch.Tensor | list[torch.Tensor]
     m2m_features: torch.Tensor | list[torch.Tensor]
     m2m_edge_index: torch.Tensor | list[torch.Tensor]
+
+    _GRAPH_COMPATIBILITY_ATTRIBUTES = (
+        "g2m_edge_index",
+        "m2g_edge_index",
+        "m2m_edge_index",
+        "mesh_up_edge_index",
+        "mesh_down_edge_index",
+        "g2m_features",
+        "m2g_features",
+        "m2m_features",
+        "mesh_up_features",
+        "mesh_down_features",
+        "mesh_static_features",
+    )
 
     def __init__(
         self,
@@ -176,6 +192,37 @@ class BaseGraphModel(StepPredictor):
 
         # Compute indices and define clamping functions
         self.prepare_clamping_params(datastore)
+
+    @cached_property
+    def _graph_compatibility_fingerprint(self) -> str:
+        """Compute and cache an exact graph fingerprint."""
+        fingerprint = hashlib.sha256()
+        fingerprint.update(f"num_grid_nodes:{self.num_grid_nodes}".encode())
+        for attribute_name in self._GRAPH_COMPATIBILITY_ATTRIBUTES:
+            attribute = getattr(self, attribute_name)
+            tensors = (
+                (attribute,)
+                if isinstance(attribute, torch.Tensor)
+                else attribute
+            )
+            for index, tensor in enumerate(tensors):
+                tensor_cpu = tensor.detach().cpu().contiguous()
+                fingerprint.update(f"{attribute_name}:{index}".encode())
+                fingerprint.update(str(tensor_cpu.dtype).encode())
+                fingerprint.update(str(tuple(tensor_cpu.shape)).encode())
+                fingerprint.update(tensor_cpu.numpy().tobytes())
+        return fingerprint.hexdigest()
+
+    def get_pretrained_compatibility_metadata(self) -> dict[str, str]:
+        """Return the cached fingerprint of graph structure and features.
+
+        Returns
+        -------
+        dict of str to str
+            Versioned SHA-256 graph fingerprint used to validate selective
+            checkpoint initialization.
+        """
+        return {"graph_v1": self._graph_compatibility_fingerprint}
 
     def get_num_mesh(self) -> tuple[int, int]:
         """

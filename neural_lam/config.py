@@ -342,7 +342,7 @@ class TrainRunConfig:
     var_leads_metrics_watch : dict of {int: list of int}, default {}
         Mapping from variable index to list of watched rollout steps.
     load : str or None, default None
-        Checkpoint path to load.
+        Checkpoint path used for full training resume or evaluation.
     restore_opt : bool, default False
         Whether to restore optimizer state from checkpoint.
     eval : str or None, default None
@@ -351,6 +351,15 @@ class TrainRunConfig:
         Number of example predictions to plot during testing.
     create_gif : bool, default False
         Whether to create animation GIFs during evaluation.
+    pretrained_checkpoint : str or None, default None
+        Checkpoint used to initialize selected components for a fresh run.
+    pretrained_components : list of str, default []
+        Dotted module paths to initialize from ``pretrained_checkpoint``.
+    freeze_components : list of str, default []
+        Dotted module paths to freeze during training.
+    allow_missing_compatibility_metadata : bool, default False
+        Whether selective initialization may use a legacy checkpoint without
+        compatibility metadata.
     """
 
     epochs: int = 200
@@ -374,6 +383,10 @@ class TrainRunConfig:
     eval: str | None = None
     n_example_pred: int = 1
     create_gif: bool = False
+    pretrained_checkpoint: str | None = None
+    pretrained_components: list[str] = dataclasses.field(default_factory=list)
+    freeze_components: list[str] = dataclasses.field(default_factory=list)
+    allow_missing_compatibility_metadata: bool = False
 
 
 @dataclasses.dataclass

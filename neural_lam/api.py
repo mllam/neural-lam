@@ -33,6 +33,10 @@ def train(
     precision: str | int = 32,
     load: str | None = None,
     restore_opt: bool = False,
+    pretrained_checkpoint: str | None = None,
+    pretrained_components: list[str] | None = None,
+    freeze_components: list[str] | None = None,
+    allow_missing_compatibility_metadata: bool = False,
     graph: str = "multiscale",
     hidden_dim: int = 64,
     hidden_layers: int = 1,
@@ -95,6 +99,15 @@ def train(
         Path to checkpoint to resume training from.
     restore_opt : bool, default False
         Whether to restore optimizer state when loading checkpoint.
+    pretrained_checkpoint : str or None, optional
+        Checkpoint used to initialize selected components for fresh training.
+    pretrained_components : list of str or None, optional
+        Dotted module paths to initialize from ``pretrained_checkpoint``.
+    freeze_components : list of str or None, optional
+        Dotted module paths whose parameters should remain frozen.
+    allow_missing_compatibility_metadata : bool, default False
+        Allow a legacy pretrained checkpoint without compatibility metadata.
+        The caller then assumes responsibility for graph compatibility.
     graph : str, default "multiscale"
         Name of the graph to load from the datastore graph directory.
     hidden_dim : int, default 64
@@ -184,6 +197,10 @@ def train(
         train_steps_to_log = []
     if metrics_watch is None:
         metrics_watch = []
+    if pretrained_components is None:
+        pretrained_components = []
+    if freeze_components is None:
+        freeze_components = []
 
     model_config = ModelConfig(
         model=model,
@@ -222,6 +239,12 @@ def train(
         var_leads_metrics_watch=var_leads,
         load=load,
         restore_opt=restore_opt,
+        pretrained_checkpoint=pretrained_checkpoint,
+        pretrained_components=pretrained_components,
+        freeze_components=freeze_components,
+        allow_missing_compatibility_metadata=(
+            allow_missing_compatibility_metadata
+        ),
         eval=eval,
         n_example_pred=n_example_pred,
         create_gif=create_gif,

@@ -37,6 +37,21 @@ python -m neural_lam.train_model --config_path <path-to-config> --model graph_la
 
 Neural-LAM supports several models like `graph_lam`, `hi_lam`, and `hi_lam_parallel`.
 
+To start fresh training from selected components of a trusted checkpoint, use
+`--pretrained_checkpoint` together with one or more dotted module paths:
+
+```{code-block} bash
+python -m neural_lam.train_model --config_path <path-to-config> --model graph_lam --graph <graph-name> --pretrained_checkpoint <checkpoint-path> --pretrained_components forecaster.predictor.processor
+```
+
+This differs from `--load`, which resumes the complete training state. Selected
+components must have matching state keys and tensor shapes in the source and
+target models. Graph-model checkpoints must also contain the graph fingerprint
+used to reject incompatible topology, node ordering and graph features. A
+trusted older checkpoint can be used with
+`--allow_missing_compatibility_metadata` after manually verifying its graph;
+known fingerprint mismatches are always rejected.
+
 ## Step 4: Evaluate
 
 After training, you can evaluate the model on the test set by loading the saved checkpoint.
