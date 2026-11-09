@@ -39,8 +39,6 @@ def _format_timedelta(td: np.timedelta64) -> str:
     value, unit = get_integer_time(
         datetime.timedelta(microseconds=microseconds)
     )
-    if unit == "unknown":
-        return str(td)
     return f"{value} {unit}"
 
 
