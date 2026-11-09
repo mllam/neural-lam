@@ -1,5 +1,8 @@
 """Utility functions for configuring state-feature loss weighting."""
 
+# Standard library
+import math
+
 # Third-party
 import torch
 
@@ -35,7 +38,8 @@ def get_manual_state_feature_weights(
     ------
     ValueError
         If the set of feature names in ``weighting_config.weights`` does
-        not match the state feature names in the datastore.
+        not match the state feature names in the datastore, or if any weight
+        is not a finite, strictly positive number (> 0).
     """
     state_feature_names = datastore.get_vars_names(category="state")
     feature_weight_names = weighting_config.weights.keys()
@@ -54,9 +58,16 @@ def get_manual_state_feature_weights(
             f"{additional_features} which are not in the datastore."
         )
 
-    state_feature_weights = [
-        weighting_config.weights[feature] for feature in state_feature_names
-    ]
+    state_feature_weights = []
+    for feature in state_feature_names:
+        weight = weighting_config.weights[feature]
+        if not math.isfinite(weight) or weight <= 0:
+            raise ValueError(
+                f"State feature weight for '{feature}' must be a finite, "
+                f"strictly positive number (> 0), got {weight}."
+            )
+        state_feature_weights.append(weight)
+
     return state_feature_weights
 
 
@@ -76,9 +87,19 @@ def get_uniform_state_feature_weights(datastore: BaseDatastore) -> list[float]:
     -------
     list[float]
         List of floats containing the state feature weights.
+
+    Raises
+    ------
+    ValueError
+        If the datastore contains no state features.
     """
     state_feature_names = datastore.get_vars_names(category="state")
     n_features = len(state_feature_names)
+    if n_features == 0:
+        raise ValueError(
+            "Cannot compute uniform state feature weights for a datastore "
+            "with no state features."
+        )
     return [1.0 / n_features] * n_features
 
 
@@ -104,6 +125,10 @@ def get_state_feature_weighting(
 
     Raises
     ------
+    ValueError
+        If manual weights are invalid or state feature names do not match,
+        or if uniform weights are requested for a datastore with no state
+        features.
     NotImplementedError
         If ``config.training.state_feature_weighting`` is not a
         recognised weighting configuration type.
