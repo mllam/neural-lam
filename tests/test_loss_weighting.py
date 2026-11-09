@@ -1,3 +1,5 @@
+"""Unit tests for neural_lam/loss_weighting.py."""
+
 # Standard library
 import math
 
@@ -7,9 +9,27 @@ import torch
 
 # First-party
 from neural_lam import config as nlconfig
-from neural_lam.loss_weighting import get_per_var_std
+from neural_lam.config import (
+    ManualStateFeatureWeighting,
+    UniformFeatureWeighting,
+)
+from neural_lam.loss_weighting import (
+    get_manual_state_feature_weights,
+    get_per_var_std,
+    get_state_feature_weighting,
+    get_uniform_state_feature_weights,
+)
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
+
+
+class EmptyStateDatastore(DummyDatastore):
+    """DummyDatastore subclass returning no state features."""
+
+    def get_vars_names(self, category: str = "state") -> list[str]:
+        if category == "state":
+            return []
+        return super().get_vars_names(category=category)
 
 
 def _config(datastore, state_feature_weighting):
@@ -24,6 +44,113 @@ def _config(datastore, state_feature_weighting):
             state_feature_weighting=state_feature_weighting
         ),
     )
+
+
+def test_manual_weights_valid():
+    """Test get_manual_state_feature_weights with valid weights."""
+    datastore = DummyDatastore()
+    state_names = datastore.get_vars_names(category="state")
+    expected_weights = {
+        name: float(i + 1) for i, name in enumerate(state_names)
+    }
+    config = ManualStateFeatureWeighting(weights=expected_weights)
+    weights = get_manual_state_feature_weights(config, datastore)
+    assert weights == [float(i + 1) for i in range(len(state_names))]
+
+
+def test_manual_weights_missing_features_raises():
+    """Test that missing state features in weights raises ValueError."""
+    datastore = DummyDatastore()
+    state_names = datastore.get_vars_names(category="state")
+    config = ManualStateFeatureWeighting(
+        weights={name: 1.0 for name in state_names[:-1]}
+    )
+    with pytest.raises(ValueError, match="are missing"):
+        get_manual_state_feature_weights(config, datastore)
+
+
+def test_manual_weights_extra_features_raises():
+    """Test that extra features in weights raises ValueError."""
+    datastore = DummyDatastore()
+    state_names = datastore.get_vars_names(category="state")
+    weights = {name: 1.0 for name in state_names}
+    weights["extra_nonexistent_feature"] = 2.0
+    config = ManualStateFeatureWeighting(weights=weights)
+    with pytest.raises(ValueError, match="which are not in the datastore"):
+        get_manual_state_feature_weights(config, datastore)
+
+
+@pytest.mark.parametrize(
+    "invalid_weight",
+    [0.0, -0.0, -1.0, -100.5, float("nan"), float("inf"), float("-inf")],
+)
+def test_manual_weights_invalid_values_raises(invalid_weight):
+    """Test that non-positive or non-finite weights raise ValueError."""
+    datastore = DummyDatastore()
+    state_names = datastore.get_vars_names(category="state")
+    weights = {name: 1.0 for name in state_names}
+    weights[state_names[0]] = invalid_weight
+    config = ManualStateFeatureWeighting(weights=weights)
+    with pytest.raises(
+        ValueError,
+        match="must be a finite, strictly positive number",
+    ):
+        get_manual_state_feature_weights(config, datastore)
+
+
+def test_uniform_weights_valid():
+    """Test get_uniform_state_feature_weights with DummyDatastore."""
+    datastore = DummyDatastore()
+    state_names = datastore.get_vars_names(category="state")
+    weights = get_uniform_state_feature_weights(datastore)
+    assert len(weights) == len(state_names)
+    assert weights == [1.0 / len(state_names)] * len(state_names)
+
+
+def test_uniform_weights_empty_features_raises():
+    """Test uniform state weights raise ValueError when features are empty."""
+    datastore = EmptyStateDatastore()
+    with pytest.raises(
+        ValueError,
+        match="Cannot compute uniform state feature weights",
+    ):
+        get_uniform_state_feature_weights(datastore)
+
+
+def test_get_state_feature_weighting_manual():
+    """Test get_state_feature_weighting dispatches to manual weighting."""
+    datastore = DummyDatastore()
+    state_names = datastore.get_vars_names(category="state")
+    manual_weights = {name: float(i + 1) for i, name in enumerate(state_names)}
+    config = _config(
+        datastore,
+        ManualStateFeatureWeighting(weights=manual_weights),
+    )
+
+    weights = get_state_feature_weighting(config, datastore)
+    assert weights == [float(i + 1) for i in range(len(state_names))]
+
+
+def test_get_state_feature_weighting_uniform():
+    """Test get_state_feature_weighting dispatches to uniform weighting."""
+    datastore = DummyDatastore()
+    state_names = datastore.get_vars_names(category="state")
+    config = _config(datastore, UniformFeatureWeighting())
+
+    weights = get_state_feature_weighting(config, datastore)
+    assert weights == [1.0 / len(state_names)] * len(state_names)
+
+
+def test_get_state_feature_weighting_unsupported_raises():
+    """Test that unsupported weighting config raises NotImplementedError."""
+    datastore = DummyDatastore()
+    config = _config(datastore, "unsupported_scheme")
+
+    with pytest.raises(
+        NotImplementedError,
+        match="Unsupported state feature weighting configuration",
+    ):
+        get_state_feature_weighting(config, datastore)
 
 
 def test_per_var_std_divides_by_sqrt_of_manual_weights():
