@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add optional `--gradient_clip_val` training option (default `None`, i.e. off) that is passed to the Lightning `Trainer` to prevent exploding gradients during autoregressive training [\#859](https://github.com/mllam/neural-lam/pull/859) @dhruv315-max
+
 - Add deterministic and probabilistic forecaster/module interfaces with
   shared autoregressive unrolling and forecaster-owned training objectives.
   [\#700](https://github.com/mllam/neural-lam/pull/700) @Sir-Sloth-The-Lazy
