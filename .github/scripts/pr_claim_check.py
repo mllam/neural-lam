@@ -198,6 +198,8 @@ def find_problems(
                 f"#{number} is assigned to {names}. Please coordinate on the "
                 "issue before continuing here."
             )
+        if login(pr) in assignees:
+            continue  # the assignee never competes with an older PR
         for other in open_prs:
             if (
                 other.get("number") != pr.get("number")

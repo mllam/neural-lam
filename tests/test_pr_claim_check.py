@@ -189,12 +189,11 @@ def test_lookup_issue():
         assert pr_claim_check.lookup_issue(REPO, 999) is None
 
     # 403 / 500 -> Must raise
-    err_500 = subprocess.CalledProcessError(
-        1, "gh", stderr="HTTP 500: Server Error"
-    )
-    with patch("pr_claim_check.gh", side_effect=err_500):
-        with pytest.raises(subprocess.CalledProcessError):
-            pr_claim_check.lookup_issue(REPO, 999)
+    for stderr in ["HTTP 403: rate limit exceeded", "HTTP 500: Server Error"]:
+        err = subprocess.CalledProcessError(1, "gh", stderr=stderr)
+        with patch("pr_claim_check.gh", side_effect=err):
+            with pytest.raises(subprocess.CalledProcessError):
+                pr_claim_check.lookup_issue(REPO, 999)
 
 
 @pytest.mark.parametrize(
@@ -360,6 +359,31 @@ def test_lookup_issue():
             {30: {"number": 30, "state": "open", "assignees": []}},
             [],  # Older PR only referenced it, so not competing claim
         ),
+        (
+            "assignee_after_older_unassigned_pr",
+            make_pr(
+                number=50,
+                author="alice",
+                created_at="2026-01-02T12:00:00Z",
+                body="Closes #30",
+            ),
+            [
+                make_pr(
+                    number=40,
+                    author="bob",
+                    created_at="2026-01-01T10:00:00Z",
+                    body="Fixes #30",
+                ),
+            ],
+            {
+                30: {
+                    "number": 30,
+                    "state": "open",
+                    "assignees": [{"login": "alice"}],
+                }
+            },
+            [],  # The assignee is not sent to the older PR
+        ),
     ],
 )
 def test_find_problems_table(
@@ -410,6 +434,7 @@ def test_fetch_open_prs_pagination():
         assert len(prs) == 2
         assert [p["number"] for p in prs] == [1, 2]
         assert mock_gh.call_count == 2
+        assert "cursor=cursor1" in mock_gh.call_args_list[1].args
 
 
 def test_render():
@@ -434,8 +459,10 @@ def test_sync_new_problem_adds_comment_and_label():
 
         calls = [c.args for c in mock_gh.call_args_list]
         # Check comment creation
+        body = f"body={pr_claim_check.render(['Problem 1'])}"
         assert any(
             c[:3] == ("--method", "POST", f"repos/{REPO}/issues/77/comments")
+            and body in c
             for c in calls
         )
         # Check label added
