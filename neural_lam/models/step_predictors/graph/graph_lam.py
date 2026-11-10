@@ -177,10 +177,10 @@ class GraphLAM(BaseGraphModel):
         batch_size = mesh_rep.shape[0]
         m2m_emb = self.m2m_embedder(
             self.m2m_features
-        )  # (num_edges, hidden_dim)
+        )  # (num_edges_m2m, hidden_dim)
         m2m_emb_expanded = self.expand_to_batch(
             m2m_emb, batch_size
-        )  # (B, num_edges, hidden_dim)
+        )  # (B, num_edges_m2m, hidden_dim)
 
         mesh_rep, _ = self.processor(
             mesh_rep, m2m_emb_expanded

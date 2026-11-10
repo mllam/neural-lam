@@ -1,4 +1,5 @@
 # Standard library
+import pickle
 from pathlib import Path
 
 # Third-party
@@ -11,11 +12,17 @@ from torch.utils.data import DataLoader
 from neural_lam import config as nlconfig
 from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
-from neural_lam.datastore.base import BaseRegularGridDatastore
-from neural_lam.models import ForecasterModule
-from neural_lam.weather_dataset import WeatherDataset
-from tests.conftest import init_datastore_example
-from tests.dummy_datastore import DummyDatastore, EnsembleDummyDatastore
+from neural_lam.models import DeterministicForecastingModule
+from neural_lam.weather_dataset import WeatherDataModule, WeatherDataset
+from tests.conftest import (
+    init_datastore_boundary_example,
+    init_datastore_example,
+)
+from tests.dummy_datastore import (
+    BoundaryDummyDatastore,
+    DummyDatastore,
+    EnsembleDummyDatastore,
+)
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -48,7 +55,7 @@ def test_dataset_item_shapes(datastore_name):
 
     # unpack the item, this is the current return signature for
     # WeatherDataset.__getitem__
-    init_states, target_states, forcing, target_times = item
+    init_states, target_states, forcing, boundary, target_times = item
 
     # initial states
     assert init_states.ndim == 3
@@ -99,9 +106,9 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
 
     # unpack the item, this is the current return signature for
     # WeatherDataset.__getitem__
-    _, target_states, _, target_times_arr = dataset[idx]
-    _, da_target_true, _, da_target_times_true = dataset._build_item_dataarrays(
-        idx=idx
+    _, target_states, _, _, target_times_arr = dataset[idx]
+    _, da_target_true, _, _, da_target_times_true = (
+        dataset._build_item_dataarrays(idx=idx)
     )
 
     target_times = np.array(target_times_arr, dtype="datetime64[ns]")
@@ -121,7 +128,7 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
             da_target[dim].values, da_target_true[dim].values
         )
 
-    if isinstance(datastore, BaseRegularGridDatastore):
+    if datastore.is_on_rectilinear_grid:
         # test unstacking the grid coordinates
         da_target_unstacked = datastore.unstack_grid_coords(da_target)
         assert all(
@@ -145,7 +152,7 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
             da_target_single[dim].values, da_target_true[0][dim].values
         )
 
-    if isinstance(datastore, BaseRegularGridDatastore):
+    if datastore.is_on_rectilinear_grid:
         # test unstacking the grid coordinates
         da_target_single_unstacked = datastore.unstack_grid_coords(
             da_target_single
@@ -201,23 +208,25 @@ def test_single_batch(datastore_name, split):
                 archetype="keisler",
             )
 
-    if not isinstance(datastore, BaseRegularGridDatastore):
+    if not datastore.is_on_rectilinear_grid:
         with pytest.raises(NotImplementedError):
             _create_graph()
-        pytest.skip("Skipping on model-run on non-regular grid datastores")
+        pytest.skip("Skipping on model-run on non-rectilinear grid datastores")
 
     _create_graph()
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        }
     )
 
     dataset = WeatherDataset(datastore=datastore, split=split, ar_steps=2)
 
     # First-party
-    from neural_lam.models import MODELS, ARForecaster
+    from neural_lam.models import MODELS, DeterministicARForecaster
 
     predictor_class = MODELS["graph_lam"]
     predictor = predictor_class(
@@ -233,13 +242,14 @@ def test_single_batch(datastore_name, split):
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
     )
-    forecaster = ARForecaster(predictor, datastore=datastore)
+    forecaster = DeterministicARForecaster(
+        predictor, datastore=datastore, config=config, loss=args.loss
+    )
 
-    model = ForecasterModule(
+    model = DeterministicForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss=args.loss,
         restore_opt=args.restore_opt,
         n_example_pred=args.n_example_pred,
         val_steps_to_log=args.val_steps_to_log,
@@ -253,6 +263,9 @@ def test_single_batch(datastore_name, split):
     batch = next(iter(data_loader))
     batch_device = [part.to(device_name) for part in batch]
     model_device.training_step(batch_device)
+
+    # the training tests only load 2 batches, so check the end of each split
+    dataset[len(dataset) - 1]
 
 
 @pytest.mark.parametrize(
@@ -317,6 +330,44 @@ def test_dataset_out_of_range_raises_index_error():
     # corresponding positive index.
     dataset[-1]
     dataset[n - 1]
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_dataset_pickle_roundtrip(datastore_name):
+    """With ``num_workers > 0`` `WeatherDataModule` uses the "spawn" start
+    method, which pickles the dataset, including its datastore, into every
+    worker process."""
+    datastore = init_datastore_example(datastore_name)
+    dataset = WeatherDataset(datastore=datastore, split="train", ar_steps=2)
+
+    restored = pickle.loads(pickle.dumps(dataset))  # noqa: S301
+
+    for original, roundtripped in zip(dataset[0], restored[0]):
+        assert torch.equal(original, roundtripped)
+
+
+def test_dataloader_spawn_worker():
+    """Load a batch with boundary forcing through a spawned DataLoader
+    worker, the path training takes whenever ``num_workers > 0`` (the
+    default)."""
+    data_module = WeatherDataModule(
+        datastore=DummyDatastore(n_grid_points=100, n_timesteps=20),
+        datastore_boundary=BoundaryDummyDatastore(
+            n_grid_points=25, n_timesteps=20
+        ),
+        ar_steps_train=2,
+        ar_steps_eval=2,
+        batch_size=2,
+        num_workers=1,
+    )
+    data_module.setup("fit")
+    loader = data_module.train_dataloader()
+    assert loader.multiprocessing_context.get_start_method() == "spawn"
+
+    init_states, target_states, _, boundary, _ = next(iter(loader))
+    assert init_states.shape[:2] == (2, 2)
+    assert target_states.shape[:2] == (2, 2)
+    assert boundary.shape[:3] == (2, 2, 25)
 
 
 def test_ensemble_len_scales_with_default_all_members():
@@ -394,8 +445,8 @@ def test_ensemble_index_mapping_is_time_major():
         load_single_member=False,
     )
 
-    init_states_0, _, _, target_times_0 = dataset[0]
-    init_states_1, _, _, target_times_1 = dataset[1]
+    init_states_0, _, _, _, target_times_0 = dataset[0]
+    init_states_1, _, _, _, target_times_1 = dataset[1]
 
     # Adjacent flat indices correspond to same sample_idx and different member.
     assert torch.equal(target_times_0, target_times_1)
@@ -418,8 +469,8 @@ def test_ensemble_forcing_uses_same_member_when_available():
         load_single_member=False,
     )
 
-    _, _, forcing_0, target_times_0 = dataset[0]
-    _, _, forcing_1, target_times_1 = dataset[1]
+    _, _, forcing_0, _, target_times_0 = dataset[0]
+    _, _, forcing_1, _, target_times_1 = dataset[1]
 
     assert torch.equal(target_times_0, target_times_1)
     assert not torch.equal(forcing_0, forcing_1)
@@ -441,8 +492,8 @@ def test_ensemble_forcing_without_member_dim_is_shared():
         load_single_member=False,
     )
 
-    init_states_0, _, forcing_0, target_times_0 = dataset[0]
-    init_states_1, _, forcing_1, target_times_1 = dataset[1]
+    init_states_0, _, forcing_0, _, target_times_0 = dataset[0]
+    init_states_1, _, forcing_1, _, target_times_1 = dataset[1]
 
     assert torch.equal(target_times_0, target_times_1)
     assert not torch.equal(init_states_0, init_states_1)
@@ -477,3 +528,110 @@ def test_forecast_ensemble_len_scales_with_default_all_members():
         )
 
     assert len(dataset_all) == len(dataset_single) * 3
+
+
+@pytest.mark.parametrize("num_future_forcing_steps", [1, 2])
+def test_boundary_datastore_shapes(num_future_forcing_steps):
+    """The boundary tensor has the boundary grid and windowed features."""
+    n_timesteps = 20
+    ar_steps = 3
+    num_past_boundary = 1
+    num_future_boundary = 1
+    boundary_window = num_past_boundary + num_future_boundary + 1
+
+    datastore = DummyDatastore(n_grid_points=100, n_timesteps=n_timesteps)
+    boundary_ds = BoundaryDummyDatastore(
+        n_grid_points=25, n_timesteps=n_timesteps
+    )
+
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=ar_steps,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=num_future_forcing_steps,
+        num_past_boundary_steps=num_past_boundary,
+        num_future_boundary_steps=num_future_boundary,
+        datastore_boundary=boundary_ds,
+    )
+
+    init_states, target_states, forcing, boundary, target_times = dataset[0]
+
+    assert init_states.shape == (2, 100, datastore.N_FEATURES["state"])
+    assert target_states.shape == (ar_steps, 100, datastore.N_FEATURES["state"])
+    assert forcing.ndim == 3
+    assert boundary.ndim == 3
+    assert boundary.shape[0] == ar_steps
+    assert boundary.shape[1] == 25  # boundary grid
+    n_boundary_features = boundary_ds.N_FEATURES["forcing"]
+    assert boundary.shape[2] == n_boundary_features * boundary_window
+    assert target_times.shape == (ar_steps,)
+
+    assert not torch.isnan(boundary).any()
+
+    # The boundary crops the interior in time, the last sample's forcing
+    # window must still be in range
+    dataset[len(dataset) - 1]
+
+
+def test_boundary_datastore_none_gives_empty_boundary():
+    """Without a boundary datastore the boundary tensor has no features."""
+    datastore = DummyDatastore(n_grid_points=100, n_timesteps=20)
+
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=3,
+    )
+
+    _, _, _, boundary, _ = dataset[0]
+    assert boundary.shape[-1] == 0
+
+
+def test_boundary_datastore_with_ensemble_forcing_raises():
+    """Ensemble boundary forcing is not supported yet."""
+    with pytest.raises(NotImplementedError, match="ensemble forcing"):
+        WeatherDataset(
+            datastore=DummyDatastore(n_grid_points=100, n_timesteps=20),
+            datastore_boundary=EnsembleDummyDatastore(
+                forcing_has_ensemble=True
+            ),
+        )
+
+
+@pytest.mark.requires_real_data
+def test_boundary_datastore_example_shapes():
+    """Boundary tensor shapes for the DANRA interior and ERA5 boundary
+    example."""
+    datastore = init_datastore_example("mdp")
+    datastore_boundary = init_datastore_boundary_example("mdp")
+
+    ar_steps = 3
+    num_past_boundary = 1
+    num_future_boundary = 1
+    boundary_window = num_past_boundary + num_future_boundary + 1
+
+    dataset = WeatherDataset(
+        datastore=datastore,
+        datastore_boundary=datastore_boundary,
+        split="train",
+        ar_steps=ar_steps,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        num_past_boundary_steps=num_past_boundary,
+        num_future_boundary_steps=num_future_boundary,
+    )
+
+    _, _, _, boundary, target_times = dataset[0]
+
+    n_boundary_forcing = datastore_boundary.get_num_data_vars("forcing")
+    assert boundary.ndim == 3
+    assert boundary.shape[0] == ar_steps
+    assert boundary.shape[1] == datastore_boundary.num_grid_points
+    assert boundary.shape[2] == n_boundary_forcing * boundary_window
+    assert target_times.shape == (ar_steps,)
+    assert not torch.isnan(boundary).any()
+
+    # The boundary crops the interior in time, the last sample's boundary
+    # window must still be in range
+    dataset[len(dataset) - 1]

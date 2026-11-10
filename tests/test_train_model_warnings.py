@@ -9,14 +9,21 @@ from unittest.mock import MagicMock, patch
 import loguru
 import pytest
 
+
 # Mock loguru.logger.catch before importing train_model
-loguru.logger.catch = lambda f: f  # type: ignore[assignment]
+def _mock_catch(*args, **kwargs):
+    if args and callable(args[0]):
+        return args[0]
+    return lambda f: f
+
+
+loguru.logger.catch = _mock_catch  # type: ignore[assignment]
 
 # First-party
 from neural_lam.models import MODELS, BaseHiGraphModel  # noqa: E402
 from neural_lam.train_model import (  # noqa: E402
     build_predictor,
-    load_forecaster_module_from_checkpoint,
+    load_forecasting_module_from_checkpoint,
     main,
 )
 
@@ -40,9 +47,11 @@ def test_eval_without_load_warning(eval_val, load_val, expect_warning):
     mock_args.config_path = "dummy.yaml"
     mock_args.val_steps_to_log = []
     mock_args.train_steps_to_log = []
+    mock_args.metrics_watch = []
     mock_args.var_leads_metrics_watch = "{}"
     mock_args.ar_steps_eval = 10
     mock_args.ar_steps_train = 10
+    mock_args.val_interval = 1
 
     with patch(
         "neural_lam.train_model.ArgumentParser.parse_args",
@@ -62,17 +71,20 @@ def test_eval_without_load_warning(eval_val, load_val, expect_warning):
                     mock_warning.assert_not_called()
 
 
-def test_create_gif_forwarded_to_forecaster_module():
-    """--create_gif must be forwarded to ForecasterModule.__init__."""
+def test_create_gif_forwarded_to_forecasting_module():
+    """--create_gif must be forwarded to
+    DeterministicForecastingModule.__init__."""
     mock_args = MagicMock()
     mock_args.eval = None
     mock_args.load = None
     mock_args.config_path = "dummy.yaml"
     mock_args.val_steps_to_log = [1]
     mock_args.train_steps_to_log = [2]
+    mock_args.metrics_watch = []
     mock_args.var_leads_metrics_watch = "{}"
     mock_args.ar_steps_eval = 10
     mock_args.ar_steps_train = 10
+    mock_args.val_interval = 1
     mock_args.create_gif = True
     mock_args.devices = ["auto"]
     mock_args.model = "graph_lam"
@@ -91,13 +103,14 @@ def test_create_gif_forwarded_to_forecaster_module():
         ),
         patch(
             "neural_lam.train_model.load_config_and_datastore",
-            return_value=(MagicMock(), MagicMock()),
+            return_value=(MagicMock(), MagicMock(), None),
         ),
         patch("neural_lam.train_model.WeatherDataModule"),
         patch("neural_lam.train_model.MODELS", {"graph_lam": MagicMock}),
-        patch("neural_lam.train_model.ARForecaster"),
+        patch("neural_lam.train_model.DeterministicARForecaster"),
         patch(
-            "neural_lam.models.module.ForecasterModule.__init__",
+            "neural_lam.models.modules.deterministic."
+            "DeterministicForecastingModule.__init__",
             capture_init,
         ),
         pytest.raises(SystemExit),
@@ -105,11 +118,11 @@ def test_create_gif_forwarded_to_forecaster_module():
         main()
 
     assert "create_gif" in captured_kwargs, (
-        "create_gif was not forwarded to ForecasterModule"
+        "create_gif was not forwarded to DeterministicForecastingModule"
     )
     assert captured_kwargs["create_gif"] is True
     assert "train_steps_to_log" in captured_kwargs, (
-        "train_steps_to_log was not forwarded to ForecasterModule"
+        "train_steps_to_log was not forwarded to DeterministicForecastingModule"
     )
     assert captured_kwargs["train_steps_to_log"] == [2]
 
@@ -125,6 +138,8 @@ def test_create_gif_forwarded_to_forecaster_module():
                 "--val_steps_to_log",
                 "1",
                 "10",
+                "--metrics_watch",
+                "val_rmse",
                 "--var_leads_metrics_watch",
                 '{"0": [1, 10]}',
             ],
@@ -142,10 +157,23 @@ def test_create_gif_forwarded_to_forecaster_module():
             ["--var_leads_metrics_watch", '{"0": [0]}'],
             "Can not log validation step 0",
         ),
+        (
+            ["--metrics_watch", "val_rmse"],
+            "but var_leads_metrics_watch is not set",
+        ),
+        (
+            ["--var_leads_metrics_watch", '{"0": [1]}'],
+            "but metrics_watch is not set",
+        ),
+        (["--val_interval", "5"], None),
+        (["--val_interval", "0"], "val_interval must be at least 1, got 0"),
+        (["--val_interval", "-1"], "val_interval must be at least 1, got -1"),
     ],
 )
 def test_steps_to_log_validation(cli_args, match_err):
-    """ValueError must be raised if a step is outside [1, rollout length]."""
+    """ValueError must be raised if a step is outside [1, rollout length],
+    only one of metrics_watch and var_leads_metrics_watch is set, or
+    val_interval is below 1."""
     if match_err is None:
         # The checks run before load_config_and_datastore, so hitting the
         # SystemExit sentinel means every step was accepted
@@ -176,6 +204,7 @@ def make_args(**overrides):
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
         output_std=False,
+        loss="wmse",
     )
     args.update(overrides)
     return Namespace(**args)
@@ -222,13 +251,14 @@ def test_checkpoint_loader_restores_gnn_type_kwargs(config):
             return_value={"hyper_parameters": {"args": args}},
         ),
         patch("neural_lam.train_model.MODELS", {"hi_lam": predictor_class}),
-        patch("neural_lam.train_model.ARForecaster"),
+        patch("neural_lam.train_model.DeterministicARForecaster"),
         patch(
-            "neural_lam.train_model.ForecasterModule.load_from_checkpoint",
+            "neural_lam.train_model.DeterministicForecastingModule"
+            ".load_from_checkpoint",
             return_value=loaded_module,
         ),
     ):
-        result = load_forecaster_module_from_checkpoint(
+        result = load_forecasting_module_from_checkpoint(
             "model.ckpt", config, MagicMock()
         )
 

@@ -2,13 +2,14 @@
 from pathlib import Path
 
 # Third-party
+import pytest
 import torch
 
 # First-party
 from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.gnn_layers import InteractionNet, PropagationNet
-from neural_lam.models import MODELS, ARForecaster
+from neural_lam.models import MODELS, DeterministicARForecaster
 from tests.conftest import init_datastore_example
 
 
@@ -73,7 +74,7 @@ def _build_model_and_data(
         output_clamping_upper=config.training.output_clamping.upper,
         **gnn_kwargs,
     )
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = DeterministicARForecaster(predictor, datastore, config=config)
 
     B = 2
     num_grid_nodes = predictor.num_grid_nodes
@@ -94,10 +95,12 @@ def _get_datastore_and_config(graph_name):
     """Create a datastore with graph already built."""
     datastore = init_datastore_example("mdp")
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        }
     )
 
     # Ensure graph exists
@@ -164,6 +167,34 @@ class TestPropagationNetStructure:
         # Aggr MLP: first layer input should be 2 * d_h
         aggr_mlp_first = pnet.aggr_mlp[0]
         assert aggr_mlp_first.in_features == 2 * d_h
+
+    @pytest.mark.parametrize("gnn_class", [InteractionNet, PropagationNet])
+    @pytest.mark.parametrize("hidden_layers", [0, 2])
+    def test_hidden_dim_only_sets_hidden_width(self, gnn_class, hidden_layers):
+        """hidden_dim only sets the MLP hidden width, outputs keep input_dim."""
+        n_send, n_rec, n_edges = 5, 4, 10
+        input_dim, hidden_dim = 4, 8
+        edge_index = _make_edge_index(n_send, n_rec, n_edges)
+        gnn = gnn_class(
+            edge_index,
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            hidden_layers=hidden_layers,
+        )
+
+        for mlp in (gnn.edge_mlp, gnn.aggr_mlp):
+            linears = [m for m in mlp if isinstance(m, torch.nn.Linear)]
+            assert [m.out_features for m in linears] == (
+                [hidden_dim] * hidden_layers + [input_dim]
+            )
+
+        rec_out, edge_out = gnn(
+            torch.randn(n_send, input_dim),
+            torch.randn(n_rec, input_dim),
+            torch.randn(n_edges, input_dim),
+        )
+        assert rec_out.shape == (n_rec, input_dim)
+        assert edge_out.shape == (n_edges, input_dim)
 
     def test_node_index_offset_convention(self):
         """After construction, sender indices in edge_index should be
@@ -746,6 +777,7 @@ class TestNumericalStability:
 #
 
 
+@pytest.mark.requires_real_data
 class TestDefaultBehaviorUnchanged:
     """Tests that with default GNN types, models use InteractionNet
     (backward compatibility). All tests use deterministic models only."""
@@ -868,6 +900,7 @@ class TestDefaultBehaviorUnchanged:
 #
 
 
+@pytest.mark.requires_real_data
 class TestHierarchicalIntegration:
     """Tests for GNN type selection in hierarchical deterministic models."""
 

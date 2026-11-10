@@ -19,7 +19,9 @@ DATASTORES = {
 
 
 def init_datastore(
-    datastore_kind: str, config_path: str | Path
+    datastore_kind: str,
+    config_path: str | Path,
+    n_boundary_points: int | None = None,
 ) -> BaseDatastore:
     """
     Instantiate a datastore based on its short-name identifier.
@@ -30,6 +32,10 @@ def init_datastore(
         Key corresponding to one of :data:`DATASTORES`.
     config_path : str | pathlib.Path
         Path to the datastore-specific configuration file.
+    n_boundary_points : int, optional
+        Forwarded to :class:`~neural_lam.datastore.mdp.MDPDatastore` when
+        ``datastore_kind`` is ``"mdp"``, overriding its default boundary-mask
+        width. Must be left unset for other datastore kinds.
 
     Returns
     -------
@@ -40,6 +46,9 @@ def init_datastore(
     ------
     NotImplementedError
         If ``datastore_kind`` is not registered.
+    ValueError
+        If ``n_boundary_points`` is set for a ``datastore_kind`` other than
+        :data:`MDPDatastore.SHORT_NAME`.
     """
     DatastoreClass = DATASTORES.get(datastore_kind)
 
@@ -48,6 +57,15 @@ def init_datastore(
             f"Datastore kind {datastore_kind} is not implemented"
         )
 
-    datastore = DatastoreClass(config_path=config_path)
+    if n_boundary_points is None:
+        return DatastoreClass(config_path=config_path)
 
-    return datastore
+    if DatastoreClass is not MDPDatastore:
+        raise ValueError(
+            "`n_boundary_points` is only supported for "
+            f"`kind: {MDPDatastore.SHORT_NAME}` datastores, but was set for "
+            f"a `kind: {datastore_kind}` datastore."
+        )
+    return MDPDatastore(
+        config_path=config_path, n_boundary_points=n_boundary_points
+    )

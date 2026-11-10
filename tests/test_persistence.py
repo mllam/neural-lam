@@ -5,11 +5,12 @@ import pytest
 import torch
 
 # First-party
-from neural_lam.models import ARForecaster
+from neural_lam.models import DeterministicARForecaster
 from neural_lam.models.step_predictors.persistence import PersistencePredictor
 from tests.conftest import init_datastore_example
 
 
+@pytest.mark.requires_real_data
 def test_persistence_predictor_returns_prev_state():
     """PersistencePredictor.forward returns prev_state unchanged."""
     datastore = init_datastore_example("mdp")
@@ -31,6 +32,7 @@ def test_persistence_predictor_returns_prev_state():
     assert torch.equal(pred_state, prev_state)
 
 
+@pytest.mark.requires_real_data
 def test_persistence_predictor_ignores_kwargs():
     """Extra graph-specific kwargs are silently absorbed."""
     datastore = init_datastore_example("mdp")
@@ -45,11 +47,12 @@ def test_persistence_predictor_ignores_kwargs():
     assert isinstance(predictor, PersistencePredictor)
 
 
+@pytest.mark.requires_real_data
 def test_persistence_forecaster_unroll():
-    """ARForecaster with PersistencePredictor reproduces initial state."""
+    """The deterministic persistence forecast reproduces the initial state."""
     datastore = init_datastore_example("mdp")
     predictor = PersistencePredictor(datastore=datastore)
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = DeterministicARForecaster(predictor, datastore)
 
     B = 2
     num_grid_nodes = predictor.num_grid_nodes
@@ -81,6 +84,7 @@ def test_persistence_forecaster_unroll():
         )
 
 
+@pytest.mark.requires_real_data
 def test_persistence_predicts_std_false():
     """
     PersistencePredictor.predicts_std is always False and logs warning
@@ -115,8 +119,10 @@ def test_persistence_training_error():
     mock_args.load = None
     mock_args.config_path = "dummy.yaml"
     mock_args.val_steps_to_log = []
+    mock_args.metrics_watch = []
     mock_args.var_leads_metrics_watch = "{}"
     mock_args.ar_steps_eval = 10
+    mock_args.val_interval = 1
     mock_args.model = "persistence"
     mock_args.devices = ["auto"]
 
@@ -130,7 +136,7 @@ def test_persistence_training_error():
         ),
         patch(
             "neural_lam.train_model.load_config_and_datastore",
-            return_value=(MagicMock(), MagicMock()),
+            return_value=(MagicMock(), MagicMock(), None),
         ),
         patch("neural_lam.train_model.WeatherDataModule"),
         patch(

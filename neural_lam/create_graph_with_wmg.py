@@ -17,7 +17,7 @@ from loguru import logger
 
 # Local
 from .config import load_config_and_datastore
-from .datastore.base import BaseRegularGridDatastore
+from .datastore.base import BaseDatastore
 
 if TYPE_CHECKING:
     # Third-party
@@ -51,7 +51,7 @@ def _estimate_grid_node_distance(xy: np.ndarray) -> float:
 
 
 def create_graph_from_datastore(
-    datastore: BaseRegularGridDatastore,
+    datastore: BaseDatastore,
     output_root_path: str,
     archetype: str = "keisler",
     mesh_node_distance: float | None = None,
@@ -63,7 +63,7 @@ def create_graph_from_datastore(
 
     Parameters
     ----------
-    datastore : BaseRegularGridDatastore
+    datastore : BaseDatastore
         Datastore providing grid coordinates.
     output_root_path : str
         Directory where the .pt graph files will be saved.
@@ -84,9 +84,9 @@ def create_graph_from_datastore(
         Maximum number of mesh hierarchy levels. Only used for ``"graphcast"``
         and ``"hierarchical"`` archetypes.
     """
-    if not isinstance(datastore, BaseRegularGridDatastore):
+    if not datastore.is_on_rectilinear_grid:
         raise NotImplementedError(
-            "Only graph creation for BaseRegularGridDatastore is supported"
+            "Graph creation requires a datastore on a rectilinear grid."
         )
 
     if archetype not in ARCHETYPE_FUNCTIONS:
@@ -141,7 +141,13 @@ def create_graph_from_datastore(
 
 
 def cli(input_args: list[str] | None = None) -> None:
-    """Command-line interface for graph creation using weather-model-graphs."""
+    """Command-line interface for graph creation using weather-model-graphs.
+
+    Parameters
+    ----------
+    input_args : list of str or None, optional
+        Arguments to parse instead of ``sys.argv``.
+    """
     parser = ArgumentParser(
         description="Graph generation for neural-lam using "
         "weather-model-graphs (wmg)",
@@ -201,7 +207,7 @@ def cli(input_args: list[str] | None = None) -> None:
     )
 
     # Load neural-lam configuration and datastore to use
-    _, datastore = load_config_and_datastore(config_path=args.config_path)
+    _, datastore, _ = load_config_and_datastore(config_path=args.config_path)
 
     create_graph_from_datastore(
         datastore=datastore,

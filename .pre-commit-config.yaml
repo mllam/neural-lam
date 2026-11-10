@@ -25,6 +25,7 @@ repos:
     hooks:
       - id: codespell
         description: Check for spelling errors
+        args: ["--ignore-words-list", "astroid"]
 
   - repo: https://github.com/lycheeverse/lychee
     rev: lychee-v0.24.2
