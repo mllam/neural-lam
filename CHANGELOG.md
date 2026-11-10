@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix `InteractionNet` and `PropagationNet` dimension mismatches when `hidden_dim` differs from `input_dim` [\#836](https://github.com/mllam/neural-lam/pull/836) @Karvy-Singh
 
+- Raise a `ValueError` for `--val_interval` below 1 in `train_model.fit`; `0` previously crashed with a `ZeroDivisionError` inside Lightning after the model was built, and negative values were silently accepted [\#847](https://github.com/mllam/neural-lam/pull/847) @nikhil3495
+
 - Fix shifted test spatial loss map titles and `spatial_loss_maps/loss_t{n}.pdf` filenames when `val_steps_to_log` contains steps outside the evaluation rollout [\#752](https://github.com/mllam/neural-lam/pull/752) @vikramsingh920
 
 - Fix `WeatherDataset.__len__` undercounting samples by `num_future_forcing_steps` when a datastore has no forcing data, sometimes raising a spurious `ValueError` in `__init__` [\#735](https://github.com/mllam/neural-lam/pull/735) @AshNicolus
@@ -48,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Raise a `ValueError` when only one of `metrics_watch` and `var_leads_metrics_watch` is set, instead of silently logging no watched metrics [\#785](https://github.com/mllam/neural-lam/pull/785) @KumarShivam1908
 
 - Fix flux standardization statistics weighting for short final batches and exclude distributed padding samples [\#782](https://github.com/mllam/neural-lam/pull/782) @Karvy-Singh
+
+- Fix `fractional_plot_bundle` docstring describing `fraction` as a denominator of the figure width, when it is a multiplier applied to both the width and the height [\#774](https://github.com/mllam/neural-lam/pull/774) @nikhil3495
 
 ### Maintenance
 
