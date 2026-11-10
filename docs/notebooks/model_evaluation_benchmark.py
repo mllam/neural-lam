@@ -64,11 +64,15 @@ def _(mo):
     from neural_lam.benchmark import ForecastBenchmark
     from neural_lam.config import load_config_and_datastore
     from neural_lam.create_graph import create_graph_from_datastore
-    from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
+    from neural_lam.models import (
+        DeterministicARForecaster,
+        DeterministicForecastingModule,
+        GraphLAM,
+    )
 
-    # Set working directory relative to repo root
-    os.chdir(mo.notebook_dir().parents[1])
-    example_dir = Path("tests/datastore_examples/mdp/danra_100m_winds")
+    # Set paths relative to repo root
+    repo_root = mo.notebook_dir().parents[1]
+    example_dir = repo_root / "tests/datastore_examples/mdp/danra_100m_winds"
     config_path = str(example_dir / "config.yaml")
 
     config, datastore, _ = load_config_and_datastore(config_path)
@@ -88,9 +92,9 @@ def _(mo):
     print(f"State features: {datastore.get_vars_names('state')}")
 
     return (
-        ARForecaster,
+        DeterministicARForecaster,
+        DeterministicForecastingModule,
         ForecastBenchmark,
-        ForecasterModule,
         GraphLAM,
         Path,
         api,
@@ -126,9 +130,9 @@ over an autoregressive evaluation rollout with lateral boundary condition
 
 @app.cell
 def _(
-    ARForecaster,
+    DeterministicARForecaster,
+    DeterministicForecastingModule,
     ForecastBenchmark,
-    ForecasterModule,
     GraphLAM,
     config,
     datastore,
@@ -146,12 +150,13 @@ def _(
         num_future_forcing_steps=1,
         output_std=False,
     )
-    forecaster = ARForecaster(predictor, datastore)
-    candidate_model = ForecasterModule(
+    forecaster = DeterministicARForecaster(
+        predictor, datastore, config=config, loss="mse"
+    )
+    candidate_model = DeterministicForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss="mse",
     )
 
     eval_steps = 4  # 4 rollout steps (12 hours at 3h interval)

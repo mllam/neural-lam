@@ -5,7 +5,7 @@ import pytest
 import torch
 
 # First-party
-from neural_lam.models import ARForecaster
+from neural_lam.models import DeterministicARForecaster
 from neural_lam.models.step_predictors.persistence import PersistencePredictor
 from tests.conftest import init_datastore_example
 
@@ -49,10 +49,10 @@ def test_persistence_predictor_ignores_kwargs():
 
 @pytest.mark.requires_real_data
 def test_persistence_forecaster_unroll():
-    """ARForecaster with PersistencePredictor reproduces initial state."""
+    """The deterministic persistence forecast reproduces the initial state."""
     datastore = init_datastore_example("mdp")
     predictor = PersistencePredictor(datastore=datastore)
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = DeterministicARForecaster(predictor, datastore)
 
     B = 2
     num_grid_nodes = predictor.num_grid_nodes

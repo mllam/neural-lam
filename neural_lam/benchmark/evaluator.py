@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 # Local
 from .. import metrics
 from ..datastore.base import BaseDatastore
-from ..models.module import Batch, ForecasterModule
+from ..models.modules.base import BaseForecastingModule, Batch
 from ..weather_dataset import WeatherDataset
 
 
@@ -123,9 +123,12 @@ class BenchmarkScorecard:
                         else:
                             messages.append(f"WARNING: {msg}")
 
-        # Check wind frequency bias bounds: [0.8, 1.25]
+        # Check wind frequency bias bounds: [0.8, 1.25] for observed events
         for thresh, metrics_dict in self.wind_threshold_metrics.items():
-            if "fbias" in metrics_dict:
+            if "fbias" in metrics_dict and not np.isnan(metrics_dict["fbias"]):
+                # Skip unobserved thresholds
+                if metrics_dict.get("total_events", 1) == 0:
+                    continue
                 fb = metrics_dict["fbias"]
                 if fb < 0.8 or fb > 1.25:
                     msg = (
@@ -319,8 +322,13 @@ class ForecastBenchmark:
             interior_1d_bool = torch.tensor(
                 b_mask_arr == 0, device=self.device, dtype=torch.bool
             )
-            # Reshape (nx, ny) then transpose to (ny, nx)
-            interior_2d_bool = interior_1d_bool.reshape(nx, ny).transpose(0, 1)
+            # Align with datastore spatial coordinate ordering
+            if self.datastore.spatial_coordinates == ("x", "y"):
+                interior_2d_bool = interior_1d_bool.reshape(nx, ny).transpose(
+                    0, 1
+                )
+            else:
+                interior_2d_bool = interior_1d_bool.reshape(ny, nx)
 
             if self.buffer_width > 0:
                 bw = min(self.buffer_width, ny // 4, nx // 4)
@@ -328,15 +336,19 @@ class ForecastBenchmark:
                 interior_2d_bool[-bw:, :] = False
                 interior_2d_bool[:, :bw] = False
                 interior_2d_bool[:, -bw:] = False
-                # Transpose back to (nx, ny) to flatten into 1D
-                interior_1d_bool = interior_2d_bool.transpose(0, 1).flatten()
+                if self.datastore.spatial_coordinates == ("x", "y"):
+                    interior_1d_bool = interior_2d_bool.transpose(
+                        0, 1
+                    ).flatten()
+                else:
+                    interior_1d_bool = interior_2d_bool.flatten()
 
             self.interior_mask_2d = interior_2d_bool.float()
             self.interior_mask_1d = interior_1d_bool
 
     def evaluate(
         self,
-        model: ForecasterModule,
+        model: BaseForecastingModule,
         max_batches: int | None = None,
     ) -> BenchmarkScorecard:
         """
@@ -344,7 +356,7 @@ class ForecastBenchmark:
 
         Parameters
         ----------
-        model : ForecasterModule
+        model : BaseForecastingModule
             The trained model to evaluate.
         max_batches : int or None, optional
             Maximum number of batches to evaluate.
@@ -477,9 +489,17 @@ class ForecastBenchmark:
                         nx = self.datastore.grid_shape_state.x
                         ny = self.datastore.grid_shape_state.y
 
-                        # Reshape (..., nx, ny) and transpose to (..., ny, nx)
-                        p_2d = v_p_phys.reshape(-1, nx, ny).transpose(-2, -1)
-                        t_2d = v_t_phys.reshape(-1, nx, ny).transpose(-2, -1)
+                        # Reshape to (..., ny, nx) matching spatial coordinates
+                        if self.datastore.spatial_coordinates == ("x", "y"):
+                            p_2d = v_p_phys.reshape(-1, nx, ny).transpose(
+                                -2, -1
+                            )
+                            t_2d = v_t_phys.reshape(-1, nx, ny).transpose(
+                                -2, -1
+                            )
+                        else:
+                            p_2d = v_p_phys.reshape(-1, ny, nx)
+                            t_2d = v_t_phys.reshape(-1, ny, nx)
 
                         k_centers, rad_psd_p = metrics.dct_power_spectrum_2d(
                             p_2d, mask=self.interior_mask_2d
@@ -604,11 +624,20 @@ class ForecastBenchmark:
                 f = counts["f"]
                 m = counts["m"]
                 cn = counts["cn"]
-                fb = (h + f) / (h + m + 1e-8)
+                total_events = h + m
                 total = h + f + m + cn
-                h_rand = ((h + m) * (h + f)) / (total + 1e-8)
-                ets = (h - h_rand) / (h + m + f - h_rand + 1e-8)
-                wind_threshold_metrics[thresh] = {"fbias": fb, "ets": ets}
+                if total_events > 0:
+                    fb = (h + f) / (h + m + 1e-8)
+                    h_rand = ((h + m) * (h + f)) / (total + 1e-8)
+                    ets = (h - h_rand) / (h + m + f - h_rand + 1e-8)
+                else:
+                    fb = float("nan")
+                    ets = float("nan")
+                wind_threshold_metrics[thresh] = {
+                    "fbias": fb,
+                    "ets": ets,
+                    "total_events": total_events,
+                }
 
         lead_hours = [
             (t + 1) * self.step_length_hours for t in range(self.eval_steps)
@@ -618,6 +647,8 @@ class ForecastBenchmark:
         )
 
         predictor_model = getattr(model.forecaster, "predictor", None)
+        if predictor_model is None:
+            predictor_model = getattr(model.forecaster, "step_predictor", None)
         model_name = (
             predictor_model.__class__.__name__
             if predictor_model is not None

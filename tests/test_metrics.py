@@ -93,6 +93,12 @@ def test_fractions_skill_score_2d():
             field, target, threshold=10.0, kernel_size=2
         )
 
+    # Zero events in both forecast and observation -> NaN
+    fss_zero_events = metrics.fractions_skill_score_2d(
+        torch.zeros(4, 4), torch.zeros(4, 4), threshold=10.0, kernel_size=1
+    )
+    assert torch.isnan(fss_zero_events)
+
     # Over-sized kernel exceeding interior mask -> NaN
     tiny_mask = torch.zeros(10, 10)
     tiny_mask[4:6, 4:6] = 1.0
