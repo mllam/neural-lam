@@ -1,6 +1,10 @@
 """Latent encoder for hierarchical graphs."""
 
+# Standard library
+from typing import Any
+
 # Third-party
+import torch
 from torch import nn
 
 # First-party
@@ -22,16 +26,16 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
 
     def __init__(
         self,
-        latent_dim,
-        g2m_edge_index,
-        m2m_edge_index,
-        mesh_up_edge_index,
-        hidden_dim,
-        intra_level_layers,
-        hidden_layers=1,
-        g2m_gnn_type="InteractionNet",
-        output_dist="isotropic",
-    ):
+        latent_dim: int,
+        g2m_edge_index: torch.Tensor,
+        m2m_edge_index: utils.BufferList,
+        mesh_up_edge_index: utils.BufferList,
+        hidden_dim: int,
+        intra_level_layers: int,
+        hidden_layers: int = 1,
+        g2m_gnn_type: str = "InteractionNet",
+        output_dist: str = "isotropic",
+    ) -> None:
         """
         Set up the g2m, mesh-up and intra-level GNNs and latent param map.
 
@@ -40,13 +44,13 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
         latent_dim : int
             Dimensionality of the latent variable at each mesh node.
         g2m_edge_index : torch.Tensor
-            Shape ``(2, M_g2m)``. Edge index of grid-to-mesh edges.
+            Shape ``(2, num_edges_g2m)``. Edge index of grid-to-mesh edges.
         m2m_edge_index : BufferList
             Per-level edge indices of intra-level mesh edges, each of shape
-            ``(2, M_m2m[l])``.
+            ``(2, num_edges_m2m[l])``.
         mesh_up_edge_index : BufferList
             Per-level edge indices of upward inter-level mesh edges, each of
-            shape ``(2, M_up[l])``.
+            shape ``(2, num_edges_mesh_up[l])``.
         hidden_dim : int
             Dimensionality of internal node and edge representations.
         intra_level_layers : int
@@ -121,21 +125,25 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
 
     # pylint: disable-next=arguments-differ
     def compute_dist_params(  # type: ignore[override]
-        self, grid_rep, graph_emb, **kwargs
-    ):
+        self,
+        grid_rep: torch.Tensor,
+        graph_emb: dict[str, Any],
+        **kwargs: Any,
+    ) -> torch.Tensor:
         """
         Compute distribution parameters on the top mesh level.
 
         Parameters
         ----------
         grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Grid input representation.
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Grid input
+            representation.
         graph_emb : dict
             Embedded graph node and edge features, with at least entries
-            ``mesh``: list of ``(B, num_mesh_nodes[l], d_h)``,
-            ``g2m``: ``(B, M_g2m, d_h)``,
-            ``m2m``: list of ``(B, M_m2m[l], d_h)`` and
-            ``mesh_up``: list of ``(B, M_up[l], d_h)``.
+            ``mesh``: list of ``(B, num_mesh_nodes[l], hidden_dim)``,
+            ``g2m``: ``(B, num_edges_g2m, hidden_dim)``,
+            ``m2m``: list of ``(B, num_edges_m2m[l], hidden_dim)`` and
+            ``mesh_up``: list of ``(B, num_edges_mesh_up[l], hidden_dim)``.
         **kwargs
             Ignored.
 

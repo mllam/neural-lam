@@ -6,17 +6,27 @@ from pathlib import Path
 import pytest
 import pytorch_lightning as pl
 import torch
-import wandb
 
 # First-party
 from neural_lam import config as nlconfig
 from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
-from neural_lam.datastore.base import BaseRegularGridDatastore
-from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
+from neural_lam.models import (
+    DeterministicARForecaster,
+    DeterministicForecastingModule,
+    GraphLAM,
+    ProbabilisticForecastingModule,
+)
 from neural_lam.weather_dataset import WeatherDataModule
-from tests.conftest import init_datastore_example
+from tests.conftest import (
+    init_datastore_boundary_example,
+    init_datastore_example,
+)
 from tests.dummy_datastore import DummyDatastore, set_framed_boundary
+from tests.test_probabilistic_forecaster import (
+    ConcreteProbabilisticARForecaster,
+    NoisyStepPredictor,
+)
 
 # Model architecture defaults for tests
 GRAPH = "1level"
@@ -28,27 +38,8 @@ NUM_PAST_FORCING_STEPS = 1
 NUM_FUTURE_FORCING_STEPS = 1
 
 
-def run_simple_training(
-    datastore,
-    set_output_std,
-    metrics_watch=None,
-    var_leads_metrics_watch=None,
-):
-    """
-    Run one epoch of a simple model training setup using the given datastore.
-
-    Parameters
-    ----------
-    datastore : BaseRegularGridDatastore
-        Datastore to load data from for training
-    set_output_std : bool
-        If --output_std should be set during training
-    """
-    if metrics_watch is None:
-        metrics_watch = []
-    if var_leads_metrics_watch is None:
-        var_leads_metrics_watch = {}
-
+def build_trainer(sanity_check=False):
+    """Build a one-epoch trainer on whatever devices are available."""
     if torch.cuda.is_available():
         device_name = "cuda"
         torch.set_float32_matmul_precision(
@@ -76,7 +67,69 @@ def run_simple_training(
         # use `detect_anomaly` to ensure that we don't have NaNs popping up
         # during training
         detect_anomaly=True,
+        limit_train_batches=2,
+        limit_val_batches=2,
+        num_sanity_val_steps=2 if sanity_check else 0,
+        enable_checkpointing=False,
+        logger=False,
+        enable_progress_bar=False,
     )
+    return trainer
+
+
+def build_data_module(datastore, datastore_boundary=None):
+    """Build the data module the training tests train and validate on."""
+    return WeatherDataModule(
+        datastore=datastore,
+        datastore_boundary=datastore_boundary,
+        ar_steps_train=3,
+        ar_steps_eval=5,
+        batch_size=2,
+        num_workers=0,
+        num_past_forcing_steps=NUM_PAST_FORCING_STEPS,
+        num_future_forcing_steps=NUM_FUTURE_FORCING_STEPS,
+    )
+
+
+def build_config(datastore):
+    """Build a default config pointing at the given datastore."""
+    return nlconfig.NeuralLAMConfig(
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        }
+    )
+
+
+def run_simple_training(
+    datastore,
+    set_output_std,
+    sanity_check=False,
+    metrics_watch=None,
+    var_leads_metrics_watch=None,
+    datastore_boundary=None,
+):
+    """
+    Run one epoch of a simple model training setup using the given datastore.
+
+    Parameters
+    ----------
+    datastore : BaseDatastore
+        Datastore to load data from for training
+    set_output_std : bool
+        If --output_std should be set during training
+    sanity_check : bool, default False
+        Whether to run Lightning's sanity validation steps before training.
+    datastore_boundary : BaseDatastore, optional
+        Boundary datastore to load boundary forcing from during training
+    """
+    if metrics_watch is None:
+        metrics_watch = []
+    if var_leads_metrics_watch is None:
+        var_leads_metrics_watch = {}
+
+    trainer = build_trainer(sanity_check=sanity_check)
 
     graph_name = "1level"
 
@@ -89,26 +142,14 @@ def run_simple_training(
             archetype="keisler",
         )
 
-    data_module = WeatherDataModule(
-        datastore=datastore,
-        ar_steps_train=3,
-        ar_steps_eval=5,
-        batch_size=2,
-        num_workers=1,
-        num_past_forcing_steps=1,
-        num_future_forcing_steps=1,
-    )
+    data_module = build_data_module(datastore, datastore_boundary)
 
-    config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
-    )
+    config = build_config(datastore)
 
     # Build predictor and forecaster externally, then inject into
-    # ForecasterModule
+    # DeterministicForecastingModule
     # First-party
-    from neural_lam.models import MODELS, ARForecaster
+    from neural_lam.models import MODELS, DeterministicARForecaster
 
     predictor_class = MODELS["graph_lam"]
     predictor = predictor_class(
@@ -124,13 +165,15 @@ def run_simple_training(
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
     )
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = DeterministicARForecaster(
+        predictor, datastore, config=config, loss="mse"
+    )
 
-    model = ForecasterModule(
+    model = DeterministicForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss="mse",
+        datastore_boundary=datastore_boundary,
         lr=1.0e-3,
         restore_opt=False,
         n_example_pred=1,
@@ -138,28 +181,83 @@ def run_simple_training(
         metrics_watch=metrics_watch,
         var_leads_metrics_watch=var_leads_metrics_watch,
     )
-    wandb.init(mode="disabled")  # Disable wandb for offline test run
     trainer.fit(model=model, datamodule=data_module)
 
 
-@pytest.mark.slow
+@pytest.mark.requires_training
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_training(datastore_name):
     datastore = init_datastore_example(datastore_name)
 
-    if not isinstance(datastore, BaseRegularGridDatastore):
+    if not datastore.is_on_rectilinear_grid:
         pytest.skip(
             f"Skipping test for {datastore_name} as "
-            f"it is not a regular grid datastore."
+            f"it is not a rectilinear grid datastore."
         )
 
-    run_simple_training(datastore, set_output_std=False)
+    run_simple_training(
+        datastore,
+        set_output_std=False,
+        # the sanity loop is the validation that already runs for every
+        # datastore after the train batches, minus the logging
+        sanity_check=datastore_name == DummyDatastore.SHORT_NAME,
+    )
 
 
-@pytest.mark.slow
+@pytest.mark.requires_training
+@pytest.mark.requires_real_data
 def test_training_output_std():
     datastore = init_datastore_example("mdp")  # Test only with mdp datastore
     run_simple_training(datastore, set_output_std=True)
+
+
+@pytest.mark.requires_training
+@pytest.mark.requires_real_data
+def test_ensemble_training():
+    """Run one epoch through ProbabilisticForecastingModule.
+
+    There is no concrete ensemble model in the repo yet, so this trains the
+    mock forecaster the ensemble unit tests use, exercising the training
+    step, the ensemble validation step and the epoch-end aggregation of the
+    ensemble metrics.
+    """
+    datastore = init_datastore_example("mdp")  # Test only with mdp datastore
+    config = build_config(datastore)
+
+    predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
+    forecaster = ConcreteProbabilisticARForecaster(
+        predictor, datastore, config=config, train_num_members=2
+    )
+    model = ProbabilisticForecastingModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        eval_ensemble_size=2,
+        lr=1.0e-3,
+    )
+
+    trainer = build_trainer()
+    trainer.fit(model=model, datamodule=build_data_module(datastore))
+
+    # Both loops reported the forecaster's objective. The ensemble metrics
+    # are logged as figures rather than scalars, so they show up here only
+    # by their aggregation having run without error.
+    logged = trainer.callback_metrics
+    assert torch.isfinite(logged["train_loss"])
+    assert torch.isfinite(logged["val_mean_loss"])
+
+
+@pytest.mark.requires_training
+@pytest.mark.requires_real_data
+def test_training_with_boundary():
+    """One epoch of training with a boundary datastore."""
+    datastore = init_datastore_example("mdp")
+    datastore_boundary = init_datastore_boundary_example("mdp")
+    run_simple_training(
+        datastore,
+        set_output_std=False,
+        datastore_boundary=datastore_boundary,
+    )
 
 
 def test_all_gather_cat_single_device():
@@ -177,7 +275,8 @@ def test_all_gather_cat_single_device():
             return tensor_to_gather
 
     module = MockModule()
-    get_fn = ForecasterModule.all_gather_cat.__get__
+    # Bind the real DeterministicForecastingModule.all_gather_cat to our mock
+    get_fn = DeterministicForecastingModule.all_gather_cat.__get__
     module.all_gather_cat = get_fn(module, MockModule)  # type: ignore
 
     # Simulate a 3D metric tensor: (N_eval, pred_steps, d_f)
@@ -206,7 +305,8 @@ def test_all_gather_cat_multi_device_simulation():
             return torch.stack([tensor, tensor], dim=0)
 
     module = MockModule()
-    get_fn = ForecasterModule.all_gather_cat.__get__
+    # Bind the real DeterministicForecastingModule.all_gather_cat to our mock
+    get_fn = DeterministicForecastingModule.all_gather_cat.__get__
     module.all_gather_cat = get_fn(module, MockModule)  # type: ignore
 
     tensor = torch.randn(4, 3, 5)  # (N_eval, pred_steps, d_f)
@@ -226,7 +326,6 @@ def test_all_gather_cat_multi_device_simulation():
     )
 
 
-@pytest.mark.slow
 def test_test_step_excludes_boundary_from_spatial_loss(tmp_path):
     """
     Regression test for issue #569.
@@ -253,10 +352,12 @@ def test_test_step_excludes_boundary_from_spatial_loss(tmp_path):
         )
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        ),
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        }
     )
 
     predictor = GraphLAM(
@@ -272,11 +373,12 @@ def test_test_step_excludes_boundary_from_spatial_loss(tmp_path):
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
     )
-    model = ForecasterModule(
-        forecaster=ARForecaster(predictor, datastore),
+    model = DeterministicForecastingModule(
+        forecaster=DeterministicARForecaster(
+            predictor, datastore, config=config, loss="mse"
+        ),
         config=config,
         datastore=datastore,
-        loss="mse",
         lr=1.0e-3,
         restore_opt=False,
         n_example_pred=0,  # skip example plotting, not what is under test
@@ -314,6 +416,6 @@ def test_test_step_excludes_boundary_from_spatial_loss(tmp_path):
         "boundary nodes must be excluded from the test spatial loss map, "
         "consistent with every other loss call in the module"
     )
-    assert torch.isfinite(
-        mean_spatial_loss[:, ~boundary]
-    ).all(), "interior nodes must keep finite loss values"
+    assert torch.isfinite(mean_spatial_loss[:, ~boundary]).all(), (
+        "interior nodes must keep finite loss values"
+    )

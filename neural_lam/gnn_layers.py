@@ -86,8 +86,12 @@ class InteractionNet(pyg.nn.MessagePassing):
         self.register_buffer("edge_index", edge_index, persistent=False)
 
         # Create MLPs
-        edge_mlp_recipe = [3 * input_dim] + [hidden_dim] * (hidden_layers + 1)
-        aggr_mlp_recipe = [2 * input_dim] + [hidden_dim] * (hidden_layers + 1)
+        edge_mlp_recipe = (
+            [3 * input_dim] + [hidden_dim] * hidden_layers + [input_dim]
+        )
+        aggr_mlp_recipe = (
+            [2 * input_dim] + [hidden_dim] * hidden_layers + [input_dim]
+        )
 
         if edge_chunk_sizes is None:
             self.edge_mlp = utils.make_mlp(edge_mlp_recipe)
@@ -181,6 +185,7 @@ class InteractionNet(pyg.nn.MessagePassing):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Overridden aggregation function to:
+
         * return both aggregated and per-edge messages,
         * only aggregate to the number of receiver nodes (``self.num_rec``)
           rather than to ``dim_size``.
@@ -259,9 +264,16 @@ def get_gnn_class(gnn_type: str) -> type[pyg.nn.MessagePassing]:
     """
     Look up a GNN class by name.
 
-    gnn_type: One of the keys in GNN_TYPES
-        (currently "InteractionNet" or "PropagationNet")
-    Returns the corresponding GNN class.
+    Parameters
+    ----------
+    gnn_type : str
+        One of the keys in GNN_TYPES (currently "InteractionNet" or
+        "PropagationNet")
+
+    Returns
+    -------
+    type[pyg.nn.MessagePassing]
+        The corresponding GNN class.
     """
     if gnn_type not in GNN_TYPES:
         raise ValueError(
@@ -295,9 +307,9 @@ class SplitMLPs(nn.Module):
             If the number of ``mlps`` and ``chunk_sizes`` differ.
         """
         super().__init__()
-        assert len(mlps) == len(
-            chunk_sizes
-        ), "Number of MLPs must match the number of chunks"
+        assert len(mlps) == len(chunk_sizes), (
+            "Number of MLPs must match the number of chunks"
+        )
 
         self.mlps = nn.ModuleList(mlps)
         self.chunk_sizes = chunk_sizes

@@ -262,7 +262,7 @@ def main() -> None:
     )
 
     args = parser.parse_args()
-    _, datastore = load_config_and_datastore(
+    _, datastore, _ = load_config_and_datastore(
         config_path=args.datastore_config_path
     )
 

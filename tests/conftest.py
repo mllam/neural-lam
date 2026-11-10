@@ -1,5 +1,11 @@
 # Standard library
 import os
+
+# Skip the GCE metadata lookup gcsfs does for the public ERA5 bucket, which
+# times out on most HPC nodes. Must be set before google.auth is imported.
+os.environ["NO_GCE_CHECK"] = "true"
+
+# Standard library
 from datetime import timedelta
 from pathlib import Path
 
@@ -63,7 +69,7 @@ def download_meps_example_reduced_dataset():
 
     config_path = dataset_path / "meps_example_reduced.datastore.yaml"
 
-    with open(config_path, "r") as f:
+    with config_path.open() as f:
         config = yaml.safe_load(f)
 
     if "class" in config["projection"]:
@@ -75,7 +81,7 @@ def download_meps_example_reduced_dataset():
         # dataclass
         config["projection"]["class_name"] = config["projection"].pop("class")
 
-        with open(config_path, "w") as f:
+        with config_path.open("w") as f:
             yaml.dump(config, f)
 
     # create parameters, only run if the files we expect are not present
@@ -111,7 +117,79 @@ DATASTORES_EXAMPLES = dict(
     dummydata=None,
 )
 
+DATASTORES_BOUNDARY_EXAMPLES = {
+    "mdp": (
+        DATASTORE_EXAMPLES_ROOT_PATH
+        / "mdp"
+        / "era5_1000hPa_danra_100m_winds"
+        / "era5.datastore.yaml"
+    ),
+}
+
 DATASTORES[DummyDatastore.SHORT_NAME] = DummyDatastore
+
+# Datastore kinds whose examples are real data, downloaded on first use
+REAL_DATA_DATASTORE_KINDS = ("mdp", "npyfilesmeps")
+
+
+def pytest_collection_modifyitems(items):
+    """Mark tests parametrized with a ``datastore_name`` that needs real
+    example data with ``requires_real_data``, and tests needing neither real
+    data nor training with ``quick``."""
+    for item in items:
+        callspec = getattr(item, "callspec", None)
+        if (
+            callspec is not None
+            and callspec.params.get("datastore_name")
+            in REAL_DATA_DATASTORE_KINDS
+        ):
+            item.add_marker(pytest.mark.requires_real_data)
+        if not (
+            item.get_closest_marker("requires_real_data")
+            or item.get_closest_marker("requires_training")
+        ):
+            item.add_marker(pytest.mark.quick)
+
+
+def _fail_unmarked_example_datastore(kind):
+    """Return a callable that fails the test constructing ``kind``."""
+
+    def fail(*args, **kwargs):
+        pytest.fail(
+            f"This test constructs the '{kind}' example datastore, which "
+            "needs real example data. Mark it with "
+            "@pytest.mark.requires_real_data."
+        )
+
+    return fail
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_protocol(item, nextitem):
+    """Fail tests that construct a real example datastore without the
+    ``requires_real_data`` marker, so that
+    ``pytest -m "not requires_real_data"`` never needs the example data.
+
+    Wrapping the whole test protocol, rather than using an autouse fixture,
+    also covers module- and session-scoped fixtures set up for the test.
+    """
+    if item.get_closest_marker("requires_real_data"):
+        return (yield)
+
+    with pytest.MonkeyPatch.context() as mp:
+        for kind in REAL_DATA_DATASTORE_KINDS:
+            mp.setattr(
+                DATASTORES[kind],
+                "__init__",
+                _fail_unmarked_example_datastore(kind),
+            )
+        # the npyfilesmeps example is downloaded before its datastore is built
+        mp.setitem(
+            globals(),
+            "download_meps_example_reduced_dataset",
+            _fail_unmarked_example_datastore("npyfilesmeps"),
+        )
+        return (yield)
 
 
 def init_datastore_example(datastore_kind):
@@ -129,3 +207,11 @@ def init_datastore_example(datastore_kind):
     )
 
     return datastore
+
+
+def init_datastore_boundary_example(datastore_kind):
+    datastore_boundary = init_datastore(
+        datastore_kind=datastore_kind,
+        config_path=DATASTORES_BOUNDARY_EXAMPLES[datastore_kind],
+    )
+    return datastore_boundary

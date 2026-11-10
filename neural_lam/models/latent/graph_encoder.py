@@ -1,5 +1,11 @@
 """Latent encoder for flat (non-hierarchical) graphs."""
 
+# Standard library
+from typing import Any
+
+# Third-party
+import torch
+
 # First-party
 from neural_lam import utils
 from neural_lam.gnn_layers import get_gnn_class
@@ -18,15 +24,15 @@ class GraphLatentEncoder(BaseLatentEncoder):
 
     def __init__(
         self,
-        latent_dim,
-        g2m_edge_index,
-        m2m_edge_index,
-        hidden_dim,
-        m2m_layers,
-        hidden_layers=1,
-        g2m_gnn_type="InteractionNet",
-        output_dist="isotropic",
-    ):
+        latent_dim: int,
+        g2m_edge_index: torch.Tensor,
+        m2m_edge_index: torch.Tensor,
+        hidden_dim: int,
+        m2m_layers: int,
+        hidden_layers: int = 1,
+        g2m_gnn_type: str = "InteractionNet",
+        output_dist: str = "isotropic",
+    ) -> None:
         """
         Set up the g2m GNN, on-mesh processing stack and latent param map.
 
@@ -35,9 +41,9 @@ class GraphLatentEncoder(BaseLatentEncoder):
         latent_dim : int
             Dimensionality of the latent variable at each mesh node.
         g2m_edge_index : torch.Tensor
-            Shape ``(2, M_g2m)``. Edge index of grid-to-mesh edges.
+            Shape ``(2, num_edges_g2m)``. Edge index of grid-to-mesh edges.
         m2m_edge_index : torch.Tensor
-            Shape ``(2, M_m2m)``. Edge index of mesh-to-mesh edges.
+            Shape ``(2, num_edges_m2m)``. Edge index of mesh-to-mesh edges.
         hidden_dim : int
             Dimensionality of internal node and edge representations.
         m2m_layers : int
@@ -77,19 +83,24 @@ class GraphLatentEncoder(BaseLatentEncoder):
 
     # pylint: disable-next=arguments-differ
     def compute_dist_params(  # type: ignore[override]
-        self, grid_rep, graph_emb, **kwargs
-    ):
+        self,
+        grid_rep: torch.Tensor,
+        graph_emb: dict[str, Any],
+        **kwargs: Any,
+    ) -> torch.Tensor:
         """
         Compute distribution parameters on mesh from grid features.
 
         Parameters
         ----------
         grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Grid input representation.
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Grid input
+            representation.
         graph_emb : dict
             Embedded graph node and edge features, with at least entries
-            ``mesh``: ``(B, num_mesh_nodes, d_h)``,
-            ``g2m``: ``(B, M_g2m, d_h)`` and ``m2m``: ``(B, M_m2m, d_h)``.
+            ``mesh``: ``(B, num_mesh_nodes, hidden_dim)``,
+            ``g2m``: ``(B, num_edges_g2m, hidden_dim)`` and
+            ``m2m``: ``(B, num_edges_m2m, hidden_dim)``.
         **kwargs
             Ignored.
 

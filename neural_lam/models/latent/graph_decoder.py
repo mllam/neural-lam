@@ -1,5 +1,11 @@
 """Latent decoder for flat (non-hierarchical) graphs."""
 
+# Standard library
+from typing import Any
+
+# Third-party
+import torch
+
 # First-party
 from neural_lam import utils
 from neural_lam.gnn_layers import get_gnn_class
@@ -19,29 +25,29 @@ class GraphLatentDecoder(BaseGraphLatentDecoder):
 
     def __init__(
         self,
-        g2m_edge_index,
-        m2m_edge_index,
-        m2g_edge_index,
-        hidden_dim,
-        latent_dim,
-        num_state_vars,
-        m2m_layers,
-        hidden_layers=1,
-        g2m_gnn_type="InteractionNet",
-        m2g_gnn_type="InteractionNet",
-        output_std=True,
-    ):
+        g2m_edge_index: torch.Tensor,
+        m2m_edge_index: torch.Tensor,
+        m2g_edge_index: torch.Tensor,
+        hidden_dim: int,
+        latent_dim: int,
+        num_state_vars: int,
+        m2m_layers: int,
+        hidden_layers: int = 1,
+        g2m_gnn_type: str = "InteractionNet",
+        m2g_gnn_type: str = "InteractionNet",
+        output_std: bool = True,
+    ) -> None:
         """
         Set up the g2m, on-mesh and m2g GNNs.
 
         Parameters
         ----------
         g2m_edge_index : torch.Tensor
-            Shape ``(2, M_g2m)``. Edge index of grid-to-mesh edges.
+            Shape ``(2, num_edges_g2m)``. Edge index of grid-to-mesh edges.
         m2m_edge_index : torch.Tensor
-            Shape ``(2, M_m2m)``. Edge index of mesh-to-mesh edges.
+            Shape ``(2, num_edges_m2m)``. Edge index of mesh-to-mesh edges.
         m2g_edge_index : torch.Tensor
-            Shape ``(2, M_m2g)``. Edge index of mesh-to-grid edges.
+            Shape ``(2, num_edges_m2g)``. Edge index of mesh-to-grid edges.
         hidden_dim : int
             Dimensionality of internal node and edge representations.
         latent_dim : int
@@ -92,35 +98,40 @@ class GraphLatentDecoder(BaseGraphLatentDecoder):
         )
 
     def combine_with_latent(
-        self, original_grid_rep, latent_rep, residual_grid_rep, graph_emb
-    ):
+        self,
+        original_grid_rep: torch.Tensor,
+        latent_rep: torch.Tensor,
+        residual_grid_rep: torch.Tensor,
+        graph_emb: dict[str, Any],
+    ) -> torch.Tensor:
         """
         Fuse grid and latent reps via g2m -> m2m -> m2g.
 
         Parameters
         ----------
         original_grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Embedded grid input
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Embedded grid input
             features, used as the sender representation in the
             grid-to-mesh step.
         latent_rep : torch.Tensor
-            Shape ``(B, num_mesh_nodes, d_h)``. Latent sample embedded to
-            ``d_h``, used as the initial mesh node representation (the
-            receiver in the grid-to-mesh step), so all mesh processing
-            starts from the latent.
+            Shape ``(B, num_mesh_nodes, hidden_dim)``. Latent sample
+            embedded to ``hidden_dim``, used as the initial mesh node
+            representation (the receiver in the grid-to-mesh step), so all
+            mesh processing starts from the latent.
         residual_grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Residually updated grid
-            representation, used as the receiver representation in the
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Residually updated
+            grid representation, used as the receiver representation in the
             mesh-to-grid step.
         graph_emb : dict
             Embedded static graph node and edge features, with at least
-            the entries ``g2m``: ``(B, M_g2m, d_h)``,
-            ``m2m``: ``(B, M_m2m, d_h)`` and ``m2g``: ``(B, M_m2g, d_h)``.
+            the entries ``g2m``: ``(B, num_edges_g2m, hidden_dim)``,
+            ``m2m``: ``(B, num_edges_m2m, hidden_dim)`` and
+            ``m2g``: ``(B, num_edges_m2g, hidden_dim)``.
 
         Returns
         -------
         torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Combined grid
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Combined grid
             representation, incorporating both the grid input and the
             latent sample.
         """

@@ -3,7 +3,7 @@ predictors, for hierarchical (GraphEFM) and flat (GraphEFMMultiScale) mesh
 graphs."""
 
 # Standard library
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 # Third-party
 import torch
@@ -51,6 +51,9 @@ class BaseGraphEFM(StepPredictor):
     and :class:`GraphEFMMultiScale` (flat graph).
     """
 
+    g2m_edge_index: torch.Tensor
+    m2g_edge_index: torch.Tensor
+
     def __init__(
         self,
         datastore: BaseDatastore,
@@ -67,7 +70,7 @@ class BaseGraphEFM(StepPredictor):
         output_std: bool = False,
         output_clamping_lower: Optional[Dict[str, float]] = None,
         output_clamping_upper: Optional[Dict[str, float]] = None,
-    ):
+    ) -> None:
         """
         Set up the graph-type independent parts of the predictor.
 
@@ -262,13 +265,13 @@ class BaseGraphEFM(StepPredictor):
 
     def build_learnable_prior(
         self,
-        latent_dim,
-        hidden_dim,
-        hidden_layers,
-        g2m_gnn_type,
-        prior_dist,
-        prior_layers,
-    ):
+        latent_dim: int,
+        hidden_dim: int,
+        hidden_layers: int,
+        g2m_gnn_type: str,
+        prior_dist: str,
+        prior_layers: int,
+    ) -> nn.Module:
         """
         Build the graph-type specific learnable prior encoder.
 
@@ -300,11 +303,11 @@ class BaseGraphEFM(StepPredictor):
 
     def embedd_grid_with_target(
         self,
-        prev_state,
-        prev_prev_state,
-        forcing,
-        current_state,
-    ):
+        prev_state: torch.Tensor,
+        prev_prev_state: torch.Tensor,
+        forcing: torch.Tensor,
+        current_state: torch.Tensor,
+    ) -> torch.Tensor:
         """
         Embed the grid representation including the current (target) state.
         Used as input to the encoder, which is conditioned also on the target.
@@ -312,18 +315,18 @@ class BaseGraphEFM(StepPredictor):
         Parameters
         ----------
         prev_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_state)``. ``X_t``.
+            Shape ``(B, num_grid_nodes, num_state_vars)``. ``X_t``.
         prev_prev_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_state)``. ``X_{t-1}``.
+            Shape ``(B, num_grid_nodes, num_state_vars)``. ``X_{t-1}``.
         forcing : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_forcing)``.
+            Shape ``(B, num_grid_nodes, num_windowed_forcing_vars)``.
         current_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_state)``. ``X_{t+1}`` (target).
+            Shape ``(B, num_grid_nodes, num_state_vars)``. ``X_{t+1}`` (target).
 
         Returns
         -------
         torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Grid embedding.
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Grid embedding.
         """
         batch_size = prev_state.shape[0]
 
@@ -340,9 +343,9 @@ class BaseGraphEFM(StepPredictor):
 
         return self.grid_current_embedder(
             grid_current_features
-        )  # (B, num_grid_nodes, d_h)
+        )  # (B, num_grid_nodes, hidden_dim)
 
-    def embedd_mesh(self, batch_size):
+    def embedd_mesh(self, batch_size: int) -> dict[str, Any]:
         """
         Embed static mesh node and intra-mesh edge features.
 
@@ -356,30 +359,35 @@ class BaseGraphEFM(StepPredictor):
         dict
             Mesh-related entries of the graph embedding (``mesh``, ``m2m``
             and, for hierarchical graphs, ``mesh_up`` and ``mesh_down``).
-            Entries are tensors of shape ``(B, *, d_h)`` for flat graphs
+            Entries are tensors of shape ``(B, *, hidden_dim)`` for flat graphs
             and per-level lists of such tensors for hierarchical graphs.
         """
         raise NotImplementedError("embedd_mesh not implemented")
 
-    def embedd_grid_and_graph(self, prev_state, prev_prev_state, forcing):
+    def embedd_grid_and_graph(
+        self,
+        prev_state: torch.Tensor,
+        prev_prev_state: torch.Tensor,
+        forcing: torch.Tensor,
+    ) -> tuple[torch.Tensor, dict[str, Any]]:
         """
         Embed the grid (states up to t-1) and the full graph.
 
         Parameters
         ----------
         prev_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_state)``. ``X_t``.
+            Shape ``(B, num_grid_nodes, num_state_vars)``. ``X_t``.
         prev_prev_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_state)``. ``X_{t-1}``.
+            Shape ``(B, num_grid_nodes, num_state_vars)``. ``X_{t-1}``.
         forcing : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_forcing)``.
+            Shape ``(B, num_grid_nodes, num_windowed_forcing_vars)``.
 
         Returns
         -------
         grid_emb : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Grid embedding.
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Grid embedding.
         graph_emb : dict
-            Edge/mesh embeddings, each entry of shape ``(B, *, d_h)``.
+            Edge/mesh embeddings, each entry of shape ``(B, *, hidden_dim)``.
         """
         batch_size = prev_state.shape[0]
 
@@ -394,7 +402,7 @@ class BaseGraphEFM(StepPredictor):
         )  # (B, num_grid_nodes, grid_dim)
 
         grid_emb = self.grid_prev_embedder(grid_features)
-        # (B, num_grid_nodes, d_h)
+        # (B, num_grid_nodes, hidden_dim)
 
         # Graph embedding. NOTE: this block depends only on static graph
         # features, so it is constant across an autoregressive rollout. It is
@@ -403,10 +411,10 @@ class BaseGraphEFM(StepPredictor):
         graph_emb = {
             "g2m": self.expand_to_batch(
                 self.g2m_embedder(self.g2m_features), batch_size
-            ),  # (B, M_g2m, d_h)
+            ),  # (B, num_edges_g2m, hidden_dim)
             "m2g": self.expand_to_batch(
                 self.m2g_embedder(self.m2g_features), batch_size
-            ),  # (B, M_m2g, d_h)
+            ),  # (B, num_edges_m2g, hidden_dim)
         }
         graph_emb.update(self.embedd_mesh(batch_size))
 
@@ -427,20 +435,20 @@ class BaseGraphEFM(StepPredictor):
         Parameters
         ----------
         prev_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_state)``. ``X_t``.
+            Shape ``(B, num_grid_nodes, num_state_vars)``. ``X_t``.
         prev_prev_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_state)``. ``X_{t-1}``.
+            Shape ``(B, num_grid_nodes, num_state_vars)``. ``X_{t-1}``.
         forcing : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_forcing)``.
+            Shape ``(B, num_grid_nodes, num_windowed_forcing_vars)``.
 
         Returns
         -------
         new_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_state)``. Predicted ``X_{t+1}``
-            (the decoder mean, given the sampled latent).
+            Shape ``(B, num_grid_nodes, num_state_vars)``. Predicted
+            ``X_{t+1}`` (the decoder mean, given the sampled latent).
         pred_std : torch.Tensor or None
-            Shape ``(B, num_grid_nodes, d_state)`` when ``output_std`` is True,
-            otherwise None.
+            Shape ``(B, num_grid_nodes, num_state_vars)`` when
+            ``output_std`` is True, otherwise None.
         """
         # embed all features
         grid_prev_emb, graph_emb = self.embedd_grid_and_graph(
@@ -450,11 +458,11 @@ class BaseGraphEFM(StepPredictor):
         # Compute prior
         prior_dist = self.prior_model(
             grid_prev_emb, graph_emb=graph_emb
-        )  # (B, num_mesh_nodes, d_latent)
+        )  # (B, num_mesh_nodes, latent_dim)
 
         # Sample from prior
         latent_samples = prior_dist.rsample()
-        # (B, num_mesh_nodes, d_latent)
+        # (B, num_mesh_nodes, latent_dim)
 
         # Decode the latent into a state increment, rescale it with the
         # one-step difference statistics, then add it onto prev_state (X_t)
@@ -466,7 +474,7 @@ class BaseGraphEFM(StepPredictor):
         )
         rescaled_mean_delta = mean_delta * self.diff_std + self.diff_mean
         pred_mean = self.get_clamped_new_state(rescaled_mean_delta, prev_state)
-        # (B, num_grid_nodes, d_state)
+        # (B, num_grid_nodes, num_state_vars)
 
         return pred_mean, pred_std
 
@@ -484,6 +492,9 @@ class GraphEFM(BaseGraphEFM):
     mesh_up_features: list[torch.Tensor]
     mesh_down_features: list[torch.Tensor]
     m2m_features: list[torch.Tensor]
+    m2m_edge_index: utils.BufferList
+    mesh_up_edge_index: utils.BufferList
+    mesh_down_edge_index: utils.BufferList
 
     def __init__(
         self,
@@ -504,7 +515,7 @@ class GraphEFM(BaseGraphEFM):
         output_std: bool = False,
         output_clamping_lower: Optional[Dict[str, float]] = None,
         output_clamping_upper: Optional[Dict[str, float]] = None,
-    ):
+    ) -> None:
         """
         Build the mesh embedders and the hierarchical encoder/decoder
         latent modules. The prior is built by the base class.
@@ -700,13 +711,13 @@ class GraphEFM(BaseGraphEFM):
 
     def build_learnable_prior(
         self,
-        latent_dim,
-        hidden_dim,
-        hidden_layers,
-        g2m_gnn_type,
-        prior_dist,
-        prior_layers,
-    ):
+        latent_dim: int,
+        hidden_dim: int,
+        hidden_layers: int,
+        g2m_gnn_type: str,
+        prior_dist: str,
+        prior_layers: int,
+    ) -> HiGraphLatentEncoder:
         """
         Build the hierarchical learnable prior encoder.
 
@@ -743,7 +754,7 @@ class GraphEFM(BaseGraphEFM):
             output_dist=prior_dist,
         )
 
-    def embedd_mesh(self, batch_size):
+    def embedd_mesh(self, batch_size: int) -> dict[str, Any]:
         """
         Embed static mesh node and intra-mesh edge features per level.
 
@@ -756,7 +767,7 @@ class GraphEFM(BaseGraphEFM):
         -------
         dict
             Entries ``mesh``, ``m2m``, ``mesh_up`` and ``mesh_down``, each
-            a list with one ``(B, *, d_h)`` tensor per mesh level (or
+            a list with one ``(B, *, hidden_dim)`` tensor per mesh level (or
             inter-level connection).
         """
         mesh_emb = {
@@ -805,6 +816,7 @@ class GraphEFMMultiScale(BaseGraphEFM):
 
     mesh_static_features: torch.Tensor
     m2m_features: torch.Tensor
+    m2m_edge_index: torch.Tensor
 
     def __init__(
         self,
@@ -825,7 +837,7 @@ class GraphEFMMultiScale(BaseGraphEFM):
         output_std: bool = False,
         output_clamping_lower: Optional[Dict[str, float]] = None,
         output_clamping_upper: Optional[Dict[str, float]] = None,
-    ):
+    ) -> None:
         """
         Build the mesh embedders and the flat-graph encoder/decoder latent
         modules. The prior is built by the base class.
@@ -970,13 +982,13 @@ class GraphEFMMultiScale(BaseGraphEFM):
 
     def build_learnable_prior(
         self,
-        latent_dim,
-        hidden_dim,
-        hidden_layers,
-        g2m_gnn_type,
-        prior_dist,
-        prior_layers,
-    ):
+        latent_dim: int,
+        hidden_dim: int,
+        hidden_layers: int,
+        g2m_gnn_type: str,
+        prior_dist: str,
+        prior_layers: int,
+    ) -> GraphLatentEncoder:
         """
         Build the flat-graph learnable prior encoder.
 
@@ -1012,7 +1024,7 @@ class GraphEFMMultiScale(BaseGraphEFM):
             output_dist=prior_dist,
         )
 
-    def embedd_mesh(self, batch_size):
+    def embedd_mesh(self, batch_size: int) -> dict[str, Any]:
         """
         Embed static mesh node and intra-mesh edge features.
 
@@ -1024,14 +1036,14 @@ class GraphEFMMultiScale(BaseGraphEFM):
         Returns
         -------
         dict
-            Entries ``mesh``: ``(B, num_mesh_nodes, d_h)`` and
-            ``m2m``: ``(B, M_m2m, d_h)``.
+            Entries ``mesh``: ``(B, num_mesh_nodes, hidden_dim)`` and
+            ``m2m``: ``(B, num_edges_m2m, hidden_dim)``.
         """
         return {
             "mesh": self.expand_to_batch(
                 self.mesh_embedder(self.mesh_static_features), batch_size
-            ),  # (B, num_mesh_nodes, d_h)
+            ),  # (B, num_mesh_nodes, hidden_dim)
             "m2m": self.expand_to_batch(
                 self.m2m_embedder(self.m2m_features), batch_size
-            ),  # (B, M_m2m, d_h)
+            ),  # (B, num_edges_m2m, hidden_dim)
         }
