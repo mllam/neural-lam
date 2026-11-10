@@ -555,8 +555,8 @@ def fit(
     """
     if train_config.val_interval < 1:
         raise ValueError(
-            f"val_interval must be at least 1, got {train_config.val_interval}"
-            ". Adjust --val_interval."
+            "val_interval must be at least 1, got "
+            f"{train_config.val_interval}. Adjust --val_interval."
         )
 
     for phase, max_steps in [
