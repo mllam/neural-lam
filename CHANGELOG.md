@@ -66,6 +66,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rename remaining non-canonical dimension names (`d_*`, `N_*`, `M_*`) in shape annotations and docstrings to Dimension Glossary names [\#825](https://github.com/mllam/neural-lam/pull/825) @Omega-127
 
 - Set up dependabot to keep GitHub Actions, pre-commit hooks and `uv.lock` up to date [\#718](https://github.com/mllam/neural-lam/pull/718) @observingClouds
+- Bump `pytorch-lightning` from 2.6.1 to 2.6.6 [#871](https://github.com/mllam/neural-lam/pull/871) @dependabot
+- Bump `tueplots` from 0.2.4 to 0.2.6 [#871](https://github.com/mllam/neural-lam/pull/871) @dependabot
+- Bump `marimo` from 0.25.1 to 0.25.2 [#871](https://github.com/mllam/neural-lam/pull/871) @dependabot
 
 ## [v0.7.0](https://github.com/mllam/neural-lam/releases/tag/v0.7.0)
 
