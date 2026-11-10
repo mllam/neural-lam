@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add `PressureLevelWeighting` strategy to weight vertical atmospheric
+  variables proportionally to their pressure coordinates with explicit
+  `other_weights` for surface features, closest match suggestions for
+  mismatched datastore feature names, and comprehensive unit tests
+  ([#361](https://github.com/mllam/neural-lam/issues/361)) @muskan-creates352
+
 - Add deterministic and probabilistic forecaster/module interfaces with
   shared autoregressive unrolling and forecaster-owned training objectives.
   [\#700](https://github.com/mllam/neural-lam/pull/700) @Sir-Sloth-The-Lazy

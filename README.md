@@ -188,7 +188,23 @@ For now the neural-lam config only defines few things:
    categories](#data-categories) below.
 2. The weighting of different features in
 the loss function. If you don't define the state feature weighting it will default to
-weighting all features equally.
+weighting all features equally (`UniformFeatureWeighting`). You can also specify manual
+weights using `ManualStateFeatureWeighting`, or weight vertical atmospheric variables
+proportionally to pressure levels with `PressureLevelWeighting`:
+
+```yaml
+training:
+  state_feature_weighting:
+    __config_class__: PressureLevelWeighting
+    variables: [z, q, t, u, v, w]
+    pressure_levels: [50, 100, 250, 500, 850, 1000]
+    name_format: "{var_name}{level}"
+    other_weights:
+      2t: 1.0
+      10u: 0.1
+      10v: 0.1
+      msl: 0.1
+```
 3. Valid numerical range for output of each feature. The numerical range of all features default to $]-\infty, \infty[$.
 
 (This example is taken from the

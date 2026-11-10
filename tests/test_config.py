@@ -15,6 +15,12 @@ import neural_lam.config as nlconfig
             weights=dict(u100m=1.0, v100m=0.5)
         ),
         nlconfig.UniformFeatureWeighting(),
+        nlconfig.PressureLevelWeighting(
+            variables=["t", "z"],
+            pressure_levels=[500, 850],
+            name_format="{var_name}{level}",
+            other_weights=dict(u100m=1.0),
+        ),
     ],
 )
 def test_config_serialization(state_weighting_config):
@@ -71,9 +77,50 @@ manual_weights_config = nlconfig.NeuralLAMConfig(
     ),
 )
 
+yaml_training_pressure_level_weights = """
+datastores:
+  main:
+    kind: mdp
+    config_path: ""
+training:
+  state_feature_weighting:
+    __config_class__: PressureLevelWeighting
+    variables:
+      - t
+      - z
+    pressure_levels:
+      - 500
+      - 850
+    name_format: "{var_name}{level}"
+    other_weights:
+      u100m: 1.0
+"""
+
+pressure_level_weights_config = nlconfig.NeuralLAMConfig(
+    datastores={
+        "main": nlconfig.DatastoreSelection(kind="mdp", config_path="")
+    },
+    training=nlconfig.TrainingConfig(
+        state_feature_weighting=nlconfig.PressureLevelWeighting(
+            variables=["t", "z"],
+            pressure_levels=[500, 850],
+            name_format="{var_name}{level}",
+            other_weights=dict(u100m=1.0),
+        )
+    ),
+)
+
 yaml_samples = zip(
-    [yaml_training_defaults, yaml_training_manual_weights],
-    [default_config, manual_weights_config],
+    [
+        yaml_training_defaults,
+        yaml_training_manual_weights,
+        yaml_training_pressure_level_weights,
+    ],
+    [
+        default_config,
+        manual_weights_config,
+        pressure_level_weights_config,
+    ],
 )
 
 

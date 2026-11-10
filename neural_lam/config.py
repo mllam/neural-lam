@@ -80,6 +80,35 @@ class UniformFeatureWeighting:
 
 
 @dataclasses.dataclass
+class PressureLevelWeighting:
+    """
+    Configuration for weighting state features proportionally to pressure
+    levels for atmospheric variables, with optional explicit weights for
+    other (e.g. surface) features.
+
+    Attributes
+    ----------
+    variables : list[str]
+        List of variable prefixes (e.g. ``["z", "q", "t", "u", "v", "w"]``)
+        that are defined on vertical pressure levels. Defaults to an empty list.
+    pressure_levels : list[float | int]
+        List of vertical pressure levels (e.g. in hPa). Defaults to an empty
+        list.
+    name_format : str
+        Format string used to construct feature names from variable and level.
+        Defaults to ``"{var_name}{level}"``.
+    other_weights : dict[str, float]
+        Manual weights for features not defined on pressure levels (e.g.
+        surface features). Defaults to an empty dictionary.
+    """
+
+    variables: list[str] = dataclasses.field(default_factory=list)
+    pressure_levels: list[float | int] = dataclasses.field(default_factory=list)
+    name_format: str = "{var_name}{level}"
+    other_weights: dict[str, float] = dataclasses.field(default_factory=dict)
+
+
+@dataclasses.dataclass
 class OutputClamping:
     """
     Configuration for clamping the output of the model.
@@ -104,7 +133,9 @@ class TrainingConfig:
     Attributes
     ----------
     state_feature_weighting :
-        ManualStateFeatureWeighting | UniformFeatureWeighting
+        ManualStateFeatureWeighting
+        | UniformFeatureWeighting
+        | PressureLevelWeighting
         The method to use for weighting the state features in the loss
         function. Defaults to uniform weighting (`UniformFeatureWeighting`, i.e.
         all features are weighted equally).
@@ -114,7 +145,9 @@ class TrainingConfig:
     """
 
     state_feature_weighting: (
-        ManualStateFeatureWeighting | UniformFeatureWeighting
+        ManualStateFeatureWeighting
+        | UniformFeatureWeighting
+        | PressureLevelWeighting
     ) = dataclasses.field(default_factory=UniformFeatureWeighting)
 
     output_clamping: OutputClamping = dataclasses.field(
