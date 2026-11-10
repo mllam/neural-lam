@@ -65,6 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Rename remaining non-canonical dimension names (`d_*`, `N_*`, `M_*`) in shape annotations and docstrings to Dimension Glossary names [\#825](https://github.com/mllam/neural-lam/pull/825) @Omega-127
 
+- Set up dependabot to keep GitHub Actions, pre-commit hooks and `uv.lock` up to date [\#718](https://github.com/mllam/neural-lam/pull/718) @observingClouds
+
 ## [v0.7.0](https://github.com/mllam/neural-lam/releases/tag/v0.7.0)
 
 This release contains two major improvements to the codebase: splitting the monolithic `ARModel` into a modular `ForecasterModule` / `Forecaster` / `StepPredictor` hierarchy and adding graph creation through the weather-model-graphs package.
@@ -177,8 +179,6 @@ It also contains a number of smaller improvements, bug fixes and maintenance upd
 - Fix `WeatherDataset.__len__` off-by-one in analysis mode (was undercounting by 1 sample), include `num_past_forcing_steps` in the forecast-mode minimum-horizon check, validate forcing-side forecast horizon when forcing is present, and use `min(n_state, n_forcing)` when both are present in analysis mode; raise `IndexError` for out-of-range indices in `WeatherDataset.__getitem__` (with Python-style negative indexing support) [\#312](https://github.com/mllam/neural-lam/pull/312) @kshirajahere
 
 ### Maintenance
-
-- Set up dependabot to keep GitHub Actions, pre-commit hooks and `uv.lock` up to date [\#718](https://github.com/mllam/neural-lam/pull/718) @observingClouds
 
 - Cache the mdp example input data in CI with fsspec `simplecache`, so the DANRA inputs are no longer downloaded on every run [\#751](https://github.com/mllam/neural-lam/pull/751) @KumarShivam1908
 
