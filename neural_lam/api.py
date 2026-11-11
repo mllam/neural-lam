@@ -284,6 +284,7 @@ def evaluate(
     mesh_up_gnn_type: str = "InteractionNet",
     mesh_down_gnn_type: str = "InteractionNet",
     batch_size: int = 4,
+    loss: str = "wmse",
     ar_steps_eval: int = 10,
     n_example_pred: int = 1,
     create_gif: bool = False,
@@ -308,7 +309,10 @@ def evaluate(
     Evaluate a Neural-LAM model checkpoint programmatically.
 
     Parameters share the meaning and defaults of :func:`train`, with ``eval``
-    defaulting to ``"test"``, and training-only parameters omitted.
+    defaulting to ``"test"``, and training-only parameters omitted. ``loss``
+    is kept because it is the scoring rule behind the reported validation and
+    test losses and spatial loss maps, so pass the one the checkpoint was
+    trained with to get comparable numbers.
 
     Returns
     -------
@@ -347,7 +351,7 @@ def evaluate(
         batch_size=batch_size,
         ar_steps_train=1,
         ar_steps_eval=ar_steps_eval,
-        loss="wmse",
+        loss=loss,
         lr=1e-3,
         val_interval=1,
         num_sanity_val_steps=0,
