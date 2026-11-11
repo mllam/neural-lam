@@ -1,0 +1,35 @@
+version: 2
+updates:
+- package-ecosystem: github-actions
+  directory: /
+  schedule:
+    interval: quarterly
+  cooldown:
+    default-days: 7
+  groups:
+    gha-patches:
+      update-types:
+      - patch
+
+- package-ecosystem: uv
+  directory: /
+  versioning-strategy: lockfile-only
+  schedule:
+    interval: quarterly
+  cooldown:
+    default-days: 7
+  groups:
+    uvlock-patches:
+      update-types:
+      - patch
+
+- package-ecosystem: "pre-commit"
+  directory: "/"
+  schedule:
+    interval: "quarterly"
+  cooldown:
+    default-days: 7
+  groups:
+    pre-commit-all:
+      patterns:
+        - "*"
