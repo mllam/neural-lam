@@ -67,6 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Rename remaining non-canonical dimension names (`d_*`, `N_*`, `M_*`) in shape annotations and docstrings to Dimension Glossary names [\#825](https://github.com/mllam/neural-lam/pull/825) @Omega-127
 
+- Bump [`casperdcl/deploy-pypi`](https://github.com/casperdcl/deploy-pypi) from 2 to 3 [\#868](https://github.com/mllam/neural-lam/pull/868) @dependabot
+
 - Bump [`actions/deploy-pages`](https://github.com/actions/deploy-pages) from 4 to 5 [\#866](https://github.com/mllam/neural-lam/pull/866) @dependabot
 
 - Set up dependabot to keep GitHub Actions, pre-commit hooks and `uv.lock` up to date [\#718](https://github.com/mllam/neural-lam/pull/718) @observingClouds
