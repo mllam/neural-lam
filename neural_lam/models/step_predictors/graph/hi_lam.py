@@ -12,7 +12,56 @@ from torch import nn
 # Local
 from ....datastore import BaseDatastore
 from ....gnn_layers import InteractionNet, get_gnn_class
+from ....utils.networks import make_gnn_seq
 from .hierarchical import BaseHiGraphModel
+
+
+class SameLevelGNNStack(nn.Module):
+    """Stack same-level InteractionNet layers behind HiLAM's GNN interface."""
+
+    def __init__(
+        self,
+        edge_index: torch.Tensor,
+        num_layers: int,
+        hidden_dim: int,
+        hidden_layers: int,
+    ) -> None:
+        """Initialize a stack of same-level InteractionNet layers.
+
+        Args:
+            edge_index: Edge connectivity for this mesh level.
+            num_layers: Number of InteractionNet layers to stack.
+            hidden_dim: Size of node and edge representations.
+            hidden_layers: Number of hidden layers in each InteractionNet MLP.
+        """
+        super().__init__()
+        self.num_layers = num_layers
+        self.gnn_seq = make_gnn_seq(
+            edge_index=edge_index,
+            num_gnn_layers=num_layers,
+            hidden_layers=hidden_layers,
+            hidden_dim=hidden_dim,
+            gnn_type="InteractionNet",
+        )
+
+    def forward(
+        self,
+        send_node_rep: torch.Tensor,
+        rec_node_rep: torch.Tensor,
+        edge_rep: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Apply the stacked GNN to receiver-node and edge representations.
+
+        Args:
+            send_node_rep: Sender-node representations, retained for
+            interface compatibility.
+            rec_node_rep: Receiver-node representations.
+            edge_rep: Edge representations.
+
+        Returns:
+            Updated receiver-node and edge representations.
+        """
+        return self.gnn_seq(rec_node_rep, edge_rep)
 
 
 class HiLAM(BaseHiGraphModel):
@@ -39,6 +88,7 @@ class HiLAM(BaseHiGraphModel):
         m2g_gnn_type: str = "InteractionNet",
         mesh_up_gnn_type: str = "InteractionNet",
         mesh_down_gnn_type: str = "InteractionNet",
+        same_level_processor_layers: list[int] | None = None,
     ) -> None:
         """
         Initialize the HiLAM model.
@@ -55,6 +105,10 @@ class HiLAM(BaseHiGraphModel):
             The number of hidden layers in the MLPs.
         processor_layers : int, default 4
             The number of processor layers in the GNN.
+        same_level_processor_layers : list[int], optional
+            Number of same-level message-passing layers for each
+            mesh level, ordered from finest to coarsest. Defaults
+            to one layer per level.
         mesh_aggr : str, default "sum"
             The aggregation method for mesh nodes.
         num_past_forcing_steps : int, default 1
@@ -85,6 +139,24 @@ class HiLAM(BaseHiGraphModel):
             mesh_up_gnn_type=mesh_up_gnn_type,
             mesh_down_gnn_type=mesh_down_gnn_type,
         )
+        if same_level_processor_layers is None:
+            same_level_processor_layers = [1] * self.num_levels
+        elif len(same_level_processor_layers) != self.num_levels:
+            raise ValueError(
+                "same_level_processor_layers must contain one depth per "
+                f"mesh level: expected {self.num_levels}, "
+                f"got {len(same_level_processor_layers)}."
+            )
+
+        if any(
+            not isinstance(depth, int) or isinstance(depth, bool) or depth < 1
+            for depth in same_level_processor_layers
+        ):
+            raise ValueError(
+                "All same-level processor depths must be positive integers."
+            )
+
+        self.same_level_processor_layers = list(same_level_processor_layers)
 
         # Make down GNNs, both for down edges and same level
         self.mesh_down_gnns = nn.ModuleList(
@@ -103,24 +175,30 @@ class HiLAM(BaseHiGraphModel):
         )  # Nested lists (proc_steps, num_levels)
 
     def make_same_gnns(self) -> nn.ModuleList:
-        """
-        Make intra-level GNNs.
+        """Make intra-level GNNs with configurable depth for each mesh level."""
+        same_gnns = []
 
-        Returns
-        -------
-        nn.ModuleList
-            List of GNNs for each level.
-        """
-        return nn.ModuleList(
-            [
-                InteractionNet(
+        for edge_index, num_layers in zip(
+            self.m2m_edge_index,
+            self.same_level_processor_layers,
+        ):
+            if num_layers == 1:
+                # Preserve the existing module structure for the default case.
+                gnn = InteractionNet(
                     edge_index,
                     self.hidden_dim,
                     hidden_layers=self.hidden_layers,
                 )
-                for edge_index in self.m2m_edge_index
-            ]
-        )
+            else:
+                gnn = SameLevelGNNStack(
+                    edge_index=edge_index,
+                    num_layers=num_layers,
+                    hidden_dim=self.hidden_dim,
+                    hidden_layers=self.hidden_layers,
+                )
+            same_gnns.append(gnn)
+
+        return nn.ModuleList(same_gnns)
 
     def make_up_gnns(self) -> nn.ModuleList:
         """
