@@ -17,6 +17,7 @@ getting-started/quickstart
 
 notebooks/create_reduced_meps_dataset
 notebooks/hello_world_danra
+notebooks/model_evaluation_benchmark
 ```
 
 ```{toctree}
