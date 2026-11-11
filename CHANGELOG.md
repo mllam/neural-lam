@@ -69,6 +69,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Set up dependabot to keep GitHub Actions, pre-commit hooks and `uv.lock` up to date [\#718](https://github.com/mllam/neural-lam/pull/718) @observingClouds
 
+- Bump `[actions/checkout](https://github.com/actions/checkout)` from 2 to 7 [#867](https://github.com/mllam/neural-lam/pull/867) @dependabot
+
 ## [v0.7.0](https://github.com/mllam/neural-lam/releases/tag/v0.7.0)
 
 This release contains two major improvements to the codebase: splitting the monolithic `ARModel` into a modular `ForecasterModule` / `Forecaster` / `StepPredictor` hierarchy and adding graph creation through the weather-model-graphs package.
