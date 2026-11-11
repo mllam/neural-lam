@@ -53,6 +53,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Raise `ValueError` for unknown metric names in `get_metric` instead of an
+  `assert`, and add unit test coverage in `tests/test_metrics.py`
+  [\#779](https://github.com/mllam/neural-lam/pull/779) @muskan-creates352
+
 - Speed up the training tests by trimming Lightning Trainer and DataLoader overhead, and test the spawned DataLoader workers separately [\#812](https://github.com/mllam/neural-lam/pull/812) @Karvy-Singh
 
 - Add automated PR claim check workflow (`pr-claim-check.yml`) and triage script to flag pull requests without a linked issue, competing PRs for the same issue, or unedited PR template placeholders [\#819](https://github.com/mllam/neural-lam/pull/819) @GiGiKoneti
