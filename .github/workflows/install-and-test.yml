@@ -112,7 +112,7 @@ jobs:
           pytest -vv -s tests/test_datasets.py::test_single_batch
 
       - name: Upload test figures
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-figures-${{ matrix.device }}
           path: tests/test_outputs/
