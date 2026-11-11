@@ -21,7 +21,7 @@ repos:
         description: Require specific codes on noqa comments
 
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
+    rev: v2.4.3
     hooks:
       - id: codespell
         description: Check for spelling errors
@@ -37,7 +37,7 @@ repos:
         pass_filenames: false
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.4
+    rev: v0.17.3
     hooks:
       - id: ruff-check
         args: [--fix]
@@ -46,7 +46,7 @@ repos:
         description: Format Python code with Ruff
 
   - repo: https://github.com/tox-dev/pyproject-fmt
-    rev: v2.21.0
+    rev: v2.30.3
     hooks:
       - id: pyproject-fmt
         description: Normalize pyproject.toml formatting
@@ -59,7 +59,7 @@ repos:
         pass_filenames: false
         args: ["-c", "pyproject.toml", "neural_lam"]
   - repo: https://github.com/astral-sh/ty-pre-commit
-    rev: v0.0.69
+    rev: v0.0.96
     hooks:
       - id: ty
 
