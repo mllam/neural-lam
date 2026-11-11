@@ -69,6 +69,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Set up dependabot to keep GitHub Actions, pre-commit hooks and `uv.lock` up to date [\#718](https://github.com/mllam/neural-lam/pull/718) @observingClouds
 
+- Bump `[astral-sh/setup-uv](https://github.com/astral-sh/setup-uv)` from 5 to 7 [#870](https://github.com/mllam/neural-lam/pull/870) @dependabot
+
 - Bump `[actions/upload-artifact](https://github.com/actions/upload-artifact)` from 4 to 7 [#869](https://github.com/mllam/neural-lam/pull/869) @dependabot
 
 - Bump `[actions/checkout](https://github.com/actions/checkout)` from 2 to 7 [#867](https://github.com/mllam/neural-lam/pull/867) @dependabot
