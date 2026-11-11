@@ -162,7 +162,9 @@ label in the form `vX.Y.Z (proposed)`.
    message on `main` and the PR description becomes its body. Polish both
    before requesting review - per-commit history on your branch is not
    preserved in `main`.
-5. A maintainer will review your PR. Small, focused PRs are reviewed faster.
+5. Small, self-contained PRs may receive an automated first-pass review comment;
+   a maintainer still reviews and merges every PR. Small, focused PRs are
+   reviewed faster.
 6. After review, iterate on the feedback. Once the review is resolved and
    CI is green:
    - **Bugfixes and maintenance PRs** are merged directly by the assignee.

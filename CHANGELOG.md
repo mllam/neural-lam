@@ -53,6 +53,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Add a two-job `pull_request_target` workflow (`ai-pr-review.yml`) and stdlib-only `analyse.py` / `publish.py` scripts for gated AI first-pass reviews on simple PRs [\#855](https://github.com/mllam/neural-lam/pull/855) @Shivampal157
+
 - Speed up the training tests by trimming Lightning Trainer and DataLoader overhead, and test the spawned DataLoader workers separately [\#812](https://github.com/mllam/neural-lam/pull/812) @Karvy-Singh
 
 - Add automated PR claim check workflow (`pr-claim-check.yml`) and triage script to flag pull requests without a linked issue, competing PRs for the same issue, or unedited PR template placeholders [\#819](https://github.com/mllam/neural-lam/pull/819) @GiGiKoneti
