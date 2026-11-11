@@ -72,6 +72,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump [`actions/deploy-pages`](https://github.com/actions/deploy-pages) from 4 to 5 [\#866](https://github.com/mllam/neural-lam/pull/866) @dependabot
 
 - Set up dependabot to keep GitHub Actions, pre-commit hooks and `uv.lock` up to date [\#718](https://github.com/mllam/neural-lam/pull/718) @observingClouds
+- Bump `pytorch-lightning` from 2.6.1 to 2.6.6 [#871](https://github.com/mllam/neural-lam/pull/871) @dependabot
+- Bump `tueplots` from 0.2.4 to 0.2.6 [#871](https://github.com/mllam/neural-lam/pull/871) @dependabot
+- Bump `marimo` from 0.25.1 to 0.25.2 [#871](https://github.com/mllam/neural-lam/pull/871) @dependabot
 
 - Bump `[astral-sh/setup-uv](https://github.com/astral-sh/setup-uv)` from 5 to 7 [#870](https://github.com/mllam/neural-lam/pull/870) @dependabot
 
