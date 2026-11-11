@@ -66,9 +66,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rename remaining non-canonical dimension names (`d_*`, `N_*`, `M_*`) in shape annotations and docstrings to Dimension Glossary names [\#825](https://github.com/mllam/neural-lam/pull/825) @Omega-127
 
 - Set up dependabot to keep GitHub Actions, pre-commit hooks and `uv.lock` up to date [\#718](https://github.com/mllam/neural-lam/pull/718) @observingClouds
+
 - Bump `https://github.com/codespell-project/codespell` from v2.4.1 to 2.4.3 [#865](https://github.com/mllam/neural-lam/pull/865) @dependabot
+
 - Bump `https://github.com/astral-sh/ruff-pre-commit` from v0.15.4 to 0.17.3 [#865](https://github.com/mllam/neural-lam/pull/865) @dependabot
+
 - Bump `https://github.com/tox-dev/pyproject-fmt` from v2.21.0 to 2.30.3 [#865](https://github.com/mllam/neural-lam/pull/865) @dependabot
+
 - Bump `https://github.com/astral-sh/ty-pre-commit` from v0.0.69 to 0.0.96 [#865](https://github.com/mllam/neural-lam/pull/865) @dependabot
 
 ## [v0.7.0](https://github.com/mllam/neural-lam/releases/tag/v0.7.0)
