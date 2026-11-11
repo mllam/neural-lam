@@ -72,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump [`actions/deploy-pages`](https://github.com/actions/deploy-pages) from 4 to 5 [\#866](https://github.com/mllam/neural-lam/pull/866) @dependabot
 
 - Set up dependabot to keep GitHub Actions, pre-commit hooks and `uv.lock` up to date [\#718](https://github.com/mllam/neural-lam/pull/718) @observingClouds
+- Bump `[matplotlib](https://github.com/matplotlib/matplotlib)` from 3.10.8 to 3.10.9 [#875](https://github.com/mllam/neural-lam/pull/875) @dependabot
 
 - Bump `[astral-sh/setup-uv](https://github.com/astral-sh/setup-uv)` from 5 to 7 [#870](https://github.com/mllam/neural-lam/pull/870) @dependabot
 
