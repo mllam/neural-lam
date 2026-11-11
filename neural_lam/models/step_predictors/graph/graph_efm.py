@@ -3,7 +3,7 @@ predictors, for hierarchical (GraphEFM) and flat (GraphEFMMultiScale) mesh
 graphs."""
 
 # Standard library
-from typing import Any, Dict, Optional
+from typing import Any
 
 # Third-party
 import torch
@@ -60,7 +60,7 @@ class BaseGraphEFM(StepPredictor):
         graph_name: str,
         hidden_dim: int = 64,
         hidden_layers: int = 1,
-        latent_dim: Optional[int] = None,
+        latent_dim: int | None = None,
         learn_prior: bool = True,
         prior_dist: str = "isotropic",
         prior_layers: int = 2,
@@ -68,8 +68,8 @@ class BaseGraphEFM(StepPredictor):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
-        output_clamping_lower: Optional[Dict[str, float]] = None,
-        output_clamping_upper: Optional[Dict[str, float]] = None,
+        output_clamping_lower: dict[str, float] | None = None,
+        output_clamping_upper: dict[str, float] | None = None,
     ) -> None:
         """
         Set up the graph-type independent parts of the predictor.
@@ -364,14 +364,14 @@ class BaseGraphEFM(StepPredictor):
         """
         raise NotImplementedError("embedd_mesh not implemented")
 
-    def embedd_grid_and_graph(
+    def embedd_grid(
         self,
         prev_state: torch.Tensor,
         prev_prev_state: torch.Tensor,
         forcing: torch.Tensor,
-    ) -> tuple[torch.Tensor, dict[str, Any]]:
+    ) -> torch.Tensor:
         """
-        Embed the grid (states up to t-1) and the full graph.
+        Embed the grid states and forcing before a prediction.
 
         Parameters
         ----------
@@ -386,8 +386,6 @@ class BaseGraphEFM(StepPredictor):
         -------
         grid_emb : torch.Tensor
             Shape ``(B, num_grid_nodes, hidden_dim)``. Grid embedding.
-        graph_emb : dict
-            Edge/mesh embeddings, each entry of shape ``(B, *, hidden_dim)``.
         """
         batch_size = prev_state.shape[0]
 
@@ -404,10 +402,21 @@ class BaseGraphEFM(StepPredictor):
         grid_emb = self.grid_prev_embedder(grid_features)
         # (B, num_grid_nodes, hidden_dim)
 
-        # Graph embedding. NOTE: this block depends only on static graph
-        # features, so it is constant across an autoregressive rollout. It is
-        # kept as a self-contained block so a future embedd_graph()/
-        # embedd_grid() split (hoisting it out of the AR loop) is mechanical.
+        return grid_emb
+
+    def embedd_graph(self, batch_size: int) -> dict[str, Any]:
+        """Embed static graph features once for an autoregressive rollout.
+
+        Parameters
+        ----------
+        batch_size : int
+            Number of samples to expand the embeddings to.
+
+        Returns
+        -------
+        dict[str, Any]
+            Node and edge embeddings with batch and hidden dimensions.
+        """
         graph_emb = {
             "g2m": self.expand_to_batch(
                 self.g2m_embedder(self.g2m_features), batch_size
@@ -418,14 +427,108 @@ class BaseGraphEFM(StepPredictor):
         }
         graph_emb.update(self.embedd_mesh(batch_size))
 
-        return grid_emb, graph_emb
+        return graph_emb
+
+    def posterior_step(
+        self,
+        prev_state: torch.Tensor,
+        prev_prev_state: torch.Tensor,
+        forcing: torch.Tensor,
+        target_state: torch.Tensor,
+        graph_emb: dict[str, Any] | None = None,
+        compute_prior: bool = True,
+    ) -> tuple[
+        torch.distributions.Normal | None,
+        torch.distributions.Normal,
+        torch.Tensor,
+        torch.Tensor | None,
+    ]:
+        """Sample a training step from the target-conditioned posterior.
+
+        Parameters
+        ----------
+        prev_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, num_state_vars)``. Previous state.
+        prev_prev_state : torch.Tensor
+            Shape as ``prev_state``. State preceding the previous state.
+        forcing : torch.Tensor
+            Shape ``(B, num_grid_nodes, num_windowed_forcing_vars)``.
+        target_state : torch.Tensor
+            Shape as ``prev_state``. Posterior conditioning target.
+        graph_emb : dict[str, Any] or None, optional
+            Static graph embeddings from ``embedd_graph``. Computed from
+            the predictor buffers when omitted.
+        compute_prior : bool, optional
+            Compute the prior for the KL term. Default True.
+
+        Returns
+        -------
+        prior : torch.distributions.Normal or None
+            Conditional prior, omitted when ``compute_prior`` is False.
+        posterior : torch.distributions.Normal
+            Target-conditioned latent distribution.
+        prediction : torch.Tensor
+            Shape as ``prev_state``. Rescaled and clamped decoder mean.
+        pred_std : torch.Tensor or None
+            Shape as ``prev_state``. Conditional observation std, if enabled.
+        """
+        if graph_emb is None:
+            graph_emb = self.embedd_graph(prev_state.shape[0])
+        grid_emb = self.embedd_grid(prev_state, prev_prev_state, forcing)
+        target_emb = self.embedd_grid_with_target(
+            prev_state, prev_prev_state, forcing, target_state
+        )
+        assert isinstance(self.encoder, torch.nn.Module)
+        posterior = self.encoder(target_emb, graph_emb=graph_emb)
+        prior = (
+            self.prior_model(grid_emb, graph_emb=graph_emb)
+            if compute_prior
+            else None
+        )
+        mean, std = self.decode_state(
+            grid_emb, posterior.rsample(), graph_emb, prev_state
+        )
+        return prior, posterior, mean, std
+
+    def decode_state(
+        self,
+        grid_emb: torch.Tensor,
+        latent: torch.Tensor,
+        graph_emb: dict[str, Any],
+        prev_state: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+        """Decode a latent sample into a rescaled, clamped state.
+
+        Parameters
+        ----------
+        grid_emb : torch.Tensor
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Embedded grid.
+        latent : torch.Tensor
+            Shape ``(B, num_mesh_nodes, latent_dim)``. Latent sample.
+        graph_emb : dict[str, Any]
+            Static graph embeddings.
+        prev_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, num_state_vars)``. Previous state.
+
+        Returns
+        -------
+        prediction : torch.Tensor
+            Shape as ``prev_state``. Next-state mean.
+        pred_std : torch.Tensor or None
+            Shape as ``prev_state``. Observation std, if enabled.
+        """
+        assert isinstance(self.decoder, torch.nn.Module)
+        mean_delta, pred_std = self.decoder(grid_emb, latent, graph_emb)
+        increment = mean_delta * self.diff_std + self.diff_mean
+        return self.get_clamped_new_state(increment, prev_state), pred_std
 
     def forward(
         self,
         prev_state: torch.Tensor,
         prev_prev_state: torch.Tensor,
         forcing: torch.Tensor,
-    ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
+        graph_emb: dict[str, Any] | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """
         Sample one time step prediction: embed features, sample the latent
         from the prior, decode, and return the predicted next state. The
@@ -440,6 +543,10 @@ class BaseGraphEFM(StepPredictor):
             Shape ``(B, num_grid_nodes, num_state_vars)``. ``X_{t-1}``.
         forcing : torch.Tensor
             Shape ``(B, num_grid_nodes, num_windowed_forcing_vars)``.
+        graph_emb : dict[str, Any] or None, optional
+            Static embeddings from ``embedd_graph``. Reuse within one
+            rollout to avoid embedding the graph at each step. Computed
+            on demand when omitted; no embeddings persist across batches.
 
         Returns
         -------
@@ -451,9 +558,10 @@ class BaseGraphEFM(StepPredictor):
             ``output_std`` is True, otherwise None.
         """
         # embed all features
-        grid_prev_emb, graph_emb = self.embedd_grid_and_graph(
-            prev_state, prev_prev_state, forcing
-        )
+        grid_prev_emb = self.embedd_grid(prev_state, prev_prev_state, forcing)
+
+        if graph_emb is None:
+            graph_emb = self.embedd_graph(prev_state.shape[0])
 
         # Compute prior
         prior_dist = self.prior_model(
@@ -464,19 +572,9 @@ class BaseGraphEFM(StepPredictor):
         latent_samples = prior_dist.rsample()
         # (B, num_mesh_nodes, latent_dim)
 
-        # Decode the latent into a state increment, rescale it with the
-        # one-step difference statistics, then add it onto prev_state (X_t)
-        # and clamp to the valid range (a no-op when no clamping limits are
-        # configured), as for the deterministic models.
-        assert isinstance(self.decoder, torch.nn.Module)
-        mean_delta, pred_std = self.decoder(
-            grid_prev_emb, latent_samples, graph_emb
+        return self.decode_state(
+            grid_prev_emb, latent_samples, graph_emb, prev_state
         )
-        rescaled_mean_delta = mean_delta * self.diff_std + self.diff_mean
-        pred_mean = self.get_clamped_new_state(rescaled_mean_delta, prev_state)
-        # (B, num_grid_nodes, num_state_vars)
-
-        return pred_mean, pred_std
 
 
 class GraphEFM(BaseGraphEFM):
@@ -502,7 +600,7 @@ class GraphEFM(BaseGraphEFM):
         graph_name: str = "hierarchical",
         hidden_dim: int = 64,
         hidden_layers: int = 1,
-        latent_dim: Optional[int] = None,
+        latent_dim: int | None = None,
         prior_intra_level_layers: int = 2,
         encoder_intra_level_layers: int = 2,
         decoder_intra_level_layers: int = 4,
@@ -513,8 +611,8 @@ class GraphEFM(BaseGraphEFM):
         g2m_gnn_type: str = "InteractionNet",
         m2g_gnn_type: str = "InteractionNet",
         output_std: bool = False,
-        output_clamping_lower: Optional[Dict[str, float]] = None,
-        output_clamping_upper: Optional[Dict[str, float]] = None,
+        output_clamping_lower: dict[str, float] | None = None,
+        output_clamping_upper: dict[str, float] | None = None,
     ) -> None:
         """
         Build the mesh embedders and the hierarchical encoder/decoder
@@ -824,7 +922,7 @@ class GraphEFMMultiScale(BaseGraphEFM):
         graph_name: str = "multiscale",
         hidden_dim: int = 64,
         hidden_layers: int = 1,
-        latent_dim: Optional[int] = None,
+        latent_dim: int | None = None,
         prior_m2m_layers: int = 2,
         encoder_m2m_layers: int = 2,
         decoder_m2m_layers: int = 4,
@@ -835,8 +933,8 @@ class GraphEFMMultiScale(BaseGraphEFM):
         g2m_gnn_type: str = "InteractionNet",
         m2g_gnn_type: str = "InteractionNet",
         output_std: bool = False,
-        output_clamping_lower: Optional[Dict[str, float]] = None,
-        output_clamping_upper: Optional[Dict[str, float]] = None,
+        output_clamping_lower: dict[str, float] | None = None,
+        output_clamping_upper: dict[str, float] | None = None,
     ) -> None:
         """
         Build the mesh embedders and the flat-graph encoder/decoder latent
