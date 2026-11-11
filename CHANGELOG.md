@@ -55,6 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Speed up the training tests by trimming Lightning Trainer and DataLoader overhead, and test the spawned DataLoader workers separately [\#812](https://github.com/mllam/neural-lam/pull/812) @Karvy-Singh
 
+- Add automated PR claim check workflow (`pr-claim-check.yml`) and triage script to flag pull requests without a linked issue, competing PRs for the same issue, or unedited PR template placeholders [\#819](https://github.com/mllam/neural-lam/pull/819) @GiGiKoneti
+
 - Fix the GPU CI job silently running on CPU: use an NVIDIA `g4dn.xlarge` cirun instance instead of the AMD `g4ad.xlarge`, install `--extra gpu-cu128` to match the runner's CUDA 12.2 driver, assert `torch.cuda.is_available()`, and run only the GPU-relevant tests there [\#802](https://github.com/mllam/neural-lam/pull/802) @varma1221
 
 - Add a `lychee` pre-commit hook checking Markdown links and section anchors (config in `.github/lychee.toml`, run once per push in CI) and a PR-template reminder to update `CONTRIBUTING.md` / `AGENTS.md` [\#738](https://github.com/mllam/neural-lam/pull/738) @KumarShivam1908
@@ -67,7 +69,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bump [`casperdcl/deploy-pypi`](https://github.com/casperdcl/deploy-pypi) from 2 to 3 [\#868](https://github.com/mllam/neural-lam/pull/868) @dependabot
 
+- Bump [`actions/deploy-pages`](https://github.com/actions/deploy-pages) from 4 to 5 [\#866](https://github.com/mllam/neural-lam/pull/866) @dependabot
+
 - Set up dependabot to keep GitHub Actions, pre-commit hooks and `uv.lock` up to date [\#718](https://github.com/mllam/neural-lam/pull/718) @observingClouds
+
+- Bump `[astral-sh/setup-uv](https://github.com/astral-sh/setup-uv)` from 5 to 7 [#870](https://github.com/mllam/neural-lam/pull/870) @dependabot
+
+- Bump `[actions/upload-artifact](https://github.com/actions/upload-artifact)` from 4 to 7 [#869](https://github.com/mllam/neural-lam/pull/869) @dependabot
+
+- Bump `[actions/checkout](https://github.com/actions/checkout)` from 2 to 7 [#867](https://github.com/mllam/neural-lam/pull/867) @dependabot
 
 ## [v0.7.0](https://github.com/mllam/neural-lam/releases/tag/v0.7.0)
 
