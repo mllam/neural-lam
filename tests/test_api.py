@@ -265,3 +265,21 @@ def test_api_var_leads_metrics_watch_parsing(monkeypatch, tmp_path):
     # Test evaluate with dict input
     api.evaluate(var_leads_metrics_watch={1: [3, 4]})
     assert captured_train_config[-1].var_leads_metrics_watch == {1: [3, 4]}
+
+
+def test_api_evaluate_passes_loss(monkeypatch, tmp_path):
+    """Test that evaluate threads ``loss`` through to the run config."""
+    captured_train_config = []
+
+    def mock_fit(*, train_config, **kwargs):
+        captured_train_config.append(train_config)
+        return train_model.Run(run_dir=tmp_path)
+
+    monkeypatch.setattr(api.train_model_script, "fit", mock_fit)
+
+    api.evaluate(loss="mae")
+    assert captured_train_config[-1].loss == "mae"
+
+    # Default matches api.train and the CLI
+    api.evaluate()
+    assert captured_train_config[-1].loss == "wmse"
