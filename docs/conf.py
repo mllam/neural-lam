@@ -110,6 +110,9 @@ linkcheck_ignore = [
     r"https://docs\.pytorch\.org/.*",  # Flaky anchors in intersphinx
     r"https://mllam\.github\.io/neural-lam/.*",  # Own site, not yet deployed
 ]
+# GitHub renders README heading anchors client-side, so linkcheck cannot find
+# them; lychee still verifies these fragments
+linkcheck_anchors_ignore_for_url = [r"https://github\.com/.*"]
 
 
 def use_tracked_source(app, pagename, templatename, context, doctree):

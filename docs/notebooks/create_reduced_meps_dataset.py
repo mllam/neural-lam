@@ -28,7 +28,7 @@ def _(mo):
     This notebook outlines how the small test dataset
     `meps_example_reduced` was created from `meps_example`. The original
     zipped datasets were 263 MB and 2.6 GB, respectively. See the
-    [README](https://github.com/mllam/neural-lam/blob/main/README.md)
+    [datastores guide](https://mllam.github.io/neural-lam/user-guide/datastores.html)
     for instructions to download and extract `meps_example`.
 
     The dataset was reduced by cropping the grid and keeping fewer
@@ -65,7 +65,7 @@ def _(Path, argparse):
     if not (input_dir / "static" / "nwp_xy.npy").is_file():
         raise FileNotFoundError(
             f"MEPS source dataset not found at {input_dir}. "
-            "Download and extract meps_example as described in the README, "
+            "Download and extract meps_example as described in the datastores guide, "
             "or pass --input-dir."
         )
     if output_dir == input_dir:

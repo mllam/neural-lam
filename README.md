@@ -7,65 +7,36 @@
 </p>
 
 Neural-LAM is a repository of graph-based neural weather prediction models for Limited Area Modeling (LAM).
-Also global forecasting is possible, but currently on a [different branch](https://github.com/mllam/neural-lam/tree/prob_model_global) ([planned to be merged with main](https://github.com/mllam/neural-lam/issues/63)).
-The code uses [PyTorch](https://pytorch.org/) and [PyTorch Lightning](https://github.com/Lightning-AI/pytorch-lightning).
-Graph Neural Networks are implemented using [PyG](https://pyg.org/) and logging is set up through [Weights & Biases](https://wandb.ai/).
+Built on [PyTorch](https://pytorch.org/), [PyTorch Lightning](https://github.com/Lightning-AI/pytorch-lightning), and [PyG](https://pyg.org/), it provides modular, swappable components for data, graphs, and models.
 
-Read the [Neural-LAM documentation](https://mllam.github.io/neural-lam/) for installation, quickstart, and API reference.
+It is aimed at researchers and engineers working on ML-based numerical weather prediction who want to train, evaluate, or extend GNN-based LAM models on their own data.
 
-The repository contains LAM versions of:
+## Documentation
 
-* The graph-based model from [Keisler (2022)](https://arxiv.org/abs/2202.07575).
-* GraphCast, by [Lam et al. (2023)](https://arxiv.org/abs/2212.12794).
-* The hierarchical model from [Oskarsson et al. (2023)](https://arxiv.org/abs/2309.17370).
+Full guides, tutorials, and API reference live at **[mllam.github.io/neural-lam](https://mllam.github.io/neural-lam/)**:
 
-# Publications
-For a more in-depth scientific introduction to machine learning for LAM weather forecasting see the publications listed here.
-As the code in the repository is continuously evolving, the latest version might feature some small differences to what was used for these publications.
-We retain some paper-specific branches for reproducibility purposes.
-
-### Core Neural-LAM Publications
-*If you use Neural-LAM in your work, please cite the relevant paper(s)*.
-
-#### [Graph-based Neural Weather Prediction for Limited Area Modeling](https://arxiv.org/abs/2309.17370)
-```
-@inproceedings{oskarsson2023graphbased,
-    title={Graph-based Neural Weather Prediction for Limited Area Modeling},
-    author={Oskarsson, Joel and Landelius, Tomas and Lindsten, Fredrik},
-    booktitle={NeurIPS 2023 Workshop on Tackling Climate Change with Machine Learning},
-    year={2023}
-}
-```
-See the branch [`ccai_paper_2023`](https://github.com/joeloskarsson/neural-lam/tree/ccai_paper_2023) for a revision of the code that reproduces this workshop paper.
-
-#### [Probabilistic Weather Forecasting with Hierarchical Graph Neural Networks](https://arxiv.org/abs/2406.04759)
-```
-@inproceedings{oskarsson2024probabilistic,
-  title = {Probabilistic Weather Forecasting with Hierarchical Graph Neural Networks},
-  author = {Oskarsson, Joel and Landelius, Tomas and Deisenroth, Marc Peter and Lindsten, Fredrik},
-  booktitle = {Advances in Neural Information Processing Systems},
-  volume = {37},
-  year = {2024},
-}
-```
-See the branches [`prob_model_lam`](https://github.com/mllam/neural-lam/tree/prob_model_lam) and [`prob_model_global`](https://github.com/mllam/neural-lam/tree/prob_model_global) for revisions of the code that reproduces this paper.
-The global and probabilistic models from this paper are not yet fully merged with `main` (see issues [62](https://github.com/mllam/neural-lam/issues/62) and [63](https://github.com/mllam/neural-lam/issues/63)).
+- 📦 [Installation](https://mllam.github.io/neural-lam/getting-started/installation.html)
+- 🚀 [Quickstart](https://mllam.github.io/neural-lam/getting-started/quickstart.html) and the [DANRA tutorial](https://mllam.github.io/neural-lam/notebooks/hello_world_danra.html)
+- 📖 User guide: [configuration and datastores](https://mllam.github.io/neural-lam/user-guide/datastores.html), [graph creation](https://mllam.github.io/neural-lam/user-guide/graphs.html), [training and evaluation](https://mllam.github.io/neural-lam/user-guide/training.html), [experiment logging](https://mllam.github.io/neural-lam/user-guide/logging.html)
+- 📚 [API Reference](https://mllam.github.io/neural-lam/api/index.html)
+- 🗺️ [Graph Storage Specification](https://mllam.github.io/neural-lam/graph_storage_spec.html)
 
 # Modularity
-The Neural-LAM code is designed to modularize the different components involved in training and evaluating neural weather prediction models.
-Models, graphs and data are stored separately and it should be possible to swap out individual components.
-Still, some restrictions are inevitable:
 
-* The graph used has to be compatible with what the model expects. E.g. a hierarchical model requires a hierarchical graph.
-* The graph and data are specific to the limited area under consideration. This is of course true for the data, but also the graph should be created with the exact geometry of the area in mind.
+Models, graphs, and data are kept independent so each component can be swapped without changing the others.
 
 <p align="middle">
   <img src="https://raw.githubusercontent.com/mllam/neural-lam/main/figures/neural_lam_setup.png" width="600"/>
 </p>
 
+The three implemented architectures are Graph-LAM (flat), Hi-LAM (hierarchical), and Hi-LAM-Parallel.
+Global forecasting is available on a [separate branch](https://github.com/mllam/neural-lam/tree/prob_model_global) ([planned to be merged](https://github.com/mllam/neural-lam/issues/63)).
 
 # Installing Neural-LAM
 
+```bash
+# From PyPI
+python -m pip install neural_lam
 When installing `neural-lam` you have a choice of either installing directly with `pip` or using the `uv` package manager.
 We recommend using `uv` as it makes it easy to add/remove packages while
 keeping versions consistent (it automatically updates the `pyproject.toml`
@@ -577,28 +548,17 @@ Using SLURM, the job can be started with `sbatch slurm_job.sh` with a shell scri
 # Load necessary modules or activate environment, for example:
 conda activate neural-lam
 
-srun -ul python -m neural_lam.train_model \
-    --config_path /path/to/config.yaml \
-    --num_nodes $SLURM_JOB_NUM_NODES
+# From source (recommended, using uv)
+git clone https://github.com/mllam/neural-lam.git && cd neural-lam
+uv sync --extra cpu --group dev   # CPU
+uv sync --extra gpu --group dev   # GPU / CUDA 13.0
 ```
 
-When using on a system without SLURM, where all GPU's are visible, it is possible to select a subset of GPU's to use for training with the `devices` cli argument, e.g. `--devices 0 1` to use the first 2 GPU's.
+For all install options (pip, CUDA variants, editable installs) see the [Installation guide](https://mllam.github.io/neural-lam/getting-started/installation.html).
 
-> **DGX Spark / container compatibility:** see [issue #163](https://github.com/mllam/neural-lam/issues/163) for a list of currently known-working and known-failing PyTorch / CUDA / container combinations on DGX Spark.
+# Using Neural-LAM
 
-## Evaluate Models
-Evaluation is also done using `python -m neural_lam.train_model --config_path <config-path>`, but using the `--eval` option.
-Use `--eval val` to evaluate the model on the validation set and `--eval test` to evaluate on test data.
-Most of the training options are also relevant for evaluation.
-Some options specifically important for evaluation are:
-
-* `--load`: Path to model checkpoint file (`.ckpt`) to load parameters from
-* `--n_example_pred`: Number of example predictions to plot during evaluation.
-* `--ar_steps_eval`: Number of time steps to unroll for during evaluation
-
-**Note:** While it is technically possible to use multiple GPUs for running evaluation, this is strongly discouraged. If using multiple devices the `DistributedSampler` will replicate some samples to make sure all devices have the same batch size, meaning that evaluation metrics will be unreliable.
-A possible workaround is to just use batch size 1 during evaluation.
-This issue stems from PyTorch Lightning. See for example [this PR](https://github.com/Lightning-AI/torchmetrics/pull/1886) for more discussion.
+You need a config file, a datastore, and a graph. The [Quickstart](https://mllam.github.io/neural-lam/getting-started/quickstart.html) creates a graph, trains and evaluates a model from the command line on a small example dataset, and the [DANRA tutorial](https://mllam.github.io/neural-lam/notebooks/hello_world_danra.html) does the same in Python with plots. The [user guide](https://mllam.github.io/neural-lam/user-guide/datastores.html) covers each step in detail, including how to set up a datastore for your own data, e.g. with [mllam-data-prep](https://github.com/mllam/mllam-data-prep).
 
 # Repository Structure
 Except for training and pre-processing scripts all the source code can be found in the `neural_lam` directory.
@@ -680,31 +640,21 @@ graphs
 └── graphN
 ```
 
-### Mesh hierarchy format
-To keep track of levels in the mesh graph, a list format is used for the files with mesh graph information.
-In particular, the files
 ```
-│   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_graph)
-│   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_graph)
-│   ├── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_graph)
+neural-lam/
+├── neural_lam/           - Source code
+│   ├── train_model.py    - Training / evaluation CLI
+│   ├── create_graph_with_wmg.py - Graph creation CLI
+│   ├── api.py            - Python API (train, evaluate, create_graph)
+│   ├── models/           - ForecasterModule, forecasters, step predictors (GraphLAM, HiLAM, HiLAMParallel, Persistence)
+│   ├── datastore/        - Datastore implementations and base classes
+│   └── utils/            - Graph loading and other helpers
+├── docs/                 - Documentation source (Sphinx)
+│   ├── getting-started/  - Installation and quickstart
+│   ├── user-guide/       - Datastores, graphs, training and evaluation, logging
+│   └── notebooks/        - Marimo tutorial notebooks
+└── tests/                - Test suite and example datastore configs
 ```
-all contain lists of length `L`, for a hierarchical mesh graph with `L` layers.
-For non-hierarchical graphs `L == 1` and these are all just singly-entry lists.
-Each entry in the list contains the corresponding edge set or features of that level.
-Note that the first level (index 0 in these lists) corresponds to the lowest level in the hierarchy.
-
-In addition, hierarchical mesh graphs (`L > 1`) feature a few additional files with static data:
-```
-├── graph1
-│   ├── ...
-│   ├── mesh_down_edge_index.pt             - Downward edges in mesh graph (neural_lam.create_graph)
-│   ├── mesh_up_edge_index.pt               - Upward edges in mesh graph (neural_lam.create_graph)
-│   ├── mesh_down_features.pt               - Static features of downward mesh edges (neural_lam.create_graph)
-│   ├── mesh_up_features.pt                 - Static features of upward mesh edges (neural_lam.create_graph)
-│   ├── ...
-```
-These files have the same list format as the ones above, but each list has length `L-1` (as these edges describe connections between levels).
-Entries 0 in these lists describe edges between the lowest levels 1 and 2.
 
 ## Dimension Glossary
 
@@ -734,10 +684,35 @@ Canonical dimension names used in tensor shape annotations throughout the codeba
 - `num_send` - number of sender nodes in a message-passing step
 - `num_rec` - number of receiver nodes in a message-passing step
 
-# Development and Contributing
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor guide: how to open an issue, set up a development environment, the code standards we follow, the checks to run before pushing, the pull-request and review process, and the community roadmap.
+# Publications
 
-# Contact
-If you are interested in machine learning models for LAM, have questions about the implementation or ideas for extending it, feel free to get in touch.
-There is an open [mllam slack channel](https://kutt.to/mllam) that anyone can join (after following the link you have to request to join, this is to avoid spam bots).
-You can also open a github issue on this page.
+*If you use Neural-LAM in your work, please cite the relevant paper(s).*
+
+#### [Graph-based Neural Weather Prediction for Limited Area Modeling](https://arxiv.org/abs/2309.17370)
+```
+@inproceedings{oskarsson2023graphbased,
+    title={Graph-based Neural Weather Prediction for Limited Area Modeling},
+    author={Oskarsson, Joel and Landelius, Tomas and Lindsten, Fredrik},
+    booktitle={NeurIPS 2023 Workshop on Tackling Climate Change with Machine Learning},
+    year={2023}
+}
+```
+See branch [`ccai_paper_2023`](https://github.com/joeloskarsson/neural-lam/tree/ccai_paper_2023) to reproduce this paper.
+
+#### [Probabilistic Weather Forecasting with Hierarchical Graph Neural Networks](https://arxiv.org/abs/2406.04759)
+```
+@inproceedings{oskarsson2024probabilistic,
+  title = {Probabilistic Weather Forecasting with Hierarchical Graph Neural Networks},
+  author = {Oskarsson, Joel and Landelius, Tomas and Deisenroth, Marc Peter and Lindsten, Fredrik},
+  booktitle = {Advances in Neural Information Processing Systems},
+  volume = {37},
+  year = {2024},
+}
+```
+See branches [`prob_model_lam`](https://github.com/mllam/neural-lam/tree/prob_model_lam) and [`prob_model_global`](https://github.com/mllam/neural-lam/tree/prob_model_global) to reproduce this paper.
+
+# Development and Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor guide.
+
+Join the [mllam Slack](https://kutt.to/mllam) or open a [GitHub issue](https://github.com/mllam/neural-lam/issues) to get in touch.

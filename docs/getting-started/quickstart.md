@@ -1,52 +1,36 @@
 # Quickstart
 
-## Overview
+This runs the minimal Neural-LAM workflow from the command line on the small DANRA example dataset in `tests/datastore_examples/mdp/danra_100m_winds`.
+The {doc}`DANRA tutorial <../notebooks/hello_world_danra>` runs the same steps in Python and shows the resulting graph, metrics and forecasts.
 
-This guide walks through the minimum steps to get started with Neural-LAM:
-1. Set up example data
-2. Create a graph
-3. Train a model
-4. Evaluate the model
+Run the commands from the repository root after the {doc}`installation`.
+The datastore downloads and prepares its data on first use, and W&B is switched to offline mode so nothing is uploaded (see {doc}`../user-guide/logging`):
 
-## Step 1: Download Example Data
-
-When running tests for the first time, example data is automatically downloaded from S3. You can trigger this download by running a minimal test.
-
-```{code-block} bash
-# Run a minimal test to trigger the data download
-pytest tests/test_training.py -vv -s -k "test_training"
+```bash
+export WANDB_MODE=offline
+CONFIG=tests/datastore_examples/mdp/danra_100m_winds/config.yaml
 ```
 
-## Step 2: Create a Graph
+## 1. Create a graph
 
-Before training, you must construct a graph mesh for your data.
-
-```{code-block} bash
-python -m neural_lam.create_graph_with_wmg --config_path <path-to-config> --name <graph-name>
+```bash
+python -m neural_lam.create_graph_with_wmg --config_path $CONFIG --archetype keisler --name keisler
 ```
 
-This script builds the mesh graph required by the GNN models.
+See {doc}`../user-guide/graphs` for the other archetypes and their options.
 
-## Step 3: Train a Model
+## 2. Train a model
 
-Now you can train a model using the graph and configuration.
-
-```{code-block} bash
-python -m neural_lam.train_model --config_path <path-to-config> --model graph_lam --graph <graph-name>
+```bash
+python -m neural_lam.train_model --config_path $CONFIG --model graph_lam --graph keisler --epochs 1 --logger_run_name quickstart
 ```
 
-Neural-LAM supports several models like `graph_lam`, `hi_lam`, and `hi_lam_parallel`.
+See {doc}`../user-guide/training` for the available models and training options, and {doc}`../user-guide/datastores` for how to write a config for your own data.
 
-## Step 4: Evaluate
+## 3. Evaluate the model
 
-After training, you can evaluate the model on the test set by loading the saved checkpoint.
-
-```{code-block} bash
-python -m neural_lam.train_model --eval test --config_path <path-to-config> --model graph_lam --graph <graph-name> --load <checkpoint-path>
+```bash
+python -m neural_lam.train_model --eval test --config_path $CONFIG --model graph_lam --graph keisler --load runs/quickstart/checkpoints/min_val_loss.ckpt
 ```
 
-## Configuration
-
-Neural-LAM uses a YAML configuration system powered by `dataclass-wizard`. The configuration selects the datastore and sets training options such as state feature weighting and output clamping; model hyperparameters are `train_model` CLI flags. For complete details, see the API reference for {py:class}`neural_lam.config.NeuralLAMConfig`.
-
-- {doc}`../api/index` for complete API reference
+See {doc}`../user-guide/training` for the evaluation options.
