@@ -211,6 +211,11 @@ def load_config_and_datastore(
     """
     with open(config_path, encoding="utf-8") as f:
         raw_config = yaml.safe_load(f)
+    if not isinstance(raw_config, dict):
+        raise InvalidConfigError(
+            f"The configuration file at {config_path} is empty or does not "
+            "contain a YAML mapping."
+        )
     if isinstance(raw_config, dict) and (
         "datastore" in raw_config and "datastores" not in raw_config
     ):

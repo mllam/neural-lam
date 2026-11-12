@@ -92,6 +92,20 @@ def test_legacy_datastore_key_raises_migration_error(tmp_path):
         nlconfig.load_config_and_datastore(str(config_path))
 
 
+def test_empty_config_raises_invalid_config_error(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("", encoding="utf-8")
+    with pytest.raises(nlconfig.InvalidConfigError, match="empty"):
+        nlconfig.load_config_and_datastore(str(config_path))
+
+
+def test_comments_only_config_raises_invalid_config_error(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("# only a comment\n", encoding="utf-8")
+    with pytest.raises(nlconfig.InvalidConfigError, match="empty"):
+        nlconfig.load_config_and_datastore(str(config_path))
+
+
 DATASTORE_EXAMPLES = Path(__file__).parent / "datastore_examples" / "mdp"
 BOUNDARY_EXAMPLE_DIR = DATASTORE_EXAMPLES / "era5_1000hPa_danra_100m_winds"
 
