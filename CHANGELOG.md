@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add `register_model` and `register_datastore` decorators, and introduce a `from_config` classmethod on `StepPredictor` to decouple model construction in `build_predictor` [#791](https://github.com/mllam/neural-lam/issues/791)
+
 - Add deterministic and probabilistic forecaster/module interfaces with
   shared autoregressive unrolling and forecaster-owned training objectives.
   [\#700](https://github.com/mllam/neural-lam/pull/700) @Sir-Sloth-The-Lazy
