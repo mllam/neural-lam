@@ -372,6 +372,15 @@ def build_parser() -> ArgumentParser:
         default=2,
         help="Number of sanity validation steps to run before training",
     )
+    train_group.add_argument(
+        "--gradient_checkpointing",
+        action="store_true",
+        help=(
+            "If set, recompute the activations of each autoregressive step "
+            "in the backward pass instead of storing them. Lowers peak "
+            "memory when --ar_steps_train > 1, at the cost of extra compute."
+        ),
+    )
 
     # Evaluation options
     eval_group = parser.add_argument_group("Evaluation Options")
@@ -685,7 +694,11 @@ def fit(
             "--eval <val/test> to evaluate a baseline."
         )
     forecaster = DeterministicARForecaster(
-        predictor, datastore, config=config, loss=train_config.loss
+        predictor,
+        datastore,
+        config=config,
+        loss=train_config.loss,
+        gradient_checkpointing=train_config.gradient_checkpointing,
     )
 
     model = DeterministicForecastingModule(
