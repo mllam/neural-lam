@@ -37,6 +37,516 @@ Global forecasting is available on a [separate branch](https://github.com/mllam/
 ```bash
 # From PyPI
 python -m pip install neural_lam
+When installing `neural-lam` you have a choice of either installing directly with `pip` or using the `uv` package manager.
+We recommend using `uv` as it makes it easy to add/remove packages while
+keeping versions consistent (it automatically updates the `pyproject.toml`
+file), makes it easy to handle virtual environments and includes the
+development toolchain packages installation too.
+
+**regarding `torch` installation**: `torch` is a required dependency, but it ships separate variants for CPU-only and each CUDA version. With `uv`, the correct PyTorch index is chosen automatically via `[tool.uv.sources]`. With `pip`, you must pass `--index-url` explicitly (see instructions below).
+
+We cover all the installation options in our [github actions ci/cd
+setup](https://github.com/mllam/neural-lam/tree/main/.github/workflows) which you can use as a reference.
+
+### From pypi.org
+
+```
+python -m pip install neural_lam
+```
+
+### From source
+
+#### Using `uv`
+
+1. Clone this repository and navigate to the root directory.
+2. Install `uv` if you don't have it installed on your system (either with `pip install uv` or [following the install instructions](https://docs.astral.sh/uv/getting-started/installation)).
+3. Install with the CPU or GPU extra:
+   ```bash
+   uv sync --extra cpu        --group dev  # CPU-only
+   uv sync --extra gpu        --group dev  # GPU, CUDA 13.0 (default)
+   uv sync --extra gpu-cu128  --group dev  # GPU, CUDA 12.8
+   ```
+   This creates a virtual environment, installs `torch` from the correct
+   PyTorch index, and installs all other dependencies (including dev tools)
+   in one step.
+
+   If you need a different CUDA version, install with the `cpu` extra first (smaller download) and then swap `torch` to your CUDA variant:
+   ```bash
+   uv sync --extra cpu --group dev              # create env (small torch wheel)
+   uv pip install torch --torch-backend auto    # replace torch with your CUDA variant
+   ```
+   Note: this swap is venv-local and will be reverted by the next `uv sync`.
+
+#### Using `pip`
+
+1. Clone this repository and navigate to the root directory.
+> If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 3.
+2. Install a specific version of `torch` with `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `python -m pip install torch --index-url https://download.pytorch.org/whl/cu130` for CUDA 13.0 support (use `.../whl/cu128` for CUDA 12.8; you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
+3. Install the dependencies with `python -m pip install .`. If you will be developing `neural-lam` we recommend to install in editable mode and install the development dependencies with `python -m pip install --group dev -e .` so you can make changes to the code and see the effects immediately.
+
+
+# Using Neural-LAM
+
+Once `neural-lam` is installed you will be able to train/evaluate models. For this you will in general need two things:
+
+1. **Data to train/evaluate the model**. To represent this data we use a concept of
+   *datastores* in Neural-LAM (see the [Data](#data-the-datastore-and-weatherdataset-classes) section for more details).
+   In brief, a datastore implements the process of loading data from disk in a
+   specific format (for example zarr or numpy files) by implementing an
+   interface that provides the data in a data-structure that can be used within
+   neural-lam. A datastore is used to create a `pytorch.Dataset`-derived
+   class that samples the data in time to create individual samples for
+   training, validation and testing.
+
+2. **The graph structure** is used to define message-passing GNN layers,
+   that are trained to emulate fluid flow in the atmosphere over time. The
+   graph structure is created for a specific datastore.
+
+Any command you run in neural-lam will include the path to a configuration file
+to be used (usually called `config.yaml`). This configuration file defines the
+path to the datastore configuration you wish to use and allows you to configure
+different aspects about the training and evaluation of the model.
+
+The path you provide to the neural-lam config (`config.yaml`) also sets the
+root directory relative to which all other paths are resolved, as in the parent
+directory of the config becomes the root directory. Both the datastore and
+graphs you generate are then stored in subdirectories of this root directory.
+Exactly how and where a specific datastore expects its source data to be stored
+and where it stores its derived data is up to the implementation of the
+datastore.
+
+In general the folder structure assumed in Neural-LAM is as follows (we will
+assume you placed `config.yaml` in a folder called `data`):
+
+```
+data/
+├── config.yaml           - Configuration file for neural-lam
+├── danra.datastore.yaml  - Configuration file for the datastore, referred to from config.yaml
+├── era5.datastore.yaml   - Optional second datastore, here providing boundary forcing
+└── graphs/               - Directory containing graphs for training
+```
+
+And the content of `config.yaml` could in this case look like:
+```yaml
+datastores:
+  danra:
+    kind: mdp
+    config_path: danra.datastore.yaml
+  era5:  # optional; no `state` data, so used for input (boundary) only
+    kind: mdp
+    config_path: era5.datastore.yaml
+training:
+  state_feature_weighting:
+    __config_class__: ManualStateFeatureWeighting
+    weights:
+      u100m: 1.0
+      v100m: 1.0
+      t2m: 1.0
+      r2m: 1.0
+  output_clamping:
+    lower:
+      t2m: 0.0
+      r2m: 0
+    upper:
+      r2m: 1.0
+```
+
+For now the neural-lam config only defines few things:
+
+1. A named mapping of datastores (`datastores`), each giving the kind of
+   datastore and the path to its config. Which one is the interior and which is
+   the boundary follows from the categories each provides, see [Data
+   categories](#data-categories) below.
+2. The weighting of different features in
+the loss function. If you don't define the state feature weighting it will default to
+weighting all features equally.
+3. Valid numerical range for output of each feature. The numerical range of all features default to $]-\infty, \infty[$.
+
+(This example is taken from the
+`tests/datastore_examples/mdp/era5_1000hPa_danra_100m_winds` directory; the
+`tests/datastore_examples/mdp/danra_100m_winds` one next to it is the
+single-datastore version.)
+
+
+Below follows instructions on how to use Neural-LAM to train and evaluate
+models, with details first given for each kind of datastore implemented
+and later the graph generation. Once `neural-lam` has been installed the
+general process is:
+
+1. Run any pre-processing scripts to generate the necessary derived data that your chosen datastore requires
+2. Run graph-creation step
+3. Train the model
+
+## Data (the `DataStore` and `WeatherDataset` classes)
+
+To enable flexibility in what input-data sources can be used with neural-lam,
+the input-data representation is split into two parts:
+
+1. A "datastore" (represented by instances of
+   [neural_lam.datastore.BaseDataStore](neural_lam/datastore/base.py)) which
+   takes care of loading a given category (state, forcing or static) and split
+   (train/val/test) of data from disk and returning it as a `xarray.DataArray`.
+   The returned data-array is expected to have the spatial coordinates
+   flattened into a single `grid_index` dimension and all variables and vertical
+   levels stacked into a feature dimension (named as `{category}_feature`). The
+   datastore also provides information about the number, names and units of
+   variables in the data, the boundary mask, normalisation values and grid
+   information.
+
+2. A `pytorch.Dataset`-derived class (called
+   `neural_lam.weather_dataset.WeatherDataset`) which takes care of sampling in
+   time to create individual samples for training, validation and testing, and
+   returning `torch.Tensor`-objects. The values are returned unnormalised;
+   normalisation is applied to each batch on the accelerator instead, by
+   `BaseForecastingModule.on_after_batch_transfer`.
+
+Each interior `MDPDatastore` still has its own boundary mask - a rim of
+`n_boundary_points` grid cells (default 30) excluded from the loss and
+overwritten with ground truth in the prediction. This is independent of any
+pairing with a separate boundary datastore (below).
+Set `datastores.<name>.n_boundary_points` in `config.yaml` to 0 once boundary
+forcing comes from elsewhere. If there is no separate datastore with boundary
+forcing, `n_boundary_points > 0` can still be used to take boundary input from the
+interior state. Using both `n_boundary_points > 0` and a separate boundary datastore
+corresponds to taking two kinds of boundary inputs (from interior state and boundary
+datastore), and is not recommended unless you have a very specific setup.
+`NpyFilesDatastoreMEPS`'s boundary mask is fixed at data-preparation time and
+does not support this option.
+
+### Data categories
+
+Each variable in a datastore belongs to one of three *categories*, which fix
+whether it is fed to the model as input, predicted as output, or both:
+
+| Category  | Model input | Model output | Description |
+|-----------|:-----------:|:------------:|-------------|
+| `state`   | ✓           | ✓            | Prognostic variables the model both reads and predicts (autoregressed forward in time). |
+| `forcing` | ✓           |              | Time-varying inputs known in advance (e.g. solar radiation, boundary forcing). |
+| `static`  | ✓           |              | Time-invariant inputs (e.g. orography, land-sea mask). |
+
+The categories also fix each datastore's role. A datastore with `state` data is the interior domain; one without is input-only, e.g. ERA5 boundary forcing for a LAM domain, whose forcing is windowed into an extra tensor per training sample. Exactly one interior datastore is required and at most one boundary datastore is supported.
+
+There are currently two different datastores implemented in the codebase:
+
+1. `neural_lam.datastore.MDPDatastore` which represents loading of
+   *training-ready* datasets in zarr format created with the
+   [mllam-data-prep](https://github.com/mllam/mllam-data-prep) package.
+   Training-ready refers to the fact that this data has been transformed
+   (variables have been stacked, spatial coordinates have been flattened,
+   statistics for normalisation have been calculated, etc) to be ready for
+   training. `mllam-data-prep` can combine any number of datasets that can be
+   read with [xarray](https://github.com/pydata/xarray) and the processing can
+   either be done at run-time or as a pre-processing step before calling
+   neural-lam.
+
+2. `neural_lam.datastore.NpyFilesDatastoreMEPS` which reads MEPS data from
+   `.npy`-files in the format introduced in neural-lam `v0.1.0`. Note that this
+   datastore is specific to the format of the MEPS dataset, but can act as an
+   example for how to create similar numpy-based datastores.
+
+If neither of these options fit your need you can create your own datastore by
+subclassing the `neural_lam.datastore.BaseDatastore` class and implementing the abstract methods.
+
+Datastores whose grid points form a complete 2D `x`/`y` rectilinear grid (the
+spacing need not be uniform) set `is_on_rectilinear_grid` to `True` and
+implement `grid_shape_state`. This can depend on the data, e.g. a
+domain-cropped `MDPDatastore` is not on a rectilinear grid.
+
+
+### MDP (mllam-data-prep) Datastore - `MDPDatastore`
+
+With `MDPDatastore` (the mllam-data-prep datastore) all the selection,
+transformation and pre-calculation steps that are needed to go from
+for example gridded weather data to a format that is optimised for training
+in neural-lam, are done in a separate package called
+[mllam-data-prep](https://github.com/mllam/mllam-data-prep) rather than in
+neural-lam itself.
+Specifically, the `mllam-data-prep` datastore configuration (for example
+[danra.datastore.yaml](tests/datastore_examples/mdp/danra_100m_winds/danra.datastore.yaml))
+specifies a) what source datasets to read from, b) what variables to select, c)
+what transformations of dimensions and variables to make, d) what statistics to
+calculate (for normalisation) and e) how to split the data into training,
+validation and test sets (see full details about the configuration specification
+in the [mllam-data-prep README](https://github.com/mllam/mllam-data-prep)).
+
+From a datastore configuration `mllam-data-prep` returns the transformed
+dataset as an `xr.Dataset` which is then written in zarr-format to disk by
+`neural-lam` when the datastore is first initiated (the path of the dataset is
+derived from the datastore config, so that from a config named `danra.datastore.yaml` the resulting dataset is stored in `danra.datastore.zarr`).
+You can also run `mllam-data-prep` directly to create the processed dataset by providing the path to the datastore configuration file:
+
+```bash
+python -m mllam_data_prep --config data/danra.datastore.yaml
+```
+
+If you will be working on a large dataset (on the order of 10GB or more) it
+could be beneficial to produce the processed `.zarr` dataset before using it
+in neural-lam so that you can do the processing across multiple CPU cores in parallel. This is done by including the `--dask-distributed-local-core-fraction` argument when calling mllam-data-prep to set the fraction of your system's CPU cores that should be used for processing (see the
+[mllam-data-prep
+README for details](https://github.com/mllam/mllam-data-prep?tab=readme-ov-file#creating-large-datasets-with-daskdistributed)).
+
+For example:
+
+```bash
+python -m mllam_data_prep --config data/danra.datastore.yaml --dask-distributed-local-core-fraction 0.5
+```
+
+### NpyFiles MEPS Datastore - `NpyFilesDatastoreMEPS`
+
+Version `v0.1.0` of Neural-LAM was built to train from numpy-files from the
+MEPS weather forecasts dataset.
+To enable this functionality to live on in later versions of neural-lam we have
+built a datastore called `NpyFilesDatastoreMEPS` which implements functionality
+to read from these exact same numpy-files. At this stage this datastore class
+is very much tied to the MEPS dataset, but the code is written in a way where
+it quite easily could be adapted to work with numpy-based weather
+forecast/analysis files in future.
+
+The full MEPS dataset is available for download [here](https://nextcloud.liu.se/s/meps). See instructions in the file `README.txt` for how to download and extract the full dataset.
+Note that while this data works with the `NpyFilesDatastoreMEPS` datastore, the exact data loading in this setup differs somewhat from that used in earlier published papers using the dataset.
+For research reproducibility, see the exact corresponding branch for each publication (under [Publications](#publications) in this Readme).
+
+A tiny subset of the MEPS data (named `meps_example`) is also available in `example_data.zip`, which can be downloaded from [here](https://drive.google.com/drive/folders/1N6ZT_mkfbdVloVsNs9T5YOrMtxd3jG-j?usp=sharing).
+Download the files and unzip in the neural-lam directory.
+Graphs used in the initial paper are also available for download at the same link (but can as easily be re-generated using `python -m neural_lam.create_graph`).
+Note that this subset is far too small to train any useful models, but all scripts can be run with it.
+It should thus be useful to make sure that your python environment is set up correctly and that all the code can be run without any issues.
+
+The following datastore configuration works with the MEPS dataset:
+
+```yaml
+# meps.datastore.yaml
+dataset:
+  name: meps_example
+  num_forcing_features: 16
+  var_longnames:
+  - pres_heightAboveGround_0_instant
+  - pres_heightAboveSea_0_instant
+  - nlwrs_heightAboveGround_0_accum
+  - nswrs_heightAboveGround_0_accum
+  - r_heightAboveGround_2_instant
+  - r_hybrid_65_instant
+  - t_heightAboveGround_2_instant
+  - t_hybrid_65_instant
+  - t_isobaricInhPa_500_instant
+  - t_isobaricInhPa_850_instant
+  - u_hybrid_65_instant
+  - u_isobaricInhPa_850_instant
+  - v_hybrid_65_instant
+  - v_isobaricInhPa_850_instant
+  - wvint_entireAtmosphere_0_instant
+  - z_isobaricInhPa_1000_instant
+  - z_isobaricInhPa_500_instant
+  var_names:
+  - pres_0g
+  - pres_0s
+  - nlwrs_0
+  - nswrs_0
+  - r_2
+  - r_65
+  - t_2
+  - t_65
+  - t_500
+  - t_850
+  - u_65
+  - u_850
+  - v_65
+  - v_850
+  - wvint_0
+  - z_1000
+  - z_500
+  var_units:
+  - Pa
+  - Pa
+  - W/m\textsuperscript{2}
+  - W/m\textsuperscript{2}
+  - "-"
+  - "-"
+  - K
+  - K
+  - K
+  - K
+  - m/s
+  - m/s
+  - m/s
+  - m/s
+  - kg/m\textsuperscript{2}
+  - m\textsuperscript{2}/s\textsuperscript{2}
+  - m\textsuperscript{2}/s\textsuperscript{2}
+  num_timesteps: 65
+  num_ensemble_members: 2
+  step_length: 3
+  remove_state_features_with_index: [15]
+grid_shape_state:
+- 268
+- 238
+projection:
+  class_name: LambertConformal
+  kwargs:
+    central_latitude: 63.3
+    central_longitude: 15.0
+    standard_parallels:
+    - 63.3
+    - 63.3
+```
+
+Which you can then use in a neural-lam configuration file like this:
+
+```yaml
+# config.yaml
+datastores:
+  meps:
+    kind: npyfilesmeps
+    config_path: meps.datastore.yaml
+training:
+  state_feature_weighting:
+    __config_class__: ManualStateFeatureWeighting
+    values:
+      u100m: 1.0
+      v100m: 1.0
+```
+
+For npy-file based datastores you must separately run the command that creates the variables used for standardization:
+
+```bash
+python -m neural_lam.datastore.npyfilesmeps.compute_standardization_stats <path-to-datastore-config>
+```
+
+### Graph creation
+
+> **Note:** The `create_graph` command below is deprecated and will be removed
+> in a future release. Please use `create_graph_with_wmg` (see below) instead.
+
+Run `python -m neural_lam.create_graph` with suitable options to generate the graph you want to use (see `python -m neural_lam.create_graph --help` for a list of options).
+The graphs used for the different models in the [paper](#graph-based-neural-weather-prediction-for-limited-area-modeling) can be created as:
+
+* **GC-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name multiscale`
+* **Hi-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name hierarchical --hierarchical` (also works for Hi-LAM-Parallel)
+* **L1-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name 1level --levels 1`
+
+The graph-related files are stored in a directory called `graphs`.
+
+### Graph creation with weather-model-graphs
+
+The recommended way to create graphs is with the `create_graph_with_wmg`
+command, which delegates graph construction to
+[weather-model-graphs](https://github.com/mllam/weather-model-graphs):
+
+```bash
+python -m neural_lam.create_graph_with_wmg --config_path <neural-lam-config-path> --archetype <archetype>
+```
+
+Available archetypes:
+
+* **keisler** (default): `python -m neural_lam.create_graph_with_wmg --config_path <neural-lam-config-path> --archetype keisler`
+* **graphcast**: `python -m neural_lam.create_graph_with_wmg --config_path <neural-lam-config-path> --archetype graphcast`
+* **hierarchical**: `python -m neural_lam.create_graph_with_wmg --config_path <neural-lam-config-path> --archetype hierarchical`
+
+Run `python -m neural_lam.create_graph_with_wmg --help` for the full list of
+options (e.g. `--mesh_node_distance`, `--mesh_grid_distance_ratio`,
+`--level_refinement_factor`, `--max_num_levels`).
+
+## Logging your experiments
+
+### Weights & Biases Integration
+The project is fully integrated with [Weights & Biases](https://www.wandb.ai/) (W&B) for logging and visualization, but can just as easily be used without it.
+When W&B is used, training configuration, training/test statistics and plots are sent to the W&B servers and made available in an interactive web interface.
+If W&B is turned off, logging instead saves everything locally under the run directory (e.g. `runs/<run-name>/wandb/`).
+The W&B project name is set to `neural-lam`, but this can be changed in the flags of `python -m neural_lam.train_model` (using argsparse).
+See the [W&B documentation](https://docs.wandb.ai/) for details.
+
+If you would like to login and use W&B, run:
+```
+wandb login
+```
+If you would like to turn off W&B and just log things locally, run:
+```
+wandb off
+```
+
+### MLFlow Integration
+The project is also integrated with [MLFlow](https://mlflow.org/) for logging and storing artefacts.
+
+MLFlow is not used by default, but can be switched to by setting `--logger mlflow` in the training command. With MLFlow enabled, training configuration, training/test statistics and plots are logged to the MLFlow server. MLFlow is self-hosted and can be run locally or on a server. See the [MLFlow documentation](https://mlflow.org/docs/latest/index.html) for details.
+
+Use the environment variable `MLFLOW_TRACKING_URI` to set the URI of the MLFlow server. If not set the logging can not be used. An example of setting the URI to a server is and running a training command is `MLFLOW_TRACKING_URI=http://localhost:5000 python -m neural_lam.train_model --config_path <config_path> --logger mlflow`.
+
+## Train Models
+Models can be trained using `python -m neural_lam.train_model --config_path <config_path>`.
+Run `python neural_lam.train_model --help` for a full list of training options.
+A few of the key ones are outlined below:
+
+* `--config_path`: Path to the configuration for neural-lam (for example in `data/myexperiment/config.yaml`).
+* `--model`: Which model to train
+* `--graph`: Which graph to use with the model
+* `--epochs`: Number of epochs to train for
+* `--processor_layers`: Number of GNN layers to use in the processing part of the model
+* `--ar_steps_train`: Number of time steps to unroll for when making predictions and computing the loss
+* `--ar_steps_eval`: Number of time steps to unroll for during validation steps
+* `--loss`: Which of the loss functions in `neural_lam/metrics.py` to train on
+
+Checkpoints of trained models are stored under `runs/<run-name>/checkpoints/`, alongside Lightning and logger outputs for the same run.
+The implemented models are:
+
+### Graph-LAM
+This is the basic graph-based LAM model.
+The encode-process-decode framework is used with a mesh graph in order to make one-step pedictions.
+This model class is used both for the L1-LAM and GC-LAM models from the [paper](#graph-based-neural-weather-prediction-for-limited-area-modeling), only with different graphs.
+
+To train 1L-LAM use
+```
+python -m neural_lam.train_model --model graph_lam --graph 1level ...
+```
+
+To train GC-LAM use
+```
+python -m neural_lam.train_model --model graph_lam --graph multiscale ...
+```
+
+### Hi-LAM
+A version of Graph-LAM that uses a hierarchical mesh graph and performs sequential message passing through the hierarchy during processing.
+
+To train Hi-LAM use
+```
+python -m neural_lam.train_model --model hi_lam --graph hierarchical ...
+```
+
+### Hi-LAM-Parallel
+A version of Hi-LAM where all message passing in the hierarchical mesh (up, down, inter-level) is ran in parallel.
+Not included in the paper as initial experiments showed worse results than Hi-LAM, but could be interesting to try in more settings.
+
+To train Hi-LAM-Parallel use
+```
+python -m neural_lam.train_model --model hi_lam_parallel --graph hierarchical ...
+```
+
+### Persistence
+A trivial baseline model that returns the previous state unchanged at each step (`--model persistence`). Since it has no learnable parameters, it must be evaluated directly without training (e.g. `--eval val` or `--eval test`).
+
+Checkpoint files for our models trained on the MEPS data are available upon request.
+
+### High Performance Computing
+
+The training script can be run on a cluster with multiple GPU-nodes. Neural LAM is set up to use PyTorch Lightning's `DDP` backend for distributed training.
+The code can be used on systems both with and without slurm. If the cluster has multiple nodes, set the `--num_nodes` argument accordingly.
+
+Using SLURM, the job can be started with `sbatch slurm_job.sh` with a shell script like the following.
+```
+#!/bin/bash -l
+#SBATCH --job-name=Neural-LAM
+#SBATCH --time=24:00:00
+#SBATCH --nodes=2
+#SBATCH --ntasks-per-node=4
+#SBATCH --gres:gpu=4
+#SBATCH --partition=normal
+#SBATCH --mem=444G
+#SBATCH --no-requeue
+#SBATCH --exclusive
+#SBATCH --output=runs/slurm_logs/neurallam_out_%j.log
+#SBATCH --error=runs/slurm_logs/neurallam_err_%j.log
+
+# Load necessary modules or activate environment, for example:
+conda activate neural-lam
 
 # From source (recommended, using uv)
 git clone https://github.com/mllam/neural-lam.git && cd neural-lam
@@ -51,6 +561,84 @@ For all install options (pip, CUDA variants, editable installs) see the [Install
 You need a config file, a datastore, and a graph. The [Quickstart](https://mllam.github.io/neural-lam/getting-started/quickstart.html) creates a graph, trains and evaluates a model from the command line on a small example dataset, and the [DANRA tutorial](https://mllam.github.io/neural-lam/notebooks/hello_world_danra.html) does the same in Python with plots. The [user guide](https://mllam.github.io/neural-lam/user-guide/datastores.html) covers each step in detail, including how to set up a datastore for your own data, e.g. with [mllam-data-prep](https://github.com/mllam/mllam-data-prep).
 
 # Repository Structure
+Except for training and pre-processing scripts all the source code can be found in the `neural_lam` directory.
+Model classes, including abstract base classes, are located in `neural_lam/models`.
+Notebooks for visualization and analysis are marimo `.py` files in `docs/notebooks`.
+
+The model code is split into three layers:
+
+- `BaseForecastingModule` wraps a forecaster in the Lightning training/evaluation loop, handling optimization, logging, plotting and batch standardization. Its deterministic and probabilistic subclasses evaluate single forecasts and sampled ensembles, respectively.
+- `BaseForecaster` maps initial states and forcing to a full forecast through `forward` and owns the training objective. `BaseDeterministicForecaster` returns the same forecast every call; `BaseProbabilisticForecaster` samples a fresh one, with `sample_ensemble` stacking repeated samples.
+- `StepPredictor` advances the state one time step. The autoregressive forecasters (`DeterministicARForecaster` and `BaseProbabilisticARForecaster`) repeatedly apply it through the shared `unroll_forecast` function.
+
+A forecaster is free to produce a forecast in any way, including predicting all lead times at once; only the autoregressive versions use unrolling.
+
+All of these are `torch.nn.Module` subclasses, and `*` marks a class that is abstract and meant to be subclassed:
+```
+nn.Module
+├── pl.LightningModule
+│   └── BaseForecastingModule*             - Optimizer, logging, plotting and batch standardization (neural_lam/models/modules)
+│       ├── DeterministicForecastingModule - Evaluates the single forecast the forecaster produces
+│       └── ProbabilisticForecastingModule - Samples an ensemble and scores its mean
+├── BaseForecaster*                        - Initial states + forcing -> full forecast; owns the training objective (neural_lam/models/forecasters)
+│   ├── BaseDeterministicForecaster*       - forward -> the same forecast every call; objective: a loss function applied to it
+│   │   └── DeterministicARForecaster      - Unrolls that forecast; what neural_lam.train_model builds
+│   └── BaseProbabilisticForecaster*       - forward -> a fresh sample each call; sample_ensemble stacks several, leaving the objective open
+│       └── BaseProbabilisticARForecaster* - Unrolls each sample, still without an objective
+├── StepPredictor*                         - (X_{t-1}, X_t, forcing_t) -> X_{t+1} (neural_lam/models/step_predictors)
+│   ├── BaseGraphModel*                    - Encode-process-decode over a mesh graph
+│   │   ├── GraphLAM
+│   │   └── BaseHiGraphModel*              - Requires a hierarchical mesh graph
+│   │       ├── HiLAM
+│   │       └── HiLAMParallel
+│   └── BaseGraphEFM*                      - Latent-variable predictors with their own prior, encoder and decoder
+│       ├── GraphEFM
+│       └── GraphEFMMultiScale
+├── BaseLatentEncoder*                     - Grid representation -> Gaussian over a latent on the mesh (neural_lam/models/latent)
+│   ├── ConstantLatentEncoder
+│   ├── GraphLatentEncoder
+│   └── HiGraphLatentEncoder
+└── BaseGraphLatentDecoder*                - Grid representation + latent sample -> next-state increment (neural_lam/models/latent)
+    ├── GraphLatentDecoder
+    └── HiGraphLatentDecoder
+```
+The `--model` values listed under [Train Models](#train-models) select the step predictor. `GraphEFM` and `GraphEFMMultiScale` are implemented but not yet selectable this way.
+
+The building blocks these are assembled from are also `torch.nn.Module` subclasses:
+```
+nn.Module
+├── pyg.nn.MessagePassing
+│   └── InteractionNet   - GNN layer, chosen per edge type with --g2m_gnn_type, --m2g_gnn_type, --mesh_up_gnn_type, --mesh_down_gnn_type (neural_lam/gnn_layers.py)
+│       └── PropagationNet
+├── BufferList           - List of tensor buffers held as a Module (neural_lam/utils/buffer_list.py)
+└── SplitMLPs            - Feeds chunks of the input through separate MLPs (neural_lam/gnn_layers.py)
+```
+
+What to extend depends on the kind of model:
+
+* **Deterministic, autoregressive:** write a new `StepPredictor` and run it with the existing `DeterministicARForecaster`. This is the common case.
+* **Deterministic, not autoregressive:** subclass `BaseDeterministicForecaster`, implementing `forward` with the new way of producing a forecast, reusing an existing `StepPredictor` or a new one if the model has a per-step component at all.
+* **Probabilistic, autoregressive:** subclass `BaseProbabilisticARForecaster`, implementing the training objective, typically alongside a new `StepPredictor` that samples its output.
+* **Probabilistic, not autoregressive:** subclass `BaseProbabilisticForecaster`, which additionally leaves the way a single sample is produced open.
+
+## Format of graph directory
+The `graphs` directory contains generated graph structures that can be used by different graph-based models.
+For a strict, machine-verifiable specification, see `docs/graph_storage_spec.md`.
+The structure is shown with examples below:
+```
+graphs
+├── graph1                                  - Directory with a graph definition
+│   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_graph)
+│   ├── g2m_edge_index.pt                   - Edges from grid to mesh (neural_lam.create_graph)
+│   ├── m2g_edge_index.pt                   - Edges from mesh to grid (neural_lam.create_graph)
+│   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_graph)
+│   ├── g2m_features.pt                     - Static features of grid to mesh edges (neural_lam.create_graph)
+│   ├── m2g_features.pt                     - Static features of mesh to grid edges (neural_lam.create_graph)
+│   └── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_graph)
+├── graph2
+├── ...
+└── graphN
+```
 
 ```
 neural-lam/
@@ -73,6 +661,7 @@ neural-lam/
 Canonical dimension names used in tensor shape annotations throughout the codebase:
 
 - `B` - batch size
+- `S` - number of members in an ensemble forecast
 - `pred_steps` - number of autoregressive prediction steps
 - `num_times` - number of time steps along the time axis of a raw or batched timeseries (a trailing `'`, e.g. `num_times'`, denotes a pre-subsampling / pre-differencing variant)
 - `num_grid_nodes` - number of nodes in the flattened spatial grid
@@ -84,9 +673,14 @@ Canonical dimension names used in tensor shape annotations throughout the codeba
 - `num_windowed_boundary_vars` - boundary forcing variables stacked over the past/future boundary window
 - `num_variables` - generic variable dimension used in metric functions
 - `hidden_dim` - internal hidden representation size in GNN layers and MLPs
+- `latent_dim` - dimensionality of the Graph-EFM latent variable
 - `input_dim` - input feature dimensionality to a layer before transformation
 - `num_mesh_static_vars` - number of static features per mesh node
-- `num_edges` - number of edges in a graph (g2m, m2g, same-level, up, down)
+- `num_edges` - number of edges in a generic edge set, e.g. in message-passing layers
+- `num_edges_<set>` - number of edges in a specific edge set, `<set>` being one of `g2m`, `m2g`, `m2m`, `mesh_up`, `mesh_down`; indexed as e.g. `num_edges_m2m[l]` for the per-level lists of a hierarchical graph
+- `num_edge_features` - number of static features per edge
+- `grid_size_x` - number of grid points along the x axis of a rectilinear grid
+- `grid_size_y` - number of grid points along the y axis of a rectilinear grid
 - `num_send` - number of sender nodes in a message-passing step
 - `num_rec` - number of receiver nodes in a message-passing step
 

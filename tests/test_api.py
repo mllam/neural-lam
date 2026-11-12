@@ -10,8 +10,8 @@ import wandb
 # First-party
 from neural_lam import api, train_model
 from neural_lam import config as nlconfig
-from neural_lam.models import ForecasterModule
-from neural_lam.train_model import load_forecaster_module_from_checkpoint
+from neural_lam.models import DeterministicForecastingModule
+from neural_lam.train_model import load_forecasting_module_from_checkpoint
 from tests.dummy_datastore import DummyDatastore
 
 
@@ -83,12 +83,12 @@ def test_api_train_and_evaluate_roundtrip(shared_env, tmp_path, model, graph):
     assert train_run.checkpoint_path.exists()
 
     # Verify reload from checkpoint
-    reloaded_module = load_forecaster_module_from_checkpoint(
+    reloaded_module = load_forecasting_module_from_checkpoint(
         ckpt_path=str(train_run.checkpoint_path),
         config=config,
         datastore=datastore,
     )
-    assert isinstance(reloaded_module, ForecasterModule)
+    assert isinstance(reloaded_module, DeterministicForecastingModule)
 
     # Evaluate with create_gif=True to act as drift gate for all Run paths
     eval_run = api.evaluate(
