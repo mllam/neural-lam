@@ -715,6 +715,9 @@ def fit(
         )
 
     run_dir = os.path.join(logging_config.runs_root, run_name)
+    # Create the run directory here so evaluation-only runs work without a
+    # logger, checkpoint callback or `create_gif` creating it first (#860).
+    os.makedirs(run_dir, exist_ok=True)
 
     training_logger = utils.setup_training_logger(
         datastore=datastore, args=hparams, run_name=run_name, run_dir=run_dir
