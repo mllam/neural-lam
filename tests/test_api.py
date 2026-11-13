@@ -139,6 +139,29 @@ def test_api_evaluate_persistence(shared_env, tmp_path):
     assert eval_run.example_plots(1).exists()
 
 
+def test_api_evaluate_persistence_no_gif_creates_run_dir(shared_env, tmp_path):
+    """Regression test for #860: the run dir is created by `fit` itself, so
+    evaluation works with W&B disabled and `create_gif=False`, where no
+    logger, checkpoint callback or GIF helper would create it first."""
+    datastore, config = shared_env
+    eval_run = api.evaluate(
+        datastore=datastore,
+        config=config,
+        model="persistence",
+        graph="1level",
+        batch_size=1,
+        num_workers=0,
+        ar_steps_eval=2,
+        val_steps_to_log=[1],
+        create_gif=False,
+        n_example_pred=0,
+        runs_root=str(tmp_path / "runs"),
+        logger_run_name="eval_persistence_no_gif",
+    )
+    assert eval_run.run_dir.exists()
+    assert eval_run.rmse_plot.exists()
+
+
 def test_config_parity(monkeypatch, tmp_path):
     """Verify CLI parser dests, api.train(), and dataclasses have parity."""
     # 1. build_parser() dests equal dataclass fields (+ config_path)
