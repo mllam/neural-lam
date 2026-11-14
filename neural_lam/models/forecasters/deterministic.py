@@ -261,12 +261,15 @@ class DeterministicARForecaster(BaseDeterministicForecaster):
     objective is the one ``BaseDeterministicForecaster`` supplies.
     """
 
+    gradient_checkpointing: bool
+
     def __init__(
         self,
         predictor: StepPredictor,
         datastore: BaseDatastore,
         config: NeuralLAMConfig | None = None,
         loss: str = "wmse",
+        gradient_checkpointing: bool = False,
     ) -> None:
         """
         Initialize the DeterministicARForecaster.
@@ -287,9 +290,16 @@ class DeterministicARForecaster(BaseDeterministicForecaster):
         loss : str, default "wmse"
             The scoring rule (from ``neural_lam.metrics``) applied by
             ``compute_training_loss``.
+        gradient_checkpointing : bool, default False
+            If True and in training mode, wrap each predictor call and the
+            static embedding operation in ``torch.utils.checkpoint`` so their
+            activations are recomputed in the backward pass instead of stored.
+            Lowers peak memory when unrolling more than one step, at the cost
+            of extra compute.
         """
         super().__init__(datastore=datastore, config=config, loss=loss)
         self.predictor = predictor
+        self.gradient_checkpointing = bool(gradient_checkpointing)
 
     @property
     def predicts_std(self) -> bool:
@@ -344,4 +354,6 @@ class DeterministicARForecaster(BaseDeterministicForecaster):
             boundary_states,
             self.boundary_mask,
             self.interior_mask,
+            gradient_checkpointing=self.gradient_checkpointing
+            and self.training,
         )

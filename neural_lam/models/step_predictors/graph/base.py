@@ -1,6 +1,7 @@
 """Base class for graph-based step predictors."""
 
 # Standard library
+from typing import Any
 
 # Third-party
 import torch
@@ -204,7 +205,38 @@ class BaseGraphModel(StepPredictor):
         """
         raise NotImplementedError("embedd_mesh_nodes not implemented")
 
-    def process_step(self, mesh_rep: torch.Tensor) -> torch.Tensor:
+    def embed_static_processor_features(self) -> Any | None:
+        """
+        Embed static features specific to the processor step.
+
+        Returns
+        -------
+        Any or None
+            Processor-specific static embeddings, or ``None`` if none.
+        """
+        return None
+
+    def embed_static_features(
+        self,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, Any]:
+        """
+        Embed all static mesh and edge features once for reuse across
+        autoregressive rollout steps.
+
+        Returns
+        -------
+        tuple
+            Tuple of ``(mesh_emb, g2m_emb, m2g_emb, processor_emb)``.
+        """
+        mesh_emb = self.embedd_mesh_nodes()
+        g2m_emb = self.g2m_embedder(self.g2m_features)
+        m2g_emb = self.m2g_embedder(self.m2g_features)
+        processor_emb = self.embed_static_processor_features()
+        return (mesh_emb, g2m_emb, m2g_emb, processor_emb)
+
+    def process_step(
+        self, mesh_rep: torch.Tensor, processor_embeddings: Any
+    ) -> torch.Tensor:
         """
         Process the mesh representation in the encode-process-decode
         framework, running one or more message-passing steps.
@@ -216,6 +248,9 @@ class BaseGraphModel(StepPredictor):
             representations. Dims: ``B`` is batch size,
             ``num_mesh_nodes`` is the number of mesh nodes, and ``hidden_dim``
             is the hidden dimension.
+        processor_embeddings : Any
+            Static processor embeddings from
+            ``embed_static_processor_features``.
 
         Returns
         -------
@@ -230,6 +265,9 @@ class BaseGraphModel(StepPredictor):
         prev_state: torch.Tensor,
         prev_prev_state: torch.Tensor,
         forcing: torch.Tensor,
+        static_embeddings: (
+            tuple[torch.Tensor, torch.Tensor, torch.Tensor, Any] | None
+        ) = None,
     ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """
         Advance the state by one step using the encode-process-decode
@@ -256,6 +294,9 @@ class BaseGraphModel(StepPredictor):
             windows). Dims: ``B`` is batch size, ``num_grid_nodes`` is
             the number of spatial grid nodes, and ``num_forcing_vars`` is the
             forcing feature dimension.
+        static_embeddings : tuple or None, optional
+            Output of ``embed_static_features``, reused across rollout steps.
+            If ``None``, the static features are embedded in this call.
 
         Returns
         -------
@@ -282,17 +323,19 @@ class BaseGraphModel(StepPredictor):
             dim=-1,
         )
 
-        # Embed all features
+        # Embed grid features
         grid_emb = self.grid_embedder(
             grid_features
         )  # (B, num_grid_nodes, hidden_dim)
-        g2m_emb = self.g2m_embedder(
-            self.g2m_features
-        )  # (num_edges_g2m, hidden_dim)
-        m2g_emb = self.m2g_embedder(
-            self.m2g_features
-        )  # (num_edges_m2g, hidden_dim)
-        mesh_emb = self.embedd_mesh_nodes()
+
+        grid_emb = self.grid_embedder(
+            grid_features
+        )  # (B, num_grid_nodes, hidden_dim)
+
+        if static_embeddings is None:
+            static_embeddings = self.embed_static_features()
+
+        mesh_emb, g2m_emb, m2g_emb, processor_emb = static_embeddings
 
         # Map from grid to mesh
         mesh_emb_expanded = self.expand_to_batch(
@@ -310,7 +353,9 @@ class BaseGraphModel(StepPredictor):
         )  # (B, num_grid_nodes, hidden_dim)
 
         # Run processor step
-        mesh_rep = self.process_step(mesh_rep)
+        mesh_rep = self.process_step(
+            mesh_rep, processor_embeddings=processor_emb
+        )
 
         # Map back from mesh to grid
         m2g_emb_expanded = self.expand_to_batch(m2g_emb, batch_size)
