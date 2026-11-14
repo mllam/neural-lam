@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix `plot_graph` raising a `ValueError` when a mesh node has no `m2m` edge: the mesh z-offsets and marker sizes were built with `pyg.utils.degree(...)`, which returns `max(index) + 1` entries instead of one per mesh node [\#884](https://github.com/mllam/neural-lam/pull/XXX) @tygvi
+
 - Fix `InteractionNet` and `PropagationNet` dimension mismatches when `hidden_dim` differs from `input_dim` [\#836](https://github.com/mllam/neural-lam/pull/836) @Karvy-Singh
 
 - Raise a `ValueError` for `--val_interval` below 1 in `train_model.fit`; `0` previously crashed with a `ZeroDivisionError` inside Lightning after the model was built, and negative values were silently accepted [\#847](https://github.com/mllam/neural-lam/pull/847) @nikhil3495
