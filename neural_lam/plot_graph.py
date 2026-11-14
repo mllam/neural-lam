@@ -144,7 +144,12 @@ def plot_graph(
     else:
         mesh_pos = mesh_static_features.numpy()
 
-        mesh_degrees = pyg.utils.degree(m2m_edge_index[1]).numpy()
+        # Pass the mesh node count explicitly: degree() otherwise returns
+        # max(index) + 1 entries, which drops mesh nodes that have no m2m
+        # edge and makes the concatenate below fail.
+        mesh_degrees = pyg.utils.degree(
+            m2m_edge_index[1], num_nodes=mesh_pos.shape[0]
+        ).numpy()
         z_mesh = MESH_HEIGHT + 0.01 * mesh_degrees
         mesh_node_size = mesh_degrees / 2
 
