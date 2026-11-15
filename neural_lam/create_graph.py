@@ -559,8 +559,15 @@ def create_graph(
             up_graphs.append(pyg_up)
 
             if create_plot:
+                # pos holds the lower level nodes followed by the upper
+                # level nodes, so shift the zero-offset receivers past the
+                # lower level to index their positions
                 plot_graph(
-                    pyg_up,
+                    pyg.data.Data(
+                        edge_index=pyg_up.edge_index
+                        + torch.tensor([[0], [lower_level_num_nodes]]),
+                        pos=pyg_up.pos,
+                    ),
                     title=(
                         f"Up graph, {lower_level_index} -> {upper_level_index}"
                     ),
@@ -589,8 +596,14 @@ def create_graph(
             down_graphs.append(pyg_down)
 
             if create_plot:
+                # Same position layout as the up graph, with the upper
+                # level nodes now the senders
                 plot_graph(
-                    pyg_down,
+                    pyg.data.Data(
+                        edge_index=pyg_down.edge_index
+                        + torch.tensor([[lower_level_num_nodes], [0]]),
+                        pos=pyg_down.pos,
+                    ),
                     title=(
                         f"Down graph, {upper_level_index} -> {lower_level_index}"  # noqa: E501
                     ),
