@@ -85,6 +85,29 @@ def mask_and_reduce_metric(
     return metric_entry_vals
 
 
+def _validate_pred_std(pred_std: torch.Tensor, metric_name: str) -> None:
+    """
+    Validate that ``pred_std`` contains finite, strictly positive values.
+
+    Parameters
+    ----------
+    pred_std : torch.Tensor
+        Predicted standard deviation to validate.
+    metric_name : str
+        Name of the metric for the error message.
+
+    Raises
+    ------
+    ValueError
+        If ``pred_std`` contains non-positive (<= 0) or non-finite values.
+    """
+    if not torch.all((pred_std > 0) & torch.isfinite(pred_std)):
+        raise ValueError(
+            f"{metric_name} requires pred_std to contain finite, "
+            "strictly positive values (pred_std > 0)."
+        )
+
+
 def wmse(
     pred: torch.Tensor,
     target: torch.Tensor,
@@ -122,7 +145,13 @@ def wmse(
         Reduced metric values. Shape is one of ``(...,)``,
         ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
+
+    Raises
+    ------
+    ValueError
+        If ``pred_std`` contains non-positive or non-finite values.
     """
+    _validate_pred_std(pred_std, "wmse")
     entry_mse = torch.nn.functional.mse_loss(
         pred, target, reduction="none"
     )  # (..., num_grid_nodes, num_variables)
@@ -223,7 +252,13 @@ def wmae(
         Reduced metric values. Shape is one of ``(...,)``,
         ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
+
+    Raises
+    ------
+    ValueError
+        If ``pred_std`` contains non-positive or non-finite values.
     """
+    _validate_pred_std(pred_std, "wmae")
     entry_mae = torch.nn.functional.l1_loss(
         pred, target, reduction="none"
     )  # (..., num_grid_nodes, num_variables)
@@ -324,7 +359,13 @@ def nll(
         Reduced metric values. Shape is one of ``(...,)``,
         ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
+
+    Raises
+    ------
+    ValueError
+        If ``pred_std`` contains non-positive or non-finite values.
     """
+    _validate_pred_std(pred_std, "nll")
     # Broadcast pred_std if shaped (num_variables,) via distribution internals
     dist = torch.distributions.Normal(
         pred, pred_std
@@ -374,7 +415,13 @@ def crps_gauss(
         Reduced metric values. Shape is one of ``(...,)``,
         ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
+
+    Raises
+    ------
+    ValueError
+        If ``pred_std`` contains non-positive or non-finite values.
     """
+    _validate_pred_std(pred_std, "crps_gauss")
     std_normal = torch.distributions.Normal(
         torch.zeros((), device=pred.device), torch.ones((), device=pred.device)
     )

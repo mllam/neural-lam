@@ -145,3 +145,33 @@ def test_probabilistic_losses_support_pred_std_broadcasting():
             sum_vars=False,
         ),
     )
+
+
+@pytest.mark.parametrize("metric", [wmse, wmae, nll, crps_gauss])
+@pytest.mark.parametrize(
+    "invalid_std",
+    [
+        torch.tensor([0.0]),
+        torch.tensor([-1.0]),
+        torch.tensor([float("nan")]),
+        torch.tensor([float("inf")]),
+        torch.tensor([-float("inf")]),
+        torch.tensor([1.0, 0.0]),
+        torch.tensor([1.0, -0.5]),
+        torch.tensor([1.0, float("nan")]),
+        torch.tensor([1.0, float("inf")]),
+    ],
+)
+def test_pred_std_validation_raises_value_error(metric, invalid_std):
+    """Weighted and probabilistic metrics reject non-positive or non-finite
+    pred_std."""
+    pred, target = _single_residual_case()
+    if invalid_std.numel() > 1:
+        pred = pred.expand(1, 1, 1, invalid_std.numel())
+        target = target.expand_as(pred)
+
+    with pytest.raises(
+        ValueError,
+        match="requires pred_std to contain finite, strictly positive values",
+    ):
+        metric(pred, target, invalid_std)
