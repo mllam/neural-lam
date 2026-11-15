@@ -39,7 +39,7 @@ def _(mo):
         "Building Machine Learning Limited Area Models: Kilometer-Scale Weather Forecasting in Realistic Settings" \
         (Adamov et al., 2025) available at [arXiv:2504.09340](https://arxiv.org/abs/2504.09340).
     >
-    > **Python Version:** Make sure you are using a Python version supported by the project (3.10-3.14).
+    > **Python Version:** Make sure you are using a Python version supported by the project (3.11-3.14).
     """
     )
     return
