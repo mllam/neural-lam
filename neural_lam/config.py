@@ -329,6 +329,9 @@ class TrainRunConfig:
         Loss function to use ("mse" or "wmse").
     lr : float, default 1e-3
         Learning rate.
+    gradient_clip_val : float or None, default None
+        Gradient clipping threshold used during training. If None, no
+        clipping is applied.
     val_interval : int, default 1
         Validation epoch frequency.
     num_sanity_val_steps : int, default 2
@@ -359,6 +362,7 @@ class TrainRunConfig:
     ar_steps_eval: int = 10
     loss: str = "wmse"
     lr: float = 1e-3
+    gradient_clip_val: float | None = None
     val_interval: int = 1
     num_sanity_val_steps: int = 2
     val_steps_to_log: list[int] = dataclasses.field(
