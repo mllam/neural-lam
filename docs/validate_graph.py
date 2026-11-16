@@ -7,7 +7,7 @@ Run with:
 """
 
 # /// script
-# requires-python = ">=3.10"
+# requires-python = ">=3.11"
 # dependencies = [
 #   "torch>=2.3.0",
 #   "rich>=13.0.0",
