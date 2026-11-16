@@ -56,14 +56,17 @@ python -m neural_lam.train_model --model hi_lam_parallel --graph hierarchical ..
 
 ### Persistence
 
-A trivial baseline model that returns the previous state unchanged at each step (`--model persistence`). Since it has no learnable parameters, it must be evaluated directly without training (e.g. `--eval val` or `--eval test`).
+A trivial baseline model that returns the previous state unchanged at each step (`--model persistence`).
+Since it has no learnable parameters, it must be evaluated directly without training (e.g. `--eval val` or `--eval test`).
 
 Checkpoint files for our models trained on the MEPS data are available upon request.
 
 ### High Performance Computing
 
-The training script can be run on a cluster with multiple GPU-nodes. Neural LAM is set up to use PyTorch Lightning's `DDP` backend for distributed training.
-The code can be used on systems both with and without slurm. If the cluster has multiple nodes, set the `--num_nodes` argument accordingly.
+The training script can be run on a cluster with multiple GPU-nodes.
+Neural LAM is set up to use PyTorch Lightning's `DDP` backend for distributed training.
+The code can be used on systems both with and without slurm.
+If the cluster has multiple nodes, set the `--num_nodes` argument accordingly.
 
 Using SLURM, the job can be started with `sbatch slurm_job.sh` with a shell script like the following.
 ```
@@ -114,6 +117,8 @@ python -m neural_lam.train_model \
     --load <checkpoint-path>
 ```
 
-**Note:** While it is technically possible to use multiple GPUs for running evaluation, this is strongly discouraged. If using multiple devices the `DistributedSampler` will replicate some samples to make sure all devices have the same batch size, meaning that evaluation metrics will be unreliable.
+**Note:** While it is technically possible to use multiple GPUs for running evaluation, this is strongly discouraged.
+If using multiple devices the `DistributedSampler` will replicate some samples to make sure all devices have the same batch size, meaning that evaluation metrics will be unreliable.
 A possible workaround is to just use batch size 1 during evaluation.
-This issue stems from PyTorch Lightning. See for example [this PR](https://github.com/Lightning-AI/torchmetrics/pull/1886) for more discussion.
+This issue stems from PyTorch Lightning.
+See for example [this PR](https://github.com/Lightning-AI/torchmetrics/pull/1886) for more discussion.

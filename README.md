@@ -48,7 +48,9 @@ For all install options (pip, CUDA variants, editable installs) see the [Install
 
 # Using Neural-LAM
 
-You need a config file, a datastore, and a graph. The [Quickstart](https://mllam.github.io/neural-lam/getting-started/quickstart.html) creates a graph, trains and evaluates a model from the command line on a small example dataset, and the [DANRA tutorial](https://mllam.github.io/neural-lam/notebooks/hello_world_danra.html) does the same in Python with plots. The [user guide](https://mllam.github.io/neural-lam/user-guide/datastores.html) covers each step in detail, including how to set up a datastore for your own data, e.g. with [mllam-data-prep](https://github.com/mllam/mllam-data-prep).
+You need a config file, a datastore, and a graph.
+The [Quickstart](https://mllam.github.io/neural-lam/getting-started/quickstart.html) creates a graph, trains and evaluates a model from the command line on a small example dataset, and the [DANRA tutorial](https://mllam.github.io/neural-lam/notebooks/hello_world_danra.html) does the same in Python with plots.
+The [user guide](https://mllam.github.io/neural-lam/user-guide/datastores.html) covers each step in detail, including how to set up a datastore for your own data, e.g. with [mllam-data-prep](https://github.com/mllam/mllam-data-prep).
 
 # Repository Structure
 
@@ -70,9 +72,12 @@ neural-lam/
 
 The model code is split into three layers:
 
-- `BaseForecastingModule` wraps a forecaster in the Lightning training/evaluation loop, handling optimization, logging, plotting and batch standardization. Its deterministic and probabilistic subclasses evaluate single forecasts and sampled ensembles, respectively.
-- `BaseForecaster` maps initial states and forcing to a full forecast through `forward` and owns the training objective. `BaseDeterministicForecaster` returns the same forecast every call; `BaseProbabilisticForecaster` samples a fresh one, with `sample_ensemble` stacking repeated samples.
-- `StepPredictor` advances the state one time step. The autoregressive forecasters (`DeterministicARForecaster` and `BaseProbabilisticARForecaster`) repeatedly apply it through the shared `unroll_forecast` function.
+- `BaseForecastingModule` wraps a forecaster in the Lightning training/evaluation loop, handling optimization, logging, plotting and batch standardization.
+  Its deterministic and probabilistic subclasses evaluate single forecasts and sampled ensembles, respectively.
+- `BaseForecaster` maps initial states and forcing to a full forecast through `forward` and owns the training objective.
+  `BaseDeterministicForecaster` returns the same forecast every call; `BaseProbabilisticForecaster` samples a fresh one, with `sample_ensemble` stacking repeated samples.
+- `StepPredictor` advances the state one time step.
+  The autoregressive forecasters (`DeterministicARForecaster` and `BaseProbabilisticARForecaster`) repeatedly apply it through the shared `unroll_forecast` function.
 
 A forecaster is free to produce a forecast in any way, including predicting all lead times at once; only the autoregressive versions use unrolling.
 
@@ -105,7 +110,8 @@ nn.Module
     ├── GraphLatentDecoder
     └── HiGraphLatentDecoder
 ```
-The `--model` values listed in the [training guide](https://mllam.github.io/neural-lam/user-guide/training.html) select the step predictor. `GraphEFM` and `GraphEFMMultiScale` are implemented but not yet selectable this way.
+The `--model` values listed in the [training guide](https://mllam.github.io/neural-lam/user-guide/training.html) select the step predictor.
+`GraphEFM` and `GraphEFMMultiScale` are implemented but not yet selectable this way.
 
 The building blocks these are assembled from are also `torch.nn.Module` subclasses:
 ```
@@ -119,7 +125,8 @@ nn.Module
 
 What to extend depends on the kind of model:
 
-* **Deterministic, autoregressive:** write a new `StepPredictor` and run it with the existing `DeterministicARForecaster`. This is the common case.
+* **Deterministic, autoregressive:** write a new `StepPredictor` and run it with the existing `DeterministicARForecaster`.
+  This is the common case.
 * **Deterministic, not autoregressive:** subclass `BaseDeterministicForecaster`, implementing `forward` with the new way of producing a forecast, reusing an existing `StepPredictor` or a new one if the model has a per-step component at all.
 * **Probabilistic, autoregressive:** subclass `BaseProbabilisticARForecaster`, implementing the training objective, typically alongside a new `StepPredictor` that samples its output.
 * **Probabilistic, not autoregressive:** subclass `BaseProbabilisticForecaster`, which additionally leaves the way a single sample is produced open.

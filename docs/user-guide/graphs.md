@@ -2,9 +2,7 @@
 
 ## Graph creation with weather-model-graphs (recommended)
 
-The recommended way to create graphs is with the `create_graph_with_wmg`
-command, which delegates graph construction to
-[weather-model-graphs](https://github.com/mllam/weather-model-graphs):
+The recommended way to create graphs is with the `create_graph_with_wmg` command, which delegates graph construction to [weather-model-graphs](https://github.com/mllam/weather-model-graphs):
 
 ```bash
 python -m neural_lam.create_graph_with_wmg --config_path <neural-lam-config-path> --archetype <archetype> --name <graph-name>
@@ -18,9 +16,7 @@ Available archetypes:
 | `graphcast` | `graph_lam` | Multi-scale mesh |
 | `hierarchical` | `hi_lam` / `hi_lam_parallel` | Hierarchical mesh |
 
-Run `python -m neural_lam.create_graph_with_wmg --help` for the full list of
-options (e.g. `--mesh_node_distance`, `--mesh_grid_distance_ratio`,
-`--level_refinement_factor`, `--max_num_levels`).
+Run `python -m neural_lam.create_graph_with_wmg --help` for the full list of options (e.g. `--mesh_node_distance`, `--mesh_grid_distance_ratio`, `--level_refinement_factor`, `--max_num_levels`).
 
 ## Graph creation with `create_graph` (deprecated)
 
