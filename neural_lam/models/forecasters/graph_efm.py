@@ -103,7 +103,8 @@ class GraphEFMForecaster(BaseProbabilisticARForecaster):
         encoder and the prior is accumulated too. Both terms are summed over
         the rollout and averaged over the batch; the loss is
         ``-likelihood + kl_beta * kl + crps_weight * crps``.
-        CRPS is
+        Fair CRPS uses at least two additional prior trajectories, independent
+        of the variational posterior rollout. It is
         summed over interior nodes, variables and time, like the likelihood,
         and averaged over the batch. The rollout advances on the
         predicted mean with boundary nodes overwritten by the true state.
