@@ -123,55 +123,6 @@ class TrainingConfig:
 
 
 @dataclasses.dataclass
-class ProbabilisticConfig:
-    """
-    Configuration for the probabilistic (Graph-EFM) models.
-
-    Only used when training or evaluating a probabilistic model
-    (``--model graph_efm``/``graph_efm_ms``); ignored otherwise. Every field
-    has a default, so the ``probabilistic`` config section may be omitted
-    entirely for deterministic models.
-
-    Attributes
-    ----------
-    latent_dim : int, optional
-        Dimensionality of the latent variable at each latent-carrying mesh
-        node. Defaults to the model's ``hidden_dim`` when None.
-    prior_layers : int
-        Number of on-mesh GNN layers in the prior.
-    encoder_layers : int
-        Number of on-mesh GNN layers in the variational encoder.
-    decoder_layers : int
-        Number of on-mesh GNN layers in the latent decoder.
-    learn_prior : bool
-        If True, the prior is a learned encoder conditioned on the previous
-        state; if False, a constant ``Normal(0, 1)`` prior is used.
-    prior_dist : str
-        Output distribution of the prior: ``"isotropic"`` or ``"diagonal"``.
-    kl_beta : float
-        Weight of the KL term in the ELBO. When 0, the prior and KL are not
-        computed in the posterior rollout; CRPS can still train the prior.
-    crps_weight : float
-        Weight of the optional fair CRPS objective from prior trajectories.
-    crps_members : int
-        Number of independent prior trajectories for CRPS, at least two.
-    eval_ensemble_size : int
-        Number of ensemble members sampled during validation and testing.
-    """
-
-    latent_dim: int | None = None
-    prior_layers: int = 2
-    encoder_layers: int = 2
-    decoder_layers: int = 4
-    learn_prior: bool = True
-    prior_dist: str = "isotropic"
-    kl_beta: float = 1.0
-    eval_ensemble_size: int = 5
-    crps_weight: float = 0.0
-    crps_members: int = 2
-
-
-@dataclasses.dataclass
 class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     """
     Configuration for the Neural-LAM model and training pipeline.
@@ -191,16 +142,10 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     training : TrainingConfig
         Configuration for training the model, including loss function and
         feature-weighting strategy. Defaults to ``TrainingConfig()``.
-    probabilistic : ProbabilisticConfig
-        Graph-EFM architecture, objective, and evaluation settings.
     """
 
     datastores: dict[str, DatastoreSelection]
     training: TrainingConfig = dataclasses.field(default_factory=TrainingConfig)
-
-    probabilistic: ProbabilisticConfig = dataclasses.field(
-        default_factory=ProbabilisticConfig
-    )
 
     class _(dataclass_wizard.JSONWizard.Meta):
         """
@@ -350,6 +295,16 @@ class ModelConfig:
         GNN layer type for upward mesh message passing.
     mesh_down_gnn_type : str, default "InteractionNet"
         GNN layer type for downward mesh message passing.
+    latent_dim : int or None
+        Graph-EFM latent size; defaults to hidden_dim.
+    prior_layers, encoder_layers, decoder_layers : int or None
+        Graph-EFM mesh depths; defaults to 2, 2 and 4 respectively.
+    learn_prior : bool or None
+        Learn the Graph-EFM prior; defaults to True.
+    prior_dist : str or None
+        Graph-EFM prior covariance, isotropic (default) or diagonal.
+
+    Unset Graph-EFM options inherit checkpoint values when loading.
     """
 
     model: str = "graph_lam"
@@ -363,6 +318,12 @@ class ModelConfig:
     m2g_gnn_type: str = "InteractionNet"
     mesh_up_gnn_type: str = "InteractionNet"
     mesh_down_gnn_type: str = "InteractionNet"
+    latent_dim: int | None = None
+    prior_layers: int | None = None
+    encoder_layers: int | None = None
+    decoder_layers: int | None = None
+    learn_prior: bool | None = None
+    prior_dist: str | None = None
 
 
 @dataclasses.dataclass
@@ -372,6 +333,15 @@ class TrainRunConfig:
 
     Attributes
     ----------
+    kl_beta : float or None
+        Graph-EFM KL weight; defaults to 1.0.
+    crps_weight : float or None
+        Graph-EFM fair CRPS weight; defaults to 0.0.
+    crps_members : int or None
+        Independent prior trajectories for fair CRPS; defaults to 2.
+    eval_ensemble_size : int or None
+        Graph-EFM evaluation ensemble size; defaults to 5.
+        Unset Graph-EFM options inherit checkpoint values when loading.
     epochs : int, default 200
         Number of training epochs.
     batch_size : int, default 4
@@ -408,6 +378,10 @@ class TrainRunConfig:
         Whether to create animation GIFs during evaluation.
     """
 
+    kl_beta: float | None = None
+    crps_weight: float | None = None
+    crps_members: int | None = None
+    eval_ensemble_size: int | None = None
     epochs: int = 200
     batch_size: int = 4
     ar_steps_train: int = 1

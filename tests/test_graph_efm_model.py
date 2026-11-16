@@ -423,27 +423,8 @@ def test_module_training_and_validation_steps():
 def test_train_model_assembly_selects_probabilistic_path(
     model_name, predictor_class, graph_name
 ):
-    """train_model's build_predictor/build_forecaster_module route the
-    graph_efm* models through the probabilistic assembly, reading the
-    Graph-EFM hyperparameters from the ``probabilistic`` config section and
-    producing the right predictor, forecaster, module class and checkpoint
-    monitor."""
-    datastore, _ = _datastore_and_config(graph_name)
-    config = nlconfig.NeuralLAMConfig(
-        datastores={
-            "interior": nlconfig.DatastoreSelection(
-                kind=datastore.SHORT_NAME, config_path=str(datastore.root_path)
-            )
-        },
-        probabilistic=nlconfig.ProbabilisticConfig(
-            latent_dim=4,
-            prior_layers=1,
-            encoder_layers=1,
-            decoder_layers=1,
-            kl_beta=0.5,
-            eval_ensemble_size=3,
-        ),
-    )
+    """CLI options assemble the probabilistic predictor and module."""
+    datastore, config = _datastore_and_config(graph_name)
     args = Namespace(
         model=model_name,
         graph=graph_name,
@@ -454,12 +435,17 @@ def test_train_model_assembly_selects_probabilistic_path(
         output_std=False,
         g2m_gnn_type="InteractionNet",
         m2g_gnn_type="InteractionNet",
-        loss="mse",
+        loss="wmse",
+        latent_dim=4,
+        prior_layers=1,
+        encoder_layers=1,
+        decoder_layers=1,
+        kl_beta=0.5,
+        eval_ensemble_size=3,
     )
 
     predictor = build_predictor(predictor_class, args, config, datastore)
     assert isinstance(predictor, predictor_class)
-    # Hyperparameters came from config.probabilistic, not the CLI args
     assert predictor.latent_dim == 4
 
     forecaster, module_class, module_kwargs = build_forecaster_module(
@@ -490,14 +476,6 @@ def test_training_checkpoint_round_trip(graph_name, output_std, tmp_path):
     from neural_lam.train_model import load_forecasting_module_from_checkpoint
 
     datastore, config = _datastore_and_config(graph_name)
-    config.probabilistic = nlconfig.ProbabilisticConfig(
-        latent_dim=8,
-        prior_layers=1,
-        encoder_layers=1,
-        decoder_layers=2,
-        crps_weight=0.1,
-        eval_ensemble_size=2,
-    )
     args = Namespace(
         model="graph_efm" if graph_name == "hierarchical" else "graph_efm_ms",
         graph=graph_name,
@@ -507,6 +485,12 @@ def test_training_checkpoint_round_trip(graph_name, output_std, tmp_path):
         num_future_forcing_steps=1,
         output_std=output_std,
         loss="wmse",
+        latent_dim=8,
+        prior_layers=1,
+        encoder_layers=1,
+        decoder_layers=2,
+        crps_weight=0.1,
+        eval_ensemble_size=2,
     )
     predictor = build_predictor(
         GraphEFM if graph_name == "hierarchical" else GraphEFMMultiScale,
@@ -553,7 +537,6 @@ def test_training_checkpoint_round_trip(graph_name, output_std, tmp_path):
     restored = load_forecasting_module_from_checkpoint(
         str(checkpoint), caller_config, datastore
     )
-    assert caller_config.probabilistic == nlconfig.ProbabilisticConfig()
     assert restored.forecaster.predictor.latent_dim == 8
     for name, value in model.state_dict().items():
         torch.testing.assert_close(restored.state_dict()[name], value)
@@ -727,11 +710,6 @@ def test_graph_efm_run_name_uses_configured_layers(
     from neural_lam import train_model
 
     datastore, config = _datastore_and_config(graph_name)
-    config.probabilistic = nlconfig.ProbabilisticConfig(
-        prior_layers=1,
-        encoder_layers=2,
-        decoder_layers=3,
-    )
     names = []
 
     def capture_logger(**kwargs):
@@ -747,6 +725,9 @@ def test_graph_efm_run_name_uses_configured_layers(
                 model=model_name,
                 graph=graph_name,
                 hidden_dim=4,
+                prior_layers=1,
+                encoder_layers=2,
+                decoder_layers=3,
             ),
             train_config=nlconfig.TrainRunConfig(
                 ar_steps_train=1,
@@ -794,13 +775,6 @@ def cli_graph_efm_checkpoint(request, tmp_path_factory):
                 config_path=str(datastore.root_path),
             )
         },
-        probabilistic=nlconfig.ProbabilisticConfig(
-            latent_dim=8,
-            prior_layers=1,
-            encoder_layers=1,
-            decoder_layers=2,
-            eval_ensemble_size=2,
-        ),
     )
     model_name = "graph_efm" if graph_name == "hierarchical" else "graph_efm_ms"
     args = train_model.build_parser().parse_args(
@@ -815,6 +789,13 @@ def cli_graph_efm_checkpoint(request, tmp_path_factory):
             "4",
         ]
     )
+    args.latent_dim = 8
+    args.prior_layers = 1
+    args.encoder_layers = 1
+    args.decoder_layers = 2
+    args.eval_ensemble_size = 2
+    args.kl_beta = 0
+    args.crps_weight = 0
     predictor = build_predictor(
         train_model.MODELS[model_name], args, config, datastore
     )
@@ -850,119 +831,3 @@ def cli_graph_efm_checkpoint(request, tmp_path_factory):
     checkpoint = tmp_path_factory.mktemp(f"cli_{model_name}") / "source.ckpt"
     trainer.save_checkpoint(checkpoint)
     return datastore, config, checkpoint, model_name, graph_name
-
-
-@pytest.mark.requires_training
-@pytest.mark.parametrize(
-    "mode,section",
-    [
-        ("test", "different"),
-        ("test", "equal"),
-        ("test", "omitted"),
-        ("test", "legacy"),
-        (None, "different"),
-    ],
-)
-def test_cli_restores_probabilistic_checkpoint_settings(
-    cli_graph_efm_checkpoint,
-    mode,
-    section,
-    monkeypatch,
-    tmp_path,
-):
-    """CLI evaluation and resume build models with checkpoint architecture."""
-    # Standard library
-    from unittest.mock import Mock
-
-    # Third-party
-    import yaml
-
-    # First-party
-    from neural_lam import train_model
-
-    datastore, saved_config, checkpoint, model_name, graph_name = (
-        cli_graph_efm_checkpoint
-    )
-    caller_config = nlconfig.NeuralLAMConfig(
-        datastores=saved_config.datastores,
-        probabilistic=(
-            saved_config.probabilistic
-            if section in {"equal", "legacy"}
-            else nlconfig.ProbabilisticConfig()
-        ),
-    )
-    if section == "legacy":
-        saved = torch.load(checkpoint, weights_only=False)
-        del saved["hyper_parameters"]["config"]
-        checkpoint = tmp_path / "legacy.ckpt"
-        torch.save(saved, checkpoint)
-    raw_config = yaml.safe_load(caller_config.to_yaml())
-    if section == "omitted":
-        del raw_config["probabilistic"]
-    config_path = tmp_path / "experiment.yaml"
-    config_path.write_text(yaml.safe_dump(raw_config))
-
-    real_trainer = train_model.pl.Trainer
-    trainers = []
-
-    def build_test_trainer(**kwargs):
-        trainer = real_trainer(
-            **kwargs,
-            limit_train_batches=1,
-            limit_val_batches=1,
-            limit_test_batches=1,
-            enable_progress_bar=False,
-            enable_model_summary=False,
-        )
-        trainers.append(trainer)
-        return trainer
-
-    warning = Mock()
-    monkeypatch.setattr(train_model.pl, "Trainer", build_test_trainer)
-    monkeypatch.setattr(train_model.logger, "warning", warning)
-    (tmp_path / "loaded").mkdir()
-    result = train_model.fit(
-        model_config=nlconfig.ModelConfig(
-            model=model_name,
-            graph=graph_name,
-            hidden_dim=4,
-        ),
-        train_config=nlconfig.TrainRunConfig(
-            epochs=2,
-            batch_size=2,
-            ar_steps_train=1,
-            ar_steps_eval=1,
-            val_steps_to_log=[1],
-            num_sanity_val_steps=0,
-            eval=mode,
-            load=str(checkpoint),
-        ),
-        data_config=nlconfig.DataConfig(num_workers=0),
-        compute_config=nlconfig.ComputeConfig(devices=1),
-        logging_config=nlconfig.LoggingConfig(
-            runs_root=str(tmp_path), logger_run_name="loaded"
-        ),
-        config=caller_config,
-        datastore=datastore,
-        config_path=str(config_path),
-    )
-    evaluated = trainers[0].lightning_module
-    assert evaluated.forecaster.predictor.latent_dim == 8
-    assert evaluated.hparams.config.probabilistic == saved_config.probabilistic
-    assert result.checkpoint_path is not None
-    if section == "different":
-        warning.assert_called_once()
-        assert (
-            "checkpoint's probabilistic settings take precedence"
-            in warning.call_args.args[0]
-        )
-    else:
-        warning.assert_not_called()
-    if mode == "test":
-        source_weights = torch.load(checkpoint, weights_only=False)[
-            "state_dict"
-        ]
-        for name, value in evaluated.state_dict().items():
-            torch.testing.assert_close(value, source_weights[name])
-    else:
-        assert trainers[0].global_step > 1

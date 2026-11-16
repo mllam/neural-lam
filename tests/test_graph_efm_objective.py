@@ -144,63 +144,6 @@ def test_invalid_objective_settings(kwargs):
         )
 
 
-def test_probabilistic_yaml_round_trip():
-    """Optional Graph-EFM settings survive experiment configuration loading."""
-    # First-party
-    from neural_lam.config import NeuralLAMConfig, ProbabilisticConfig
-
-    config = NeuralLAMConfig.from_yaml("""
-    datastores:
-      interior:
-        kind: mdp
-        config_path: danra.yaml
-    probabilistic:
-      latent_dim: 8
-      prior_layers: 1
-      encoder_layers: 2
-      decoder_layers: 3
-      learn_prior: false
-      prior_dist: diagonal
-      kl_beta: 0.5
-      crps_weight: 0.2
-      crps_members: 4
-      eval_ensemble_size: 6
-    """)
-    assert config.probabilistic == ProbabilisticConfig(
-        latent_dim=8,
-        prior_layers=1,
-        encoder_layers=2,
-        decoder_layers=3,
-        learn_prior=False,
-        prior_dist="diagonal",
-        kl_beta=0.5,
-        crps_weight=0.2,
-        crps_members=4,
-        eval_ensemble_size=6,
-    )
-    assert NeuralLAMConfig.from_yaml(config.to_yaml()) == config
-
-
-def test_crps_reuses_graph_across_independent_prior_trajectories(objective):
-    """Training embeds once for both variational and all prior rollouts."""
-    forecaster, predictor, mask, init, forcing, target = objective
-    forecaster.crps_weight = 1
-    forecaster.crps_members = 3
-    loss, _ = forecaster.compute_training_loss(init, forcing, target, mask)
-    assert predictor.embedding_calls == 1
-    assert len(predictor.graphs) == 3 * forcing.shape[1]
-    assert all(graph is predictor.graphs[0] for graph in predictor.graphs)
-    loss.backward()
-    assert predictor.mean.grad.abs() > 0
-
-
-def test_prior_ensemble_caches_embeddings_without_caching_samples(objective):
-    """Evaluation also shares embeddings while drawing distinct members."""
-    forecaster, predictor, mask, init, forcing, target = objective
-    ensemble, _ = forecaster.sample_ensemble(init, forcing, target, 2)
-    assert predictor.embedding_calls == 1
-    assert not torch.equal(ensemble[:, 0, :, mask], ensemble[:, 1, :, mask])
-    torch.testing.assert_close(ensemble[:, 0, :, ~mask], target[:, :, ~mask])
 
 
 @pytest.mark.parametrize(

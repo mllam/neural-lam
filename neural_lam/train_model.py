@@ -7,7 +7,12 @@ import os
 import random
 import shutil
 import time
-from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser, Namespace
+from argparse import (
+    ArgumentDefaultsHelpFormatter,
+    ArgumentParser,
+    BooleanOptionalAction,
+    Namespace,
+)
 from pathlib import Path
 from typing import Any, cast
 
@@ -15,7 +20,6 @@ from typing import Any, cast
 # for logging the model:
 import pytorch_lightning as pl
 import torch
-import yaml
 from lightning_fabric.utilities import seed
 from loguru import logger
 
@@ -30,7 +34,6 @@ from .config import (
     ModelConfig,
     NeuralLAMConfig,
     OutputClamping,
-    ProbabilisticConfig,
     TrainingConfig,
     TrainRunConfig,
     UniformFeatureWeighting,
@@ -59,7 +62,6 @@ if hasattr(torch.serialization, "add_safe_globals"):
             DatastoreSelection,
             ManualStateFeatureWeighting,
             NeuralLAMConfig,
-            ProbabilisticConfig,
             OutputClamping,
             TrainingConfig,
             UniformFeatureWeighting,
@@ -107,8 +109,7 @@ def build_predictor(
     subclasses, gating on the class hierarchy so that future hierarchical
     models are covered without maintaining a model-name list. GNN type
     arguments fall back to ``InteractionNet`` for checkpoints saved before
-    those CLI flags existed. Graph-EFM uses its probabilistic configuration
-    for latent dimensions and encoder/decoder depths.
+    those CLI flags existed. Graph-EFM delegates to its own builder.
 
     Parameters
     ----------
@@ -117,7 +118,7 @@ def build_predictor(
     args : Namespace
         Architecture and forcing-window arguments.
     config : NeuralLAMConfig
-        Output clamping and Graph-EFM settings.
+        Output clamping settings.
     datastore : BaseDatastore
         Grid features, graph location and standardization statistics.
 
@@ -142,13 +143,11 @@ def build_predictor(
             if getattr(args, name, default) != default:
                 logger.warning(
                     "--{} has no effect for Graph-EFM; use the "
-                    "probabilistic configuration section instead.",
+                    "Graph-EFM CLI options instead.",
                     name,
                 )
-        prob = config.probabilistic
-        prefix = (
-            "intra_level" if issubclass(predictor_class, GraphEFM) else "m2m"
-        )
+        prob = resolve_graph_efm_args(args)
+        prefix = "intra_level" if issubclass(predictor_class, GraphEFM) else "m2m"
         layers = {
             f"{part}_{prefix}_layers": getattr(prob, f"{part}_layers")
             for part in ("prior", "encoder", "decoder")
@@ -228,7 +227,7 @@ def build_forecaster_module(
         Additional module settings, including evaluation ensemble size.
     """
     if isinstance(predictor, (GraphEFM, GraphEFMMultiScale)):
-        prob = config.probabilistic
+        prob = resolve_graph_efm_args(args)
         forecaster = GraphEFMForecaster(
             predictor,
             datastore,
@@ -266,30 +265,44 @@ class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
         )
 
 
-def _restore_probabilistic_config(
-    ckpt_hparams: dict[str, Any],
-    config: NeuralLAMConfig,
-) -> NeuralLAMConfig:
-    """Restore saved Graph-EFM settings without mutating the caller's config.
+GRAPH_EFM_DEFAULTS = {
+    "latent_dim": None,
+    "prior_layers": 2,
+    "encoder_layers": 2,
+    "decoder_layers": 4,
+    "learn_prior": True,
+    "prior_dist": "isotropic",
+    "kl_beta": 1.0,
+    "crps_weight": 0.0,
+    "crps_members": 2,
+    "eval_ensemble_size": 5,
+}
+
+
+def resolve_graph_efm_args(
+    args: Namespace, saved_args: Namespace | None = None
+) -> Namespace:
+    """Resolve Graph-EFM options, preferring explicit values to saved ones.
 
     Parameters
     ----------
-    ckpt_hparams : dict[str, Any]
-        Hyperparameters read from a model checkpoint.
-    config : NeuralLAMConfig
-        Current experiment configuration, used for legacy checkpoints.
+    args : Namespace
+        Current CLI or API options. None means unspecified.
+    saved_args : Namespace or None, optional
+        Checkpoint arguments supplying defaults for unspecified options.
 
     Returns
     -------
-    NeuralLAMConfig
-        Configuration with the saved probabilistic settings, or ``config``
-        unchanged if the checkpoint does not contain those settings.
+    Namespace
+        A copy with Graph-EFM options resolved to saved or initial defaults.
     """
-    saved_config = ckpt_hparams.get("config")
-    saved_probabilistic = getattr(saved_config, "probabilistic", None)
-    if saved_probabilistic is None:
-        return config
-    return dataclasses.replace(config, probabilistic=saved_probabilistic)
+    resolved = vars(args).copy()
+    for name, default in GRAPH_EFM_DEFAULTS.items():
+        value = getattr(args, name, None)
+        if value is None:
+            value = getattr(saved_args, name, None)
+        resolved[name] = default if value is None else value
+    return Namespace(**resolved)
 
 
 def load_forecasting_module_from_checkpoint(
@@ -304,9 +317,8 @@ def load_forecasting_module_from_checkpoint(
 
     The checkpoint must have been saved with args in hyper_parameters (i.e.
     created via train_model.main), so that model class and architecture kwargs
-    can be recovered automatically. Graph-EFM probabilistic settings are
-    restored from the saved config, falling back to the supplied config
-    only for checkpoints without those settings.
+    can be recovered automatically. Graph-EFM architecture and objective options
+    are restored from the saved arguments.
 
     Parameters
     ----------
@@ -330,7 +342,7 @@ def load_forecasting_module_from_checkpoint(
     predictor_class = MODELS[args.model]
     is_graph_efm = issubclass(predictor_class, (GraphEFM, GraphEFMMultiScale))
     if is_graph_efm:
-        config = _restore_probabilistic_config(ckpt["hyper_parameters"], config)
+        args = resolve_graph_efm_args(args)
     predictor = build_predictor(predictor_class, args, config, datastore)
     forecaster, module_class, _ = build_forecaster_module(
         args, config, datastore, predictor
@@ -490,6 +502,43 @@ def build_parser() -> ArgumentParser:
         "hard-codes its mesh-down GNN type",
     )
 
+    efm_group = parser.add_argument_group("Graph-EFM Options")
+    for name in (
+        "latent_dim",
+        "prior_layers",
+        "encoder_layers",
+        "decoder_layers",
+    ):
+        efm_group.add_argument(
+            f"--{name}",
+            type=int,
+            help=f"Graph-EFM {name.replace('_', ' ')}; inherits checkpoint "
+            f"value when loading, otherwise {GRAPH_EFM_DEFAULTS[name]}",
+        )
+    efm_group.add_argument(
+        "--learn_prior",
+        action=BooleanOptionalAction,
+        default=None,
+        help="Learn the latent prior (default True); inherits checkpoint value",
+    )
+    efm_group.add_argument(
+        "--prior_dist",
+        choices=["isotropic", "diagonal"],
+        help="Prior covariance (default isotropic); inherits checkpoint value",
+    )
+    for name, arg_type in (
+        ("kl_beta", float),
+        ("crps_weight", float),
+        ("crps_members", int),
+        ("eval_ensemble_size", int),
+    ):
+        efm_group.add_argument(
+            f"--{name}",
+            type=arg_type,
+            help=f"Graph-EFM {name.replace('_', ' ')}; inherits checkpoint "
+            f"value when loading, otherwise {GRAPH_EFM_DEFAULTS[name]}",
+        )
+
     # Training options
     train_group = parser.add_argument_group("Training Options")
     train_group.add_argument(
@@ -513,7 +562,7 @@ def build_parser() -> ArgumentParser:
         type=str,
         default="wmse",
         help="Deterministic loss function, see metrics.py. Graph-EFM uses "
-        "a Gaussian likelihood and its probabilistic config objective.",
+        "a Gaussian likelihood with --kl_beta and --crps_weight.",
     )
     train_group.add_argument(
         "--lr", type=float, default=1e-3, help="learning rate"
@@ -685,8 +734,8 @@ def fit(
     """
     Run training or evaluation using strongly-typed configuration dataclasses.
 
-    When loading Graph-EFM weights, the checkpoint's probabilistic settings
-    take precedence over the current experiment configuration.
+    Unspecified Graph-EFM options inherit checkpoint arguments when loading;
+    explicit options override them to support staged training.
 
     Parameters
     ----------
@@ -833,25 +882,8 @@ def fit(
     # Build predictor and forecaster externally, then inject into
     # DeterministicForecastingModule
     predictor_class = MODELS[model_config.model]
-    if train_config.load and issubclass(
-        predictor_class, (GraphEFM, GraphEFMMultiScale)
-    ):
-        ckpt_hparams = torch.load(train_config.load, weights_only=False).get(
-            "hyper_parameters", {}
-        )
-        restored_config = _restore_probabilistic_config(ckpt_hparams, config)
-        if config.probabilistic != restored_config.probabilistic:
-            has_probabilistic_section = True
-            if config_path is not None and Path(config_path).is_file():
-                with open(config_path, encoding="utf-8") as config_file:
-                    raw_config = yaml.safe_load(config_file) or {}
-                has_probabilistic_section = "probabilistic" in raw_config
-            if has_probabilistic_section:
-                logger.warning(
-                    "The checkpoint's probabilistic settings take precedence "
-                    "over the current Graph-EFM configuration."
-                )
-        config = restored_config
+    if issubclass(predictor_class, (GraphEFM, GraphEFMMultiScale)):
+        hparams = resolve_graph_efm_args(hparams)
     predictor = build_predictor(predictor_class, hparams, config, datastore)
 
     if not train_config.eval and not predictor.trainable:
@@ -885,7 +917,7 @@ def fit(
         run_name = logging_config.logger_run_name
     else:
         if isinstance(forecaster, GraphEFMForecaster):
-            prob = config.probabilistic
+            prob = hparams
             layers = (
                 f"p{prob.prior_layers}-e{prob.encoder_layers}"
                 f"-d{prob.decoder_layers}"
