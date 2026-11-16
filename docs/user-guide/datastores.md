@@ -130,7 +130,7 @@ From a datastore configuration `mllam-data-prep` returns the transformed dataset
 You can also run `mllam-data-prep` directly to create the processed dataset by providing the path to the datastore configuration file:
 
 ```bash
-python -m mllam_data_prep --config data/danra.datastore.yaml
+python -m mllam_data_prep data/danra.datastore.yaml
 ```
 
 If you will be working on a large dataset (on the order of 10GB or more) it could be beneficial to produce the processed `.zarr` dataset before using it in neural-lam so that you can do the processing across multiple CPU cores in parallel.
@@ -139,7 +139,7 @@ This is done by including the `--dask-distributed-local-core-fraction` argument 
 For example:
 
 ```bash
-python -m mllam_data_prep --config data/danra.datastore.yaml --dask-distributed-local-core-fraction 0.5
+python -m mllam_data_prep data/danra.datastore.yaml --dask-distributed-local-core-fraction 0.5
 ```
 
 ### NpyFiles MEPS Datastore - `NpyFilesDatastoreMEPS`
