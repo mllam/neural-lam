@@ -7,6 +7,7 @@ from .forecasters.deterministic import (
     BaseDeterministicForecaster,
     DeterministicARForecaster,
 )
+from .forecasters.graph_efm import GraphEFMForecaster
 from .forecasters.probabilistic import (
     BaseProbabilisticARForecaster,
     BaseProbabilisticForecaster,
@@ -23,16 +24,11 @@ from .step_predictors.graph.hi_lam_parallel import HiLAMParallel
 from .step_predictors.graph.hierarchical import BaseHiGraphModel
 from .step_predictors.persistence import PersistencePredictor
 
-# NOTE: GraphEFM/GraphEFMMultiScale are intentionally NOT registered in
-# MODELS yet.
-# ``train_model.build_predictor`` instantiates the chosen model with a fixed
-# deterministic kwarg set -- datastore-first, no ``config``, and with
-# ``mesh_aggr`` -- whereas the Graph-EFM models require ``config`` (for their
-# per_var_std weighting) and take no ``mesh_aggr``.
-# Registering them requires making ``build_predictor`` config-aware.
 MODELS = {
     "graph_lam": GraphLAM,
     "hi_lam": HiLAM,
     "hi_lam_parallel": HiLAMParallel,
     "persistence": PersistencePredictor,
+    "graph_efm": GraphEFM,
+    "graph_efm_ms": GraphEFMMultiScale,
 }

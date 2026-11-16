@@ -57,9 +57,19 @@ class BaseDeterministicForecaster(BaseForecaster):
             The scoring rule (from ``neural_lam.metrics``) applied by
             ``compute_training_loss``, stored as ``self.loss``. Default
             ``"wmse"``.
+
+        Raises
+        ------
+        ValueError
+            If loss names a metric requiring an ensemble of predictions.
         """
         super().__init__(datastore=datastore)
         self.loss = metrics.get_metric(loss)
+        if metrics.requires_ensemble(self.loss):
+            raise ValueError(
+                f"{loss} requires ensemble predictions; use a probabilistic "
+                "forecaster rather than a deterministic loss."
+            )
 
         # Whether the fallback is needed is settled per call in
         # _resolve_pred_std

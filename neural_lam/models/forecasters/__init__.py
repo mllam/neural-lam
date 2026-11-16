@@ -9,6 +9,7 @@ from .deterministic import (
     BaseDeterministicForecaster,
     DeterministicARForecaster,
 )
+from .graph_efm import GraphEFMForecaster
 from .probabilistic import (
     BaseProbabilisticARForecaster,
     BaseProbabilisticForecaster,

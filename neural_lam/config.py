@@ -295,6 +295,16 @@ class ModelConfig:
         GNN layer type for upward mesh message passing.
     mesh_down_gnn_type : str, default "InteractionNet"
         GNN layer type for downward mesh message passing.
+    latent_dim : int or None
+        Graph-EFM latent size; defaults to hidden_dim.
+    prior_layers, encoder_layers, decoder_layers : int or None
+        Graph-EFM mesh depths; defaults to 2, 2 and 4 respectively.
+    learn_prior : bool or None
+        Learn the Graph-EFM prior; defaults to True.
+    prior_dist : str or None
+        Graph-EFM prior covariance, isotropic (default) or diagonal.
+
+    Unset Graph-EFM options inherit checkpoint values when loading.
     """
 
     model: str = "graph_lam"
@@ -308,6 +318,12 @@ class ModelConfig:
     m2g_gnn_type: str = "InteractionNet"
     mesh_up_gnn_type: str = "InteractionNet"
     mesh_down_gnn_type: str = "InteractionNet"
+    latent_dim: int | None = None
+    prior_layers: int | None = None
+    encoder_layers: int | None = None
+    decoder_layers: int | None = None
+    learn_prior: bool | None = None
+    prior_dist: str | None = None
 
 
 @dataclasses.dataclass
@@ -317,6 +333,15 @@ class TrainRunConfig:
 
     Attributes
     ----------
+    kl_beta : float or None
+        Graph-EFM KL weight; defaults to 1.0.
+    crps_weight : float or None
+        Graph-EFM fair CRPS weight; defaults to 0.0.
+    crps_members : int or None
+        Independent prior trajectories for fair CRPS; defaults to 2.
+    eval_ensemble_size : int or None
+        Graph-EFM evaluation ensemble size; defaults to 5.
+        Unset Graph-EFM options inherit checkpoint values when loading.
     epochs : int, default 200
         Number of training epochs.
     batch_size : int, default 4
@@ -353,6 +378,10 @@ class TrainRunConfig:
         Whether to create animation GIFs during evaluation.
     """
 
+    kl_beta: float | None = None
+    crps_weight: float | None = None
+    crps_members: int | None = None
+    eval_ensemble_size: int | None = None
     epochs: int = 200
     batch_size: int = 4
     ar_steps_train: int = 1

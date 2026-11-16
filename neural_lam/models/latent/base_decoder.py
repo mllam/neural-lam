@@ -153,7 +153,7 @@ class BaseGraphLatentDecoder(nn.Module):
             Shape ``(B, num_grid_nodes, num_state_vars)`` when
             ``output_std`` is True, otherwise None. Predicted std of the
             next state, obtained from the output parameter map through a
-            softplus.
+            softplus with a positive floor to prevent numerical underflow.
         """
         latent_emb = self.latent_embedder(latent_samples)
 
@@ -176,7 +176,7 @@ class BaseGraphLatentDecoder(nn.Module):
             # parameters), then map the latter through a softplus to get
             # positive std values.
             mean_delta, std_raw = state_params.chunk(2, dim=-1)
-            pred_std = nn.functional.softplus(std_raw)
+            pred_std = nn.functional.softplus(std_raw) + 1e-4
         else:
             mean_delta = state_params
             pred_std = None
