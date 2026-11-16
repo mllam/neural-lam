@@ -929,16 +929,10 @@ def fit(
         max_epochs=train_config.epochs,
         deterministic=True,
         default_root_dir=run_dir,
-        strategy=(
-            "ddp_find_unused_parameters_true"
-            if isinstance(forecaster, GraphEFMForecaster)
-            and (
-                compute_config.num_nodes > 1
-                or (isinstance(devices, list) and len(devices) > 1)
-                or (isinstance(devices, int) and devices > 1)
-                or (devices == "auto" and torch.cuda.device_count() > 1)
-            )
-            else "auto"
+        strategy=utils.training_strategy(
+            devices,
+            compute_config.num_nodes,
+            find_unused_parameters=isinstance(forecaster, GraphEFMForecaster),
         ),
         accelerator=device_name,
         num_nodes=compute_config.num_nodes,

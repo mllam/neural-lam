@@ -2,6 +2,7 @@
 
 # Local
 from .buffer_list import BufferList
+from .distributed import training_strategy
 from .graph import (
     compute_grid_input_dim,
     load_and_register_graph,
@@ -43,6 +44,7 @@ __all__ = [
     "make_gnn_seq",
     "make_mlp",
     "setup_training_logger",
+    "training_strategy",
     "zero_index_edge_index",
     "zero_index_g2m",
     "zero_index_m2g",
