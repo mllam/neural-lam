@@ -109,9 +109,10 @@ the input-data representation is split into two parts:
 
 2. A `pytorch.Dataset`-derived class (called
    `neural_lam.weather_dataset.WeatherDataset`) which takes care of sampling in
-   time to create individual samples for training, validation and testing. The
-   `WeatherDataset` class is also responsible for normalising the values and
-   returning `torch.Tensor`-objects.
+   time to create individual samples for training, validation and testing, and
+   returning `torch.Tensor`-objects. The values are returned unnormalised;
+   normalisation is applied to each batch on the accelerator instead, by
+   `BaseForecastingModule.on_after_batch_transfer`.
 
 Each interior `MDPDatastore` still has its own boundary mask - a rim of
 `n_boundary_points` grid cells (default 30) excluded from the loss and
