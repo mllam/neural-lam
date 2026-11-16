@@ -9,11 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add Graph-EFM forecaster training with Gaussian ELBO and optional fair CRPS,
-  probabilistic configuration, CLI assembly and checkpoint loading.
-  Restore saved probabilistic settings, share fair CRPS scoring, warn about
-  ignored CLI options and name runs using Graph-EFM layer counts.
-  Honor saved probabilistic settings in CLI evaluation and resumed training.
+- Add Graph-EFM ensemble forecasting with variational training and fair CRPS
   [\#712](https://github.com/mllam/neural-lam/pull/712) @Sir-Sloth-The-Lazy
 
 - Add deterministic and probabilistic forecaster/module interfaces with
