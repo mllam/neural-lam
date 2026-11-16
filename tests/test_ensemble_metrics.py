@@ -113,11 +113,35 @@ def test_almost_fair_crps_rejects_invalid_alpha(alpha):
 def test_empirical_crps_single_member_is_mae():
     ensemble = torch.tensor([[[[1.0, 4.0]]]])
     target = torch.tensor([[[2.0, 2.0]]])
-    torch.testing.assert_close(
-        crps_ens(ensemble, target, estimator="biased"), torch.tensor([3.0])
-    )
+    with pytest.warns(UserWarning, match="single ensemble member"):
+        actual = crps_ens(ensemble, target, estimator="biased")
+    torch.testing.assert_close(actual, torch.tensor([3.0]))
 
 
 def test_unknown_crps_estimator():
     with pytest.raises(ValueError, match="Unknown CRPS estimator"):
         crps_ens(torch.zeros(1, 2, 3, 2), torch.zeros(1, 3, 2), estimator="bad")
+
+
+@pytest.mark.parametrize("sum_vars", [False, True])
+@pytest.mark.parametrize("estimator", ["unbiased", "biased", "almost-fair"])
+def test_single_member_crps_warns_and_preserves_mask_and_variables(
+    sum_vars, estimator
+):
+    ensemble = torch.arange(12.0).reshape(1, 1, 2, 3, 2)
+    target = torch.ones(1, 2, 3, 2)
+    mask = torch.tensor([True, False, True])
+    with pytest.warns(UserWarning, match="single ensemble member"):
+        actual = crps_ens(
+            ensemble,
+            target,
+            torch.tensor([1.0, 2.0]),
+            mask=mask,
+            sum_vars=sum_vars,
+            estimator=estimator,
+            afc_alpha=0.95,
+        )
+    expected = mask_and_reduce_metric(
+        (ensemble[:, 0] - target).abs(), mask, True, sum_vars
+    )
+    torch.testing.assert_close(actual, expected)

@@ -2,6 +2,7 @@
 
 # Standard library
 import inspect
+import warnings
 from collections.abc import Callable
 
 # Third-party
@@ -396,6 +397,7 @@ def crps_gauss(
 def crps_ens(
     ensemble: torch.Tensor,
     target: torch.Tensor,
+    pred_std: torch.Tensor | None = None,
     mask: torch.Tensor | None = None,
     average_grid: bool = True,
     sum_vars: bool = True,
@@ -418,6 +420,8 @@ def crps_ens(
         two independent members.
     target : torch.Tensor
         Shape ``(..., num_grid_nodes, num_state_vars)``. Ground truth.
+    pred_std : torch.Tensor or None, optional
+        Unused; accepted for compatibility with the shared metric interface.
     mask : torch.Tensor or None, optional
         Shape ``(num_grid_nodes,)``. Boolean mask selecting grid nodes.
     average_grid : bool, optional
@@ -452,9 +456,13 @@ def crps_ens(
     ):
         raise ValueError("afc_alpha must be finite and between 0 and 1")
     num_members = ensemble.shape[ens_dim]
-    if num_members < 1 or (num_members < 2 and estimator != "biased"):
-        raise ValueError("Fair CRPS requires at least two ensemble members")
+    if num_members < 1:
+        raise ValueError("CRPS requires at least one ensemble member")
     if num_members == 1:
+        warnings.warn(
+            "CRPS received a single ensemble member; falling back to MAE.",
+            stacklevel=2,
+        )
         return mask_and_reduce_metric(
             (ensemble.squeeze(ens_dim) - target).abs(),
             mask=mask,
@@ -492,6 +500,7 @@ def crps_ens(
 def crps_ens_fair(
     ensemble: torch.Tensor,
     target: torch.Tensor,
+    pred_std: torch.Tensor | None = None,
     mask: torch.Tensor | None = None,
     average_grid: bool = True,
     sum_vars: bool = True,
@@ -511,6 +520,8 @@ def crps_ens_fair(
         num_state_vars)``. At least two independent members are required.
     target : torch.Tensor
         Shape ``(..., num_grid_nodes, num_state_vars)``. Ground truth.
+    pred_std : torch.Tensor or None, optional
+        Unused; accepted for compatibility with the shared metric interface.
     mask : torch.Tensor or None, optional
         Shape ``(num_grid_nodes,)``. Boolean mask selecting grid nodes.
     average_grid : bool, optional
@@ -531,6 +542,8 @@ def crps_ens_fair(
     ValueError
         If there are fewer than two members.
     """
+    if ensemble.shape[ens_dim] < 2:
+        raise ValueError("Fair CRPS requires at least two ensemble members")
     return crps_ens(
         ensemble,
         target,
