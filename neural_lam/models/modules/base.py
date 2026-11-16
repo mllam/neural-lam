@@ -964,6 +964,9 @@ class BaseForecastingModule(pl.LightningModule, ABC):
                 if "mse" in metric_name:
                     metric_tensor_averaged = torch.sqrt(metric_tensor_averaged)
                     metric_name = metric_name.replace("mse", "rmse")
+                elif metric_name == "spread_squared":
+                    metric_tensor_averaged = torch.sqrt(metric_tensor_averaged)
+                    metric_name = "spread"
 
                 da_state_stats = self.datastore.get_standardization_dataarray(
                     "state"

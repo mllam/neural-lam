@@ -22,9 +22,9 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
     Training is inherited unchanged from ``BaseForecastingModule``: the
     wrapped forecaster assembles its own training loss. Validation and
     testing are ensemble based instead of deterministic: an ensemble is
-    sampled through ``forecaster.sample_ensemble`` and its mean scored per
-    lead time and variable, with validation additionally reporting the
-    forecaster's own objective. The module makes no assumption on how the
+    sampled through ``forecaster.sample_ensemble`` and scored with
+    ensemble-mean RMSE, fair CRPS and spread per lead time and variable,
+    with validation also reporting the forecaster's own objective. The module makes no assumption on how the
     members are produced, only that repeated sampling is what an ensemble
     is made of.
     """
@@ -66,8 +66,9 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
             Datastore providing grid metadata and data access.
         eval_ensemble_size : int
             Number of ensemble members sampled during validation and
-            testing. Keyword-only and required: how many members to draw is
-            a choice this module cannot sensibly default.
+            testing. At least two are needed for fair CRPS and spread;
+            single-member evaluation reports only ensemble-mean error.
+            Keyword-only and required.
         datastore_boundary : BaseDatastore, optional
             Boundary forcing datastore, used for its standardization
             statistics.
@@ -129,28 +130,28 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
         # replaces, so both end up saved.
         self.save_hyperparameters({"eval_ensemble_size": eval_ensemble_size})
         self.eval_ensemble_size = eval_ensemble_size
-        self.val_metrics = {"ens_mse": []}
-        self.test_metrics = {"ens_mse": []}
+        metric_names = ["ens_mse"]
+        if eval_ensemble_size > 1:
+            metric_names.extend(("crps_ens", "spread_squared"))
+        self.val_metrics = {name: [] for name in metric_names}
+        self.test_metrics = {name: [] for name in metric_names}
 
     def _ensemble_step(
         self,
         batch: Batch,
-    ) -> torch.Tensor:
+    ) -> dict[str, torch.Tensor]:
         """
-        Sample an ensemble and compute the per-variable MSE of its mean.
+        Score an ensemble with mean error, fair CRPS and ensemble variance.
 
-        Shared by ``validation_step`` and ``test_step``: samples
-        ``self.eval_ensemble_size`` members and scores the ensemble mean
-        with plain (unweighted) MSE on interior nodes. Only the squared
-        errors are computed here; ``aggregate_and_plot_metrics`` reduces
-        them to a per-lead per-variable RMSE once per epoch, since the
-        square root has to be taken after averaging over every sample
-        rather than per batch.
+        Validation and testing share one sampled ensemble. Every metric is
+        computed on interior nodes per lead time and variable. Fair CRPS
+        and variance require at least two members; single-member evaluation
+        reports only mean error. Epoch aggregation takes the square roots
+        of mean squared error and variance after sample averaging and
+        rescales all metrics to the variables' physical units.
 
-        This is a diagnostic metric, not the training loss: it always
-        scores the ensemble mean with plain MSE, regardless of what
-        objective ``compute_training_loss`` actually trains on. The
-        objective itself is logged by ``_log_objective``.
+        The forecaster's training objective is logged separately by
+        _log_objective, since its sampling procedure may differ.
 
         Parameters
         ----------
@@ -159,9 +160,9 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
 
         Returns
         -------
-        torch.Tensor
-            Per-variable ensemble-mean MSE, shape
-            ``(B, pred_steps, num_state_vars)``, for epoch-end aggregation.
+        dict[str, torch.Tensor]
+            Per-variable metrics, each with shape
+            (B, pred_steps, num_state_vars), for epoch-end aggregation.
         """
         init_states, target_states, forcing_features, _boundary, _ = batch
         ensemble, _ = self.forecaster.sample_ensemble(
@@ -179,7 +180,16 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
             sum_vars=False,
         )  # (B, pred_steps, num_state_vars)
 
-        return entry_mses
+        values = {"ens_mse": entry_mses}
+        if self.eval_ensemble_size > 1:
+            for name in ("crps_ens", "spread_squared"):
+                values[name] = metrics.get_metric(name)(
+                    ensemble,
+                    target_states,
+                    mask=self.interior_mask_bool,
+                    sum_vars=False,
+                )
+        return values
 
     def _log_objective(
         self,
@@ -230,7 +240,7 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
 
         Logs the forecaster's objective as ``val_mean_loss``, scores the
         ensemble mean against the target states (see ``_ensemble_step``) and
-        collects per-variable ensemble-mean MSE for epoch-end aggregation.
+        collects error, fair CRPS and variance for epoch-end aggregation.
 
         Parameters
         ----------
@@ -243,8 +253,8 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
         # and one for computing ensemble metrics. Required as computing loss
         # might not involve making a forecast the same way as during inference.
         self._log_objective(batch)
-        entry_mses = self._ensemble_step(batch)
-        self.val_metrics["ens_mse"].append(entry_mses)
+        for name, values in self._ensemble_step(batch).items():
+            self.val_metrics[name].append(values)
 
     def test_step(
         self,
@@ -255,7 +265,7 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
         Perform a single ensemble test step.
 
         Scores the ensemble mean against the target states (see
-        ``_ensemble_step``) and collects per-variable ensemble-mean MSE for
+        ``_ensemble_step``) and collects error, fair CRPS and variance for
         epoch-end aggregation.
 
         Parameters
@@ -265,8 +275,8 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
         batch_idx : int
             The index of the batch.
         """
-        entry_mses = self._ensemble_step(batch)
-        self.test_metrics["ens_mse"].append(entry_mses)
+        for name, values in self._ensemble_step(batch).items():
+            self.test_metrics[name].append(values)
 
     def on_test_epoch_end(self) -> None:
         """
