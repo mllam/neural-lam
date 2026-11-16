@@ -24,9 +24,9 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
     testing are ensemble based instead of deterministic: an ensemble is
     sampled through ``forecaster.sample_ensemble`` and scored with
     ensemble-mean RMSE, fair CRPS and spread per lead time and variable,
-    with validation also reporting the forecaster's own objective. The module makes no assumption on how the
-    members are produced, only that repeated sampling is what an ensemble
-    is made of.
+    with validation also reporting the forecaster's own objective. The
+    module makes no assumption on how members are produced, only that
+    repeated sampling is what an ensemble is made of.
     """
 
     # The wrapped forecaster's forward must sample, so that repeating it

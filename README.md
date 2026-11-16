@@ -613,7 +613,36 @@ the cumulative target (400 after the first two stages above).
 Omit `--restore_opt` to reset the optimizer and apply the new learning rate;
 include it to resume optimizer state within a stage. Validation checkpoints
 monitor `val_mean_loss`, the training objective; evaluation reports
-ensemble-mean RMSE.
+ensemble-mean RMSE, fair CRPS and ensemble spread for each forecast step
+and variable, computed from the same prior ensemble on interior nodes.
+Spread is the square root of unbiased ensemble variance after averaging
+across grid points and samples; CRPS and spread are reported in the state
+variables' physical units. At least two evaluation members are required for
+CRPS and spread; single-member evaluation reports only mean error.
+Use `val_crps_ens`, `test_crps_ens`, `val_spread` or `test_spread` with
+`--metrics_watch` and `--var_leads_metrics_watch` to log selected variables
+and lead times. Testing also saves the metric heatmaps and CSV values.
+
+The shared metric API exposes `crps_ens`, `crps_ens_fair`,
+`crps_ens_biased`, `crps_ens_almost_fair` (alpha 0.95), and `spread_squared`.
+Graph-EFM uses the same fair CRPS implementation for its training objective.
+All metrics follow `(B, S, pred_steps, num_grid_nodes, num_state_vars)`,
+preserve gradients and use the shared grid mask and variable reductions.
+`pred_std` is accepted for API compatibility but does not affect these
+sample-based metrics. Fair CRPS and variance require at least two members;
+the general `crps_ens` function warns and falls back to MAE for one member.
+
+For large forecasts, CRPS supports optional chunking without changing its
+value or gradients. Choose `chunk_dim=0` for batches or `chunk_dim=2` for
+forecast steps; `chunk_size=None` (default) disables chunking:
+
+```python
+from neural_lam.metrics import crps_ens
+
+scores = crps_ens(
+    ensemble, target, sum_vars=False, chunk_size=4, chunk_dim=2
+)
+```
 
 ### Persistence
 A trivial baseline model that returns the previous state unchanged at each step (`--model persistence`). Since it has no learnable parameters, it must be evaluated directly without training (e.g. `--eval val` or `--eval test`).
@@ -708,7 +737,7 @@ nn.Module
     ├── GraphLatentDecoder
     └── HiGraphLatentDecoder
 ```
-The `--model` values listed under [Train Models](#train-models) select the step predictor. `GraphEFM` and `GraphEFMMultiScale` are implemented but not yet selectable this way.
+The `--model` values listed under [Train Models](#train-models) select the step predictor. `graph_efm` and `graph_efm_ms` select the Graph-EFM predictors.
 
 The building blocks these are assembled from are also `torch.nn.Module` subclasses:
 ```
