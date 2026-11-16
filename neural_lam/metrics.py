@@ -393,6 +393,102 @@ def crps_gauss(
     )
 
 
+def crps_ens(
+    ensemble: torch.Tensor,
+    target: torch.Tensor,
+    mask: torch.Tensor | None = None,
+    average_grid: bool = True,
+    sum_vars: bool = True,
+    ens_dim: int = 1,
+    estimator: str = "unbiased",
+    afc_alpha: float | None = None,
+) -> torch.Tensor:
+    """Compute ensemble CRPS with empirical, fair or almost-fair estimation.
+
+    Uses sorted ranks to compute the pairwise spread term with memory
+    linear in the number of members, with a direct two-member formula.
+    Gradients are retained for training.
+
+    Parameters
+    ----------
+    ensemble : torch.Tensor
+        Target shape with an additional ensemble dimension of size ``S``
+        at ``ens_dim``, normally ``(B, S, pred_steps, num_grid_nodes,
+        num_state_vars)``. Fair and almost-fair estimation require at least
+        two independent members.
+    target : torch.Tensor
+        Shape ``(..., num_grid_nodes, num_state_vars)``. Ground truth.
+    mask : torch.Tensor or None, optional
+        Shape ``(num_grid_nodes,)``. Boolean mask selecting grid nodes.
+    average_grid : bool, optional
+        Average over selected grid nodes. Default True.
+    sum_vars : bool, optional
+        Sum over state variables. Default True.
+    ens_dim : int, optional
+        Ensemble dimension in ``ensemble``. Default 1.
+    estimator : str, optional
+        "biased" scores the empirical ensemble distribution; "unbiased"
+        (default) estimates the generating distribution's CRPS fairly.
+        "almost-fair" interpolates using afc_alpha.
+    afc_alpha : float or None, optional
+        For almost-fair estimation, a finite value from 0 (biased) to 1
+        (unbiased). Required only for the almost-fair estimator.
+
+    Returns
+    -------
+    torch.Tensor
+        CRPS with the ensemble dimension removed, reduced according to
+        ``mask``, ``average_grid`` and ``sum_vars`` as for ``nll``.
+
+    Raises
+    ------
+    ValueError
+        If the estimator, alpha or number of members is invalid.
+    """
+    if estimator not in {"biased", "unbiased", "almost-fair"}:
+        raise ValueError(f"Unknown CRPS estimator: {estimator}")
+    if estimator == "almost-fair" and (
+        afc_alpha is None or not 0 <= afc_alpha <= 1
+    ):
+        raise ValueError("afc_alpha must be finite and between 0 and 1")
+    num_members = ensemble.shape[ens_dim]
+    if num_members < 1 or (num_members < 2 and estimator != "biased"):
+        raise ValueError("Fair CRPS requires at least two ensemble members")
+    if num_members == 1:
+        return mask_and_reduce_metric(
+            (ensemble.squeeze(ens_dim) - target).abs(),
+            mask=mask,
+            average_grid=average_grid,
+            sum_vars=sum_vars,
+        )
+    first = (ensemble - target.unsqueeze(ens_dim)).abs().mean(dim=ens_dim)
+    if num_members == 2:
+        spread = (
+            ensemble.select(ens_dim, 0) - ensemble.select(ens_dim, 1)
+        ).abs() / 2
+    else:
+        ordered = ensemble.sort(dim=ens_dim).values
+        rank_shape = [1] * ensemble.ndim
+        rank_shape[ens_dim] = num_members
+        ranks = torch.arange(
+            1,
+            num_members + 1,
+            device=ensemble.device,
+            dtype=ensemble.dtype,
+        ).view(rank_shape)
+        spread = ((2 * ranks - num_members - 1) * ordered).sum(dim=ens_dim)
+        spread = spread / (num_members * (num_members - 1))
+    if estimator == "biased":
+        spread = spread * (num_members - 1) / num_members
+    elif estimator == "almost-fair":
+        assert afc_alpha is not None
+        spread = spread * (num_members - 1 + afc_alpha) / num_members
+    entry_crps = first - spread
+    return mask_and_reduce_metric(
+        entry_crps, mask=mask, average_grid=average_grid, sum_vars=sum_vars
+    )
+
+
 def crps_ens_fair(
     ensemble: torch.Tensor,
     target: torch.Tensor,
@@ -404,7 +500,8 @@ def crps_ens_fair(
     """Compute fair CRPS from independent ensemble samples.
 
     Uses sorted ranks to compute the pairwise spread term with memory
-    linear in the number of members. Gradients are retained for training.
+    linear in the number of members, with a direct two-member formula.
+    Gradients are retained for training.
 
     Parameters
     ----------
@@ -434,23 +531,13 @@ def crps_ens_fair(
     ValueError
         If there are fewer than two members.
     """
-    num_members = ensemble.shape[ens_dim]
-    if num_members < 2:
-        raise ValueError("Fair CRPS requires at least two ensemble members")
-    first = (ensemble - target.unsqueeze(ens_dim)).abs().mean(dim=ens_dim)
-    ordered = ensemble.sort(dim=ens_dim).values
-    rank_shape = [1] * ensemble.ndim
-    rank_shape[ens_dim] = num_members
-    ranks = torch.arange(
-        1,
-        num_members + 1,
-        device=ensemble.device,
-        dtype=ensemble.dtype,
-    ).view(rank_shape)
-    spread = ((2 * ranks - num_members - 1) * ordered).sum(dim=ens_dim)
-    entry_crps = first - spread / (num_members * (num_members - 1))
-    return mask_and_reduce_metric(
-        entry_crps, mask=mask, average_grid=average_grid, sum_vars=sum_vars
+    return crps_ens(
+        ensemble,
+        target,
+        mask=mask,
+        average_grid=average_grid,
+        sum_vars=sum_vars,
+        ens_dim=ens_dim,
     )
 
 

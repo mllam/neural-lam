@@ -5,7 +5,7 @@ import pytest
 import torch
 
 # First-party
-from neural_lam.metrics import crps_ens_fair, mask_and_reduce_metric
+from neural_lam.metrics import crps_ens, crps_ens_fair, mask_and_reduce_metric
 
 
 @pytest.mark.parametrize("members", [2, 3, 5])
@@ -60,3 +60,64 @@ def test_fair_crps_retains_gradients():
 def test_fair_crps_rejects_insufficient_members(members):
     with pytest.raises(ValueError, match="at least two"):
         crps_ens_fair(torch.zeros(2, members, 4, 3), torch.zeros(2, 4, 3))
+
+
+@pytest.mark.parametrize("members", [2, 5])
+@pytest.mark.parametrize(
+    "estimator,alpha",
+    [
+        ("biased", None),
+        ("unbiased", None),
+        ("almost-fair", 0.0),
+        ("almost-fair", 0.4),
+        ("almost-fair", 1.0),
+    ],
+)
+def test_general_crps_estimators(members, estimator, alpha):
+    """Every estimator agrees with its pairwise definition and gradients."""
+    torch.manual_seed(8)
+    ensemble = torch.randn(2, members, 3, 2, requires_grad=True)
+    target = torch.randn(2, 3, 2)
+    first = (ensemble - target.unsqueeze(1)).abs().mean(1)
+    pairs = (ensemble.unsqueeze(2) - ensemble.unsqueeze(1)).abs().sum((1, 2))
+    factor = {
+        "biased": 1 / members,
+        "unbiased": 1 / (members - 1),
+        "almost-fair": (members - 1 + (alpha or 0)) / (members * (members - 1)),
+    }[estimator]
+    expected = first - pairs * factor / (2 * members)
+    actual = crps_ens(
+        ensemble,
+        target,
+        average_grid=False,
+        sum_vars=False,
+        estimator=estimator,
+        afc_alpha=alpha,
+    )
+    torch.testing.assert_close(actual, expected)
+    actual.sum().backward()
+    assert torch.isfinite(ensemble.grad).all()
+
+
+@pytest.mark.parametrize("alpha", [None, -1, 2, float("nan"), float("inf")])
+def test_almost_fair_crps_rejects_invalid_alpha(alpha):
+    with pytest.raises(ValueError, match="afc_alpha"):
+        crps_ens(
+            torch.zeros(1, 2, 3, 2),
+            torch.zeros(1, 3, 2),
+            estimator="almost-fair",
+            afc_alpha=alpha,
+        )
+
+
+def test_empirical_crps_single_member_is_mae():
+    ensemble = torch.tensor([[[[1.0, 4.0]]]])
+    target = torch.tensor([[[2.0, 2.0]]])
+    torch.testing.assert_close(
+        crps_ens(ensemble, target, estimator="biased"), torch.tensor([3.0])
+    )
+
+
+def test_unknown_crps_estimator():
+    with pytest.raises(ValueError, match="Unknown CRPS estimator"):
+        crps_ens(torch.zeros(1, 2, 3, 2), torch.zeros(1, 3, 2), estimator="bad")
