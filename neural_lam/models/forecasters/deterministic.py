@@ -291,10 +291,11 @@ class DeterministicARForecaster(BaseDeterministicForecaster):
             The scoring rule (from ``neural_lam.metrics``) applied by
             ``compute_training_loss``.
         gradient_checkpointing : bool, default False
-            If True and in training mode, wrap each predictor call in
-            ``torch.utils.checkpoint`` so its activations are recomputed in
-            the backward pass instead of stored. Lowers peak memory when
-            unrolling more than one step, at the cost of extra compute.
+            If True and in training mode, wrap each predictor call and the
+            static embedding operation in ``torch.utils.checkpoint`` so their
+            activations are recomputed in the backward pass instead of stored.
+            Lowers peak memory when unrolling more than one step, at the cost
+            of extra compute.
         """
         super().__init__(datastore=datastore, config=config, loss=loss)
         self.predictor = predictor

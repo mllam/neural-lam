@@ -1,5 +1,8 @@
 """Auto-regressive unrolling of a step predictor into a full forecast."""
 
+# Standard library
+from typing import Any
+
 # Third-party
 import torch
 import torch.utils.checkpoint
@@ -15,6 +18,7 @@ def unroll_forecast(
     boundary_states: torch.Tensor,
     boundary_mask: torch.Tensor,
     interior_mask: torch.Tensor,
+    static_embeddings: Any | None = None,
     gradient_checkpointing: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor | None]:
     """
@@ -61,11 +65,15 @@ def unroll_forecast(
         Shape ``(1, num_grid_nodes, 1)``. The complement of
         ``boundary_mask``, passed in rather than derived so the buffer the
         forecaster already holds is reused.
+    static_embeddings : Any or None
+        Precomputed static embeddings reused across all autoregressive steps.
+        If ``None``, static features are embedded once via
+        ``predictor.embed_static_features()``.
     gradient_checkpointing : bool, default False
-        If True, wrap each predictor call in ``torch.utils.checkpoint`` so
-        its activations are recomputed in the backward pass instead of stored.
-        Lowers peak memory when unrolling more than one step, at the cost of
-        extra compute.
+        If True, wrap each predictor call and the static embedding operation
+        in ``torch.utils.checkpoint`` so their activations are recomputed in
+        the backward pass instead of stored. Lowers peak memory when unrolling
+        more than one step, at the cost of extra compute.
 
     Returns
     -------
@@ -85,21 +93,46 @@ def unroll_forecast(
     pred_std_list = []
     pred_steps = forcing_features.shape[1]
 
+    # Embed static features once and reuse them in every step
+    if static_embeddings is None:
+        if gradient_checkpointing:
+            static_embeddings = torch.utils.checkpoint.checkpoint(
+                predictor.embed_static_features, use_reentrant=False
+            )
+        else:
+            static_embeddings = predictor.embed_static_features()
+
+    step_kwargs = (
+        {}
+        if static_embeddings is None
+        else {"static_embeddings": static_embeddings}
+    )
+
     for i in range(pred_steps):
         forcing = forcing_features[:, i]
         boundary_state = boundary_states[:, i]
 
         if gradient_checkpointing:
-            pred_state, pred_std = torch.utils.checkpoint.checkpoint(
-                predictor,
-                prev_state,
-                prev_prev_state,
-                forcing,
-                use_reentrant=False,
-            )
+            if static_embeddings is not None:
+                pred_state, pred_std = torch.utils.checkpoint.checkpoint(
+                    predictor,
+                    prev_state,
+                    prev_prev_state,
+                    forcing,
+                    use_reentrant=False,
+                    static_embeddings=static_embeddings,
+                )
+            else:
+                pred_state, pred_std = torch.utils.checkpoint.checkpoint(
+                    predictor,
+                    prev_state,
+                    prev_prev_state,
+                    forcing,
+                    use_reentrant=False,
+                )
         else:
             pred_state, pred_std = predictor(
-                prev_state, prev_prev_state, forcing
+                prev_state, prev_prev_state, forcing, **step_kwargs
             )
 
         new_state = boundary_mask * boundary_state + interior_mask * pred_state
