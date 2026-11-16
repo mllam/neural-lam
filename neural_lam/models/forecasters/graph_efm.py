@@ -1,5 +1,9 @@
 """Probabilistic forecaster training a Graph-EFM predictor via its ELBO."""
 
+# Standard library
+from functools import partial
+from typing import Any
+
 # Third-party
 import torch
 
@@ -9,6 +13,7 @@ from ...config import NeuralLAMConfig
 from ...datastore import BaseDatastore
 from ...loss_weighting import get_per_var_std
 from ..step_predictors.graph.graph_efm import BaseGraphEFM
+from .autoregressive import unroll_forecast
 from .probabilistic import BaseProbabilisticARForecaster
 
 
@@ -234,7 +239,11 @@ class GraphEFMForecaster(BaseProbabilisticARForecaster):
 
         if self.crps_weight > 0:
             ensemble, _ = self.sample_ensemble(
-                init_states, forcing_features, target_states, self.crps_members
+                init_states,
+                forcing_features,
+                target_states,
+                self.crps_members,
+                graph_emb=graph_emb,
             )
             entry_crps = metrics.crps_ens_fair(
                 ensemble,
@@ -247,3 +256,58 @@ class GraphEFMForecaster(BaseProbabilisticARForecaster):
             batch_loss = batch_loss + self.crps_weight * crps
             loss_components["crps"] = crps
         return batch_loss, loss_components
+
+    def sample_ensemble(
+        self,
+        init_states: torch.Tensor,
+        forcing_features: torch.Tensor,
+        boundary_states: torch.Tensor,
+        num_members: int,
+        graph_emb: dict[str, Any] | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+        """Sample independent prior trajectories using one graph embedding.
+
+        Parameters
+        ----------
+        init_states : torch.Tensor
+            Shape (B, 2, num_grid_nodes, num_state_vars). Initial states.
+        forcing_features : torch.Tensor
+            Shape (B, pred_steps, num_grid_nodes, num_windowed_forcing_vars).
+        boundary_states : torch.Tensor
+            Shape (B, pred_steps, num_grid_nodes, num_state_vars). Boundaries.
+        num_members : int
+            Number of independent prior trajectories, at least one.
+        graph_emb : dict[str, Any] or None, optional
+            Static graph embeddings shared with the variational rollout.
+            Computed once for all trajectories when omitted.
+
+        Returns
+        -------
+        ensemble : torch.Tensor
+            Shape (B, num_members, pred_steps, num_grid_nodes, num_state_vars).
+        per_member_std : torch.Tensor or None
+            Conditional observation scales with the same shape, if enabled.
+
+        Raises
+        ------
+        ValueError
+            If num_members is less than one.
+        """
+        if num_members < 1:
+            raise ValueError("num_members must be at least 1")
+        if graph_emb is None:
+            graph_emb = self.predictor.embedd_graph(init_states.shape[0])
+        samples = [
+            unroll_forecast(
+                partial(self.predictor, graph_emb=graph_emb),
+                init_states,
+                forcing_features,
+                boundary_states,
+                self.boundary_mask,
+                self.interior_mask,
+            )
+            for _ in range(num_members)
+        ]
+        ensemble = torch.stack([sample[0] for sample in samples], dim=1)
+        scales = [sample[1] for sample in samples if sample[1] is not None]
+        return ensemble, torch.stack(scales, dim=1) if scales else None

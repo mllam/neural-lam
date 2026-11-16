@@ -1,14 +1,17 @@
 """Auto-regressive unrolling of a step predictor into a full forecast."""
 
+# Standard library
+from collections.abc import Callable
+
 # Third-party
 import torch
 
-# Local
-from ..step_predictors.base import StepPredictor
-
 
 def unroll_forecast(
-    predictor: StepPredictor,
+    predictor: Callable[
+        [torch.Tensor, torch.Tensor, torch.Tensor],
+        tuple[torch.Tensor, torch.Tensor | None],
+    ],
     init_states: torch.Tensor,
     forcing_features: torch.Tensor,
     boundary_states: torch.Tensor,
@@ -29,7 +32,7 @@ def unroll_forecast(
 
     Parameters
     ----------
-    predictor : StepPredictor
+    predictor : callable
         The predictor advancing the state one time step, applied once per
         predicted step. A predictor that samples its output makes each call
         to this function an independent trajectory.

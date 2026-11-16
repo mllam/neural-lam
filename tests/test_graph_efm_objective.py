@@ -25,8 +25,11 @@ class ObjectivePredictor(nn.Module):
         self.log_std = nn.Parameter(torch.tensor(0.0))
         self.states = []
         self.prior_flags = []
+        self.graphs = []
+        self.embedding_calls = 0
 
     def embedd_graph(self, batch_size):
+        self.embedding_calls += 1
         return {}
 
     def posterior_step(
@@ -46,6 +49,12 @@ class ObjectivePredictor(nn.Module):
             posterior,
             self.mean.expand_as(prev),
             self.log_std.exp().expand_as(prev),
+        )
+
+    def forward(self, prev, prev_prev, forcing, graph_emb=None):
+        self.graphs.append(graph_emb)
+        return self.mean + torch.randn_like(prev), self.log_std.exp().expand_as(
+            prev
         )
 
 
@@ -101,7 +110,7 @@ def test_crps_matches_pairwise_fair_estimator(objective, members):
     torch.testing.assert_close(loss, -logs["elbo_likelihood"] + 0.7 * expected)
     assert not any(predictor.prior_flags)
     forecaster.sample_ensemble.assert_called_once_with(
-        init, forcing, target, members
+        init, forcing, target, members, graph_emb={}
     )
     loss.backward()
     assert ensemble.grad.abs().sum() > 0
@@ -170,3 +179,25 @@ def test_probabilistic_yaml_round_trip():
         eval_ensemble_size=6,
     )
     assert NeuralLAMConfig.from_yaml(config.to_yaml()) == config
+
+
+def test_crps_reuses_graph_across_independent_prior_trajectories(objective):
+    """Training embeds once for both variational and all prior rollouts."""
+    forecaster, predictor, mask, init, forcing, target = objective
+    forecaster.crps_weight = 1
+    forecaster.crps_members = 3
+    loss, _ = forecaster.compute_training_loss(init, forcing, target, mask)
+    assert predictor.embedding_calls == 1
+    assert len(predictor.graphs) == 3 * forcing.shape[1]
+    assert all(graph is predictor.graphs[0] for graph in predictor.graphs)
+    loss.backward()
+    assert predictor.mean.grad.abs() > 0
+
+
+def test_prior_ensemble_caches_embeddings_without_caching_samples(objective):
+    """Evaluation also shares embeddings while drawing distinct members."""
+    forecaster, predictor, mask, init, forcing, target = objective
+    ensemble, _ = forecaster.sample_ensemble(init, forcing, target, 2)
+    assert predictor.embedding_calls == 1
+    assert not torch.equal(ensemble[:, 0, :, mask], ensemble[:, 1, :, mask])
+    torch.testing.assert_close(ensemble[:, 0, :, ~mask], target[:, :, ~mask])
