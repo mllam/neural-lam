@@ -123,6 +123,41 @@ def test_unknown_crps_estimator():
         crps_ens(torch.zeros(1, 2, 3, 2), torch.zeros(1, 3, 2), estimator="bad")
 
 
+@pytest.mark.parametrize(
+    "metric_name,kwargs",
+    [
+        ("crps_ens_fair", {"estimator": "unbiased"}),
+        ("crps_ens_biased", {"estimator": "biased"}),
+        (
+            "crps_ens_almost_fair",
+            {"estimator": "almost-fair", "afc_alpha": 0.95},
+        ),
+    ],
+)
+def test_registered_crps_variants_follow_shared_metric_api(metric_name, kwargs):
+    # First-party
+    from neural_lam.metrics import (
+        get_metric,
+        requires_ensemble,
+        requires_pred_std,
+    )
+
+    ensemble = torch.tensor([[[[0.0, 1.0]], [[2.0, 4.0]], [[6.0, 9.0]]]])
+    target = torch.tensor([[[1.0, 3.0]]])
+    metric = get_metric(metric_name)
+    assert requires_ensemble(metric)
+    assert not requires_pred_std(metric)
+    torch.testing.assert_close(
+        metric(
+            pred=ensemble,
+            target=target,
+            pred_std=torch.tensor([0.1, 2.0]),
+            sum_vars=False,
+        ),
+        crps_ens(ensemble, target, sum_vars=False, **kwargs),
+    )
+
+
 @pytest.mark.parametrize("sum_vars", [False, True])
 @pytest.mark.parametrize("estimator", ["unbiased", "biased", "almost-fair"])
 def test_single_member_crps_warns_and_preserves_mask_and_variables(
@@ -145,3 +180,16 @@ def test_single_member_crps_warns_and_preserves_mask_and_variables(
         (ensemble[:, 0] - target).abs(), mask, True, sum_vars
     )
     torch.testing.assert_close(actual, expected)
+
+
+def test_deterministic_forecaster_rejects_ensemble_loss():
+    # First-party
+    from neural_lam.models import DeterministicARForecaster
+    from tests.dummy_datastore import DummyDatastore
+
+    with pytest.raises(ValueError, match="requires ensemble predictions"):
+        DeterministicARForecaster(
+            torch.nn.Identity(),
+            DummyDatastore(n_grid_points=25),
+            loss="crps_ens",
+        )

@@ -10,6 +10,7 @@ from neural_lam.metrics import (
     mae,
     mse,
     nll,
+    requires_ensemble,
     requires_pred_std,
     wmae,
     wmse,
@@ -94,6 +95,8 @@ def test_pred_std_requirement_matches_declaration(metric_name):
     metric = get_metric(metric_name)
     pred, target = _single_residual_case()
 
+    if requires_ensemble(metric):
+        pred = pred.unsqueeze(1).expand(-1, 2, -1, -1, -1)
     if requires_pred_std(metric):
         with pytest.raises(TypeError, match="pred_std"):
             metric(pred, target)

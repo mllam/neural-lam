@@ -4,6 +4,7 @@
 import inspect
 import warnings
 from collections.abc import Callable
+from functools import partial
 
 # Third-party
 import torch
@@ -395,7 +396,7 @@ def crps_gauss(
 
 
 def crps_ens(
-    ensemble: torch.Tensor,
+    pred: torch.Tensor,
     target: torch.Tensor,
     pred_std: torch.Tensor | None = None,
     mask: torch.Tensor | None = None,
@@ -409,15 +410,16 @@ def crps_ens(
 
     Uses sorted ranks to compute the pairwise spread term with memory
     linear in the number of members, with a direct two-member formula.
-    Gradients are retained for training.
+    Gradients are retained for training. The almost-fair variant follows
+    Lang et al. (2024), AIFS: https://arxiv.org/abs/2412.15832.
 
     Parameters
     ----------
-    ensemble : torch.Tensor
+    pred : torch.Tensor
         Target shape with an additional ensemble dimension of size ``S``
         at ``ens_dim``, normally ``(B, S, pred_steps, num_grid_nodes,
         num_state_vars)``. Fair and almost-fair estimation require at least
-        two independent members.
+        two independent members. A single member warns and returns MAE.
     target : torch.Tensor
         Shape ``(..., num_grid_nodes, num_state_vars)``. Ground truth.
     pred_std : torch.Tensor or None, optional
@@ -429,7 +431,7 @@ def crps_ens(
     sum_vars : bool, optional
         Sum over state variables. Default True.
     ens_dim : int, optional
-        Ensemble dimension in ``ensemble``. Default 1.
+        Ensemble dimension in ``pred``. Default 1.
     estimator : str, optional
         "biased" scores the empirical ensemble distribution; "unbiased"
         (default) estimates the generating distribution's CRPS fairly.
@@ -437,7 +439,6 @@ def crps_ens(
     afc_alpha : float or None, optional
         For almost-fair estimation, a finite value from 0 (biased) to 1
         (unbiased). Required only for the almost-fair estimator.
-
     Returns
     -------
     torch.Tensor
@@ -447,7 +448,7 @@ def crps_ens(
     Raises
     ------
     ValueError
-        If the estimator, alpha or number of members is invalid.
+        If the estimator, alpha, ensemble layout are invalid.
     """
     if estimator not in {"biased", "unbiased", "almost-fair"}:
         raise ValueError(f"Unknown CRPS estimator: {estimator}")
@@ -455,7 +456,16 @@ def crps_ens(
         afc_alpha is None or not 0 <= afc_alpha <= 1
     ):
         raise ValueError("afc_alpha must be finite and between 0 and 1")
-    num_members = ensemble.shape[ens_dim]
+    if pred.ndim != target.ndim + 1:
+        raise ValueError("CRPS predictions require an extra ensemble dimension")
+    if not -pred.ndim <= ens_dim < pred.ndim:
+        raise ValueError("ens_dim is outside the prediction dimensions")
+    ens_dim %= pred.ndim
+    if pred.shape[:ens_dim] + pred.shape[ens_dim + 1 :] != target.shape:
+        raise ValueError(
+            "CRPS target shape must match predictions without ens_dim"
+        )
+    num_members = pred.shape[ens_dim]
     if num_members < 1:
         raise ValueError("CRPS requires at least one ensemble member")
     if num_members == 1:
@@ -464,25 +474,23 @@ def crps_ens(
             stacklevel=2,
         )
         return mask_and_reduce_metric(
-            (ensemble.squeeze(ens_dim) - target).abs(),
+            (pred.squeeze(ens_dim) - target).abs(),
             mask=mask,
             average_grid=average_grid,
             sum_vars=sum_vars,
         )
-    first = (ensemble - target.unsqueeze(ens_dim)).abs().mean(dim=ens_dim)
+    first = (pred - target.unsqueeze(ens_dim)).abs().mean(dim=ens_dim)
     if num_members == 2:
-        spread = (
-            ensemble.select(ens_dim, 0) - ensemble.select(ens_dim, 1)
-        ).abs() / 2
+        spread = (pred.select(ens_dim, 0) - pred.select(ens_dim, 1)).abs() / 2
     else:
-        ordered = ensemble.sort(dim=ens_dim).values
-        rank_shape = [1] * ensemble.ndim
+        ordered = pred.sort(dim=ens_dim).values
+        rank_shape = [1] * pred.ndim
         rank_shape[ens_dim] = num_members
         ranks = torch.arange(
             1,
             num_members + 1,
-            device=ensemble.device,
-            dtype=ensemble.dtype,
+            device=pred.device,
+            dtype=pred.dtype,
         ).view(rank_shape)
         spread = ((2 * ranks - num_members - 1) * ordered).sum(dim=ens_dim)
         spread = spread / (num_members * (num_members - 1))
@@ -498,7 +506,7 @@ def crps_ens(
 
 
 def crps_ens_fair(
-    ensemble: torch.Tensor,
+    pred: torch.Tensor,
     target: torch.Tensor,
     pred_std: torch.Tensor | None = None,
     mask: torch.Tensor | None = None,
@@ -514,7 +522,7 @@ def crps_ens_fair(
 
     Parameters
     ----------
-    ensemble : torch.Tensor
+    pred : torch.Tensor
         Target shape with an additional ensemble dimension of size ``S``
         at ``ens_dim``, normally ``(B, S, pred_steps, num_grid_nodes,
         num_state_vars)``. At least two independent members are required.
@@ -529,7 +537,7 @@ def crps_ens_fair(
     sum_vars : bool, optional
         Sum over state variables. Default True.
     ens_dim : int, optional
-        Ensemble dimension in ``ensemble``. Default 1.
+        Ensemble dimension in ``pred``. Default 1.
 
     Returns
     -------
@@ -542,16 +550,29 @@ def crps_ens_fair(
     ValueError
         If there are fewer than two members.
     """
-    if ensemble.shape[ens_dim] < 2:
+    if pred.shape[ens_dim] < 2:
         raise ValueError("Fair CRPS requires at least two ensemble members")
     return crps_ens(
-        ensemble,
+        pred,
         target,
         mask=mask,
         average_grid=average_grid,
         sum_vars=sum_vars,
         ens_dim=ens_dim,
     )
+
+
+crps_ens_biased = partial(crps_ens, estimator="biased")
+crps_ens_almost_fair = partial(
+    crps_ens, estimator="almost-fair", afc_alpha=0.95
+)
+
+ENSEMBLE_METRICS: dict[str, Callable[..., torch.Tensor]] = {
+    "crps_ens": crps_ens,
+    "crps_ens_fair": crps_ens_fair,
+    "crps_ens_biased": crps_ens_biased,
+    "crps_ens_almost_fair": crps_ens_almost_fair,
+}
 
 
 DEFINED_METRICS: dict[str, Callable[..., torch.Tensor]] = {
@@ -561,6 +582,7 @@ DEFINED_METRICS: dict[str, Callable[..., torch.Tensor]] = {
     "wmae": wmae,
     "nll": nll,
     "crps_gauss": crps_gauss,
+    **ENSEMBLE_METRICS,
 }
 
 
@@ -586,3 +608,20 @@ def requires_pred_std(metric: Callable[..., torch.Tensor]) -> bool:
     """
     pred_std_param = inspect.signature(metric).parameters["pred_std"]
     return pred_std_param.default is inspect.Parameter.empty
+
+
+def requires_ensemble(metric: Callable[..., torch.Tensor]) -> bool:
+    """Return whether a registered metric scores an ensemble of forecasts.
+
+    Parameters
+    ----------
+    metric : callable
+        A function returned by get_metric.
+
+    Returns
+    -------
+    bool
+        True for registered ensemble metrics, which require predictions
+        with shape (B, S, pred_steps, num_grid_nodes, num_state_vars).
+    """
+    return metric in ENSEMBLE_METRICS.values()
