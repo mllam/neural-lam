@@ -179,3 +179,42 @@ def test_graph_efm_training_strategy(
         )
         == expected
     )
+
+
+def test_graph_efm_cli_options_and_checkpoint_overrides():
+    """Stage changes override saved weights, including explicit zeros."""
+    # First-party
+    from neural_lam.train_model import build_parser, resolve_graph_efm_args
+
+    parser = build_parser()
+    saved = parser.parse_args(
+        [
+            "--config_path",
+            "unused.yaml",
+            "--latent_dim",
+            "8",
+            "--kl_beta",
+            "1",
+            "--crps_weight",
+            "0.2",
+            "--no-learn_prior",
+        ]
+    )
+    current = parser.parse_args(
+        [
+            "--config_path",
+            "unused.yaml",
+            "--kl_beta",
+            "0",
+            "--crps_weight",
+            "0",
+            "--learn_prior",
+        ]
+    )
+    resolved = resolve_graph_efm_args(current, saved)
+    assert resolved.latent_dim == 8
+    assert resolved.kl_beta == 0
+    assert resolved.crps_weight == 0
+    assert resolved.learn_prior is True
+    assert resolved.crps_members == 2
+    assert current.latent_dim is None

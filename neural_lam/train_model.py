@@ -882,7 +882,16 @@ def fit(
     # Build predictor and forecaster externally, then inject into
     # DeterministicForecastingModule
     predictor_class = MODELS[model_config.model]
-    if issubclass(predictor_class, (GraphEFM, GraphEFMMultiScale)):
+    if train_config.load and issubclass(
+        predictor_class, (GraphEFM, GraphEFMMultiScale)
+    ):
+        saved_args = (
+            torch.load(train_config.load, weights_only=False)
+            .get("hyper_parameters", {})
+            .get("args")
+        )
+        hparams = resolve_graph_efm_args(hparams, saved_args)
+    elif issubclass(predictor_class, (GraphEFM, GraphEFMMultiScale)):
         hparams = resolve_graph_efm_args(hparams)
     predictor = build_predictor(predictor_class, hparams, config, datastore)
 

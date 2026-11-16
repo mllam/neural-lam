@@ -831,3 +831,96 @@ def cli_graph_efm_checkpoint(request, tmp_path_factory):
     checkpoint = tmp_path_factory.mktemp(f"cli_{model_name}") / "source.ckpt"
     trainer.save_checkpoint(checkpoint)
     return datastore, config, checkpoint, model_name, graph_name
+
+
+@pytest.mark.requires_training
+@pytest.mark.parametrize(
+    "mode,kl_beta,crps_weight",
+    [("test", None, None), (None, 1.0, 0.1), (None, 0.0, 0.0)],
+)
+def test_cli_restores_probabilistic_checkpoint_settings(
+    cli_graph_efm_checkpoint,
+    mode,
+    kl_beta,
+    crps_weight,
+    monkeypatch,
+    tmp_path,
+):
+    """CLI evaluation and resume build models with checkpoint architecture."""
+    # Standard library
+    from unittest.mock import Mock
+
+    # First-party
+    from neural_lam import train_model
+
+    datastore, saved_config, checkpoint, model_name, graph_name = (
+        cli_graph_efm_checkpoint
+    )
+    caller_config = nlconfig.NeuralLAMConfig(datastores=saved_config.datastores)
+    config_path = tmp_path / "experiment.yaml"
+    config_path.write_text(caller_config.to_yaml())
+
+    real_trainer = train_model.pl.Trainer
+    trainers = []
+
+    def build_test_trainer(**kwargs):
+        trainer = real_trainer(
+            **kwargs,
+            limit_train_batches=1,
+            limit_val_batches=1,
+            limit_test_batches=1,
+            enable_progress_bar=False,
+            enable_model_summary=False,
+        )
+        trainers.append(trainer)
+        return trainer
+
+    warning = Mock()
+    monkeypatch.setattr(train_model.pl, "Trainer", build_test_trainer)
+    monkeypatch.setattr(train_model.logger, "warning", warning)
+    (tmp_path / "loaded").mkdir()
+    result = train_model.fit(
+        model_config=nlconfig.ModelConfig(
+            model=model_name,
+            graph=graph_name,
+            hidden_dim=4,
+        ),
+        train_config=nlconfig.TrainRunConfig(
+            epochs=2,
+            batch_size=2,
+            ar_steps_train=1,
+            ar_steps_eval=1,
+            val_steps_to_log=[1],
+            num_sanity_val_steps=0,
+            eval=mode,
+            load=str(checkpoint),
+            kl_beta=kl_beta,
+            crps_weight=crps_weight,
+        ),
+        data_config=nlconfig.DataConfig(num_workers=0),
+        compute_config=nlconfig.ComputeConfig(devices=1),
+        logging_config=nlconfig.LoggingConfig(
+            runs_root=str(tmp_path), logger_run_name="loaded"
+        ),
+        config=caller_config,
+        datastore=datastore,
+        config_path=str(config_path),
+    )
+    evaluated = trainers[0].lightning_module
+    assert evaluated.forecaster.predictor.latent_dim == 8
+    assert evaluated.forecaster.kl_beta == (0 if kl_beta is None else kl_beta)
+    assert evaluated.forecaster.crps_weight == (
+        0 if crps_weight is None else crps_weight
+    )
+    assert evaluated.eval_ensemble_size == 2
+    assert evaluated.hparams.args.latent_dim == 8
+    assert result.checkpoint_path is not None
+    warning.assert_not_called()
+    if mode == "test":
+        source_weights = torch.load(checkpoint, weights_only=False)[
+            "state_dict"
+        ]
+        for name, value in evaluated.state_dict().items():
+            torch.testing.assert_close(value, source_weights[name])
+    else:
+        assert trainers[0].global_step > 1
