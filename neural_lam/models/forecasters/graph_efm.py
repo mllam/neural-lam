@@ -19,20 +19,14 @@ class GraphEFMForecaster(BaseProbabilisticARForecaster):
     Wraps a :class:`BaseGraphEFM` predictor (hierarchical ``GraphEFM`` or
     flat ``GraphEFMMultiScale``), a latent-variable model consisting of a
     conditional prior, a variational encoder and a latent decoder. Forecast
-    sampling (``forward``, ``sample_ensemble``) is inherited from
-    :class:`BaseProbabilisticARForecaster`: each predictor call samples the
-    prior and decodes, so unrolling produces one stochastic trajectory and
-    stacking several gives an ensemble.
+    sampling draws from the latent prior and decodes each step. Unrolling
+    produces one stochastic trajectory; stacking independent trajectories
+    gives an ensemble. Static graph embeddings are shared across members.
 
-    This class supplies the training objective the base class leaves
-    abstract: the evidence lower bound (ELBO). ``compute_training_loss``
-    runs a variational rollout in which, at each step, the latent is drawn
-    from the encoder (conditioned on the target), and accumulates a
-    reconstruction likelihood term and a KL term between the encoder and the
-    prior. The Gaussian likelihood, the constant per-variable std
-    fallback ``self.per_var_std`` and the boundary/interior masks all live
-    on the forecaster; the predictor only
-    provides the network building blocks.
+    ``compute_training_loss`` runs a variational rollout with latents drawn
+    from the target-conditioned encoder, accumulating a reconstruction
+    likelihood and KL term against the prior. Optional fair CRPS uses at
+    least two separate trajectories sampled from the prior.
     """
 
     def __init__(
