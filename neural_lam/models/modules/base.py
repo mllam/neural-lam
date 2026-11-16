@@ -134,9 +134,10 @@ class BaseForecastingModule(pl.LightningModule, ABC):
             ``var_leads_metrics_watch``) so legacy checkpoints round-trip
             through ``load_from_checkpoint`` correctly.
         pretrained_components : list of str, optional
-            Dotted paths of components to initialize from the checkpoint being
-            loaded. This transient setting only acts when passed explicitly;
-            it is not restored from the saved ``args`` namespace.
+            Nested module paths, such as ``forecaster.predictor.processor``,
+            to initialize from the checkpoint being loaded. This transient
+            setting only acts when passed explicitly; it is not restored from
+            the saved ``args`` namespace.
         allow_missing_compatibility_metadata : bool, default False
             Whether selective initialization may proceed when a checkpoint
             predates compatibility metadata. Known mismatches remain errors.
@@ -374,12 +375,13 @@ class BaseForecastingModule(pl.LightningModule, ABC):
     def _validate_component_paths(
         components: Sequence[str],
     ) -> tuple[str, ...]:
-        """Validate and normalize dotted component paths.
+        """Validate and normalize nested component paths.
 
         Parameters
         ----------
         components : sequence of str
-            Dotted paths relative to the forecasting module.
+            Period-separated paths relative to the forecasting module, such as
+            ``forecaster.predictor.processor``.
 
         Returns
         -------
@@ -440,7 +442,7 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         Parameters
         ----------
         components : sequence of str
-            Dotted module paths relative to this forecasting module.
+            Period-separated module paths relative to this forecasting module.
 
         Raises
         ------
@@ -563,7 +565,7 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         Returns
         -------
         dict of str to dict of str to str
-            Metadata keyed by dotted module path.
+            Metadata keyed by nested module path.
         """
         metadata = {}
         for path, module in self.named_modules():

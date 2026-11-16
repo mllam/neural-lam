@@ -288,13 +288,15 @@ def build_parser() -> ArgumentParser:
         "--pretrained_components",
         nargs="+",
         default=[],
-        help="Dotted module paths to initialize from --pretrained_checkpoint",
+        help="Nested module paths (for example, "
+        "forecaster.predictor.processor) to initialize from "
+        "--pretrained_checkpoint",
     )
     runtime_group.add_argument(
         "--freeze_components",
         nargs="+",
         default=[],
-        help="Dotted module paths whose parameters should be frozen",
+        help="Nested module paths whose parameters should be frozen",
     )
     runtime_group.add_argument(
         "--allow_missing_compatibility_metadata",

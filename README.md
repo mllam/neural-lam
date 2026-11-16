@@ -519,9 +519,12 @@ Checkpoints of trained models are stored under `runs/<run-name>/checkpoints/`, a
 ### Transfer learning
 
 Selected model components can initialize a fresh training run from a trusted
-Lightning checkpoint. Components are identified by their dotted module paths;
-for example, this transfers GraphLAM's processor and mesh embedders while
-leaving dataset-dependent input and output layers newly initialized:
+Lightning checkpoint. A dotted module path identifies a nested module by
+joining its attribute names with periods. For example,
+`forecaster.predictor.processor` means the `processor` module inside
+`predictor`, which is inside `forecaster`. This command transfers GraphLAM's
+processor and mesh embedders while leaving dataset-dependent input and output
+layers newly initialized:
 
 ```bash
 python -m neural_lam.train_model \

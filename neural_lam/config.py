@@ -354,9 +354,10 @@ class TrainRunConfig:
     pretrained_checkpoint : str or None, default None
         Checkpoint used to initialize selected components for a fresh run.
     pretrained_components : list of str, default []
-        Dotted module paths to initialize from ``pretrained_checkpoint``.
+        Nested module paths, such as ``forecaster.predictor.processor``, to
+        initialize from ``pretrained_checkpoint``.
     freeze_components : list of str, default []
-        Dotted module paths to freeze during training.
+        Nested module paths whose parameters should be frozen during training.
     allow_missing_compatibility_metadata : bool, default False
         Whether selective initialization may use a legacy checkpoint without
         compatibility metadata.

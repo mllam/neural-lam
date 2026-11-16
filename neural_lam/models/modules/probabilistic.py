@@ -101,9 +101,10 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
             Pre-refactor ``ARModel`` checkpoint hyperparameters; see
             ``BaseForecastingModule.__init__``.
         pretrained_components : list of str, optional
-            Dotted paths of components to initialize from the checkpoint being
-            loaded. This transient setting only acts when passed explicitly;
-            it is not restored from the saved ``args`` namespace.
+            Nested module paths, such as ``forecaster.predictor.processor``,
+            to initialize from the checkpoint being loaded. This transient
+            setting only acts when passed explicitly; it is not restored from
+            the saved ``args`` namespace.
         allow_missing_compatibility_metadata : bool, default False
             Whether selective initialization may proceed when a checkpoint
             predates compatibility metadata. Known mismatches remain errors.

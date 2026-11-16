@@ -38,7 +38,9 @@ python -m neural_lam.train_model --config_path <path-to-config> --model graph_la
 Neural-LAM supports several models like `graph_lam`, `hi_lam`, and `hi_lam_parallel`.
 
 To start fresh training from selected components of a trusted checkpoint, use
-`--pretrained_checkpoint` together with one or more dotted module paths:
+`--pretrained_checkpoint` with nested module paths such as
+`forecaster.predictor.processor` (the `processor` inside `predictor`, inside
+`forecaster`):
 
 ```{code-block} bash
 python -m neural_lam.train_model --config_path <path-to-config> --model graph_lam --graph <graph-name> --pretrained_checkpoint <checkpoint-path> --pretrained_components forecaster.predictor.processor

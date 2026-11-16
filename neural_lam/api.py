@@ -102,9 +102,10 @@ def train(
     pretrained_checkpoint : str or None, optional
         Checkpoint used to initialize selected components for fresh training.
     pretrained_components : list of str or None, optional
-        Dotted module paths to initialize from ``pretrained_checkpoint``.
+        Nested module paths, such as ``forecaster.predictor.processor``, to
+        initialize from ``pretrained_checkpoint``.
     freeze_components : list of str or None, optional
-        Dotted module paths whose parameters should remain frozen.
+        Nested module paths whose parameters should remain frozen.
     allow_missing_compatibility_metadata : bool, default False
         Allow a legacy pretrained checkpoint without compatibility metadata.
         The caller then assumes responsibility for graph compatibility.
