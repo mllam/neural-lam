@@ -193,3 +193,59 @@ def test_deterministic_forecaster_rejects_ensemble_loss():
             DummyDatastore(n_grid_points=25),
             loss="crps_ens",
         )
+
+
+@pytest.mark.parametrize("members", [2, 5, 12])
+@pytest.mark.parametrize("chunk_dim", [0, 2, -2])
+@pytest.mark.parametrize(
+    "estimator,alpha",
+    [("unbiased", None), ("biased", None), ("almost-fair", 0.95)],
+)
+def test_chunked_crps_matches_values_and_gradients(
+    members, chunk_dim, estimator, alpha
+):
+    torch.manual_seed(12)
+    ensemble = torch.randn(
+        3, members, 4, 5, 2, dtype=torch.float64, requires_grad=True
+    )
+    target = torch.randn(3, 4, 5, 2, dtype=torch.float64)
+    mask = torch.tensor([True, False, True, False, True])
+    kwargs = dict(
+        mask=mask,
+        average_grid=True,
+        sum_vars=False,
+        estimator=estimator,
+        afc_alpha=alpha,
+    )
+    expected = crps_ens(ensemble, target, **kwargs)
+    actual = crps_ens(
+        ensemble, target, chunk_size=2, chunk_dim=chunk_dim, **kwargs
+    )
+    torch.testing.assert_close(actual, expected)
+    expected_grad = torch.autograd.grad(expected.sum(), ensemble)[0]
+    actual_grad = torch.autograd.grad(actual.sum(), ensemble)[0]
+    torch.testing.assert_close(actual_grad, expected_grad)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"chunk_size": 0},
+        {"chunk_size": -1},
+        {"chunk_size": 1, "chunk_dim": 1},
+        {"chunk_size": 1, "chunk_dim": 5},
+    ],
+)
+def test_crps_rejects_invalid_chunks(kwargs):
+    with pytest.raises(ValueError, match="chunk_"):
+        crps_ens(torch.zeros(2, 3, 4, 5, 2), torch.zeros(2, 4, 5, 2), **kwargs)
+
+
+def test_fair_crps_chunking_supports_reordered_ensemble_axis():
+    ensemble = torch.randn(3, 2, 4, 5, 2)
+    target = torch.randn(2, 4, 5, 2)
+    expected = crps_ens_fair(ensemble, target, ens_dim=0)
+    actual = crps_ens_fair(
+        ensemble, target, ens_dim=0, chunk_size=2, chunk_dim=2
+    )
+    torch.testing.assert_close(actual, expected)

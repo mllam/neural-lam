@@ -405,6 +405,9 @@ def crps_ens(
     ens_dim: int = 1,
     estimator: str = "unbiased",
     afc_alpha: float | None = None,
+    *,
+    chunk_size: int | None = None,
+    chunk_dim: int = 0,
 ) -> torch.Tensor:
     """Compute ensemble CRPS with empirical, fair or almost-fair estimation.
 
@@ -439,6 +442,15 @@ def crps_ens(
     afc_alpha : float or None, optional
         For almost-fair estimation, a finite value from 0 (biased) to 1
         (unbiased). Required only for the almost-fair estimator.
+    chunk_size : int or None, optional
+        Maximum entries along chunk_dim per scoring call. None disables
+        chunking. Smaller chunks reduce peak temporary memory; gradients
+        remain available to callers using CRPS for training.
+    chunk_dim : int, optional
+        Dimension in pred to chunk, excluding ens_dim. Defaults to
+        batch dimension 0; use 2 for forecast steps in (B, S, T, N, F).
+        Negative dimension indices are supported.
+
     Returns
     -------
     torch.Tensor
@@ -448,7 +460,7 @@ def crps_ens(
     Raises
     ------
     ValueError
-        If the estimator, alpha, ensemble layout are invalid.
+        If the estimator, alpha, ensemble layout or chunk settings are invalid.
     """
     if estimator not in {"biased", "unbiased", "almost-fair"}:
         raise ValueError(f"Unknown CRPS estimator: {estimator}")
@@ -464,6 +476,34 @@ def crps_ens(
     if pred.shape[:ens_dim] + pred.shape[ens_dim + 1 :] != target.shape:
         raise ValueError(
             "CRPS target shape must match predictions without ens_dim"
+        )
+    if chunk_size is not None:
+        if chunk_size < 1:
+            raise ValueError("chunk_size must be positive")
+        if not -pred.ndim <= chunk_dim < pred.ndim:
+            raise ValueError("chunk_dim is outside the prediction dimensions")
+        chunk_dim %= pred.ndim
+        if chunk_dim == ens_dim:
+            raise ValueError("chunk_dim must differ from ens_dim")
+        target_dim = chunk_dim - int(chunk_dim > ens_dim)
+        entries = [
+            crps_ens(
+                member_chunk,
+                target_chunk,
+                average_grid=False,
+                sum_vars=False,
+                ens_dim=ens_dim,
+                estimator=estimator,
+                afc_alpha=afc_alpha,
+            )
+            for member_chunk, target_chunk in zip(
+                pred.split(chunk_size, dim=chunk_dim),
+                target.split(chunk_size, dim=target_dim),
+                strict=True,
+            )
+        ]
+        return mask_and_reduce_metric(
+            torch.cat(entries, dim=target_dim), mask, average_grid, sum_vars
         )
     num_members = pred.shape[ens_dim]
     if num_members < 1:
@@ -513,6 +553,9 @@ def crps_ens_fair(
     average_grid: bool = True,
     sum_vars: bool = True,
     ens_dim: int = 1,
+    *,
+    chunk_size: int | None = None,
+    chunk_dim: int = 0,
 ) -> torch.Tensor:
     """Compute fair CRPS from independent ensemble samples.
 
@@ -539,6 +582,15 @@ def crps_ens_fair(
     ens_dim : int, optional
         Ensemble dimension in ``pred``. Default 1.
 
+    chunk_size : int or None, optional
+        Maximum entries along chunk_dim per scoring call. None disables
+        chunking. Smaller chunks reduce peak temporary memory; gradients
+        remain available to callers using CRPS for training.
+    chunk_dim : int, optional
+        Dimension in pred to chunk, excluding ens_dim. Defaults to
+        batch dimension 0; use 2 for forecast steps in (B, S, T, N, F).
+        Negative dimension indices are supported.
+
     Returns
     -------
     torch.Tensor
@@ -559,6 +611,8 @@ def crps_ens_fair(
         average_grid=average_grid,
         sum_vars=sum_vars,
         ens_dim=ens_dim,
+        chunk_size=chunk_size,
+        chunk_dim=chunk_dim,
     )
 
 
