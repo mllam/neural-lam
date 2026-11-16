@@ -437,7 +437,7 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         return paths
 
     def freeze_components(self, components: Sequence[str]) -> None:
-        """Disable gradient updates for complete model components.
+        """Disable gradient updates recursively for complete model components.
 
         Parameters
         ----------
@@ -562,6 +562,8 @@ class BaseForecastingModule(pl.LightningModule, ABC):
     ) -> dict[str, dict[str, str]]:
         """Collect compatibility metadata exposed by nested model components.
 
+        Components opt in by defining ``get_pretrained_compatibility_metadata``.
+
         Returns
         -------
         dict of str to dict of str to str
@@ -583,7 +585,9 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         self,
         checkpoint: dict[str, Any],
     ) -> None:
-        """Validate checkpoint metadata against the current target model.
+        """Require checkpoint metadata to exactly match the target model.
+
+        The legacy override permits missing metadata, not known mismatches.
 
         Parameters
         ----------
@@ -1306,7 +1310,10 @@ class BaseForecastingModule(pl.LightningModule, ABC):
     def on_load_checkpoint(self, checkpoint: dict[str, Any]) -> None:
         """
         Perform actions when loading a checkpoint.
-        Handles backward compatibility for older checkpoints.
+
+        Migrates older state keys. During selective initialization, it also
+        validates compatibility and merges selected source components into the
+        otherwise freshly initialized target state.
 
         Parameters
         ----------

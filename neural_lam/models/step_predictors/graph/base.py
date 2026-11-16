@@ -195,7 +195,10 @@ class BaseGraphModel(StepPredictor):
 
     @cached_property
     def _graph_compatibility_fingerprint(self) -> str:
-        """Compute and cache an exact graph fingerprint."""
+        """Hash and cache the registered graph tensors and grid-node count.
+
+        The cache assumes these tensors remain immutable model structure.
+        """
         fingerprint = hashlib.sha256()
         fingerprint.update(f"num_grid_nodes:{self.num_grid_nodes}".encode())
         for attribute_name in self._GRAPH_COMPATIBILITY_ATTRIBUTES:
@@ -215,6 +218,9 @@ class BaseGraphModel(StepPredictor):
 
     def get_pretrained_compatibility_metadata(self) -> dict[str, str]:
         """Return the cached fingerprint of graph structure and features.
+
+        Forecasting modules use this extension point when saving and validating
+        checkpoints for selective initialization.
 
         Returns
         -------
