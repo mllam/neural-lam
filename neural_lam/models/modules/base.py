@@ -472,6 +472,9 @@ class BaseForecastingModule(pl.LightningModule, ABC):
     ) -> dict[str, Any]:
         """Merge selected checkpoint components into fresh target state.
 
+        All selected components are validated before any source values are
+        applied to the returned state.
+
         Parameters
         ----------
         source_state : dict of str to Any
@@ -560,14 +563,16 @@ class BaseForecastingModule(pl.LightningModule, ABC):
     def _get_pretrained_compatibility_metadata(
         self,
     ) -> dict[str, dict[str, str]]:
-        """Collect compatibility metadata exposed by nested model components.
+        """Collect versioned compatibility claims from nested components.
 
         Components opt in by defining ``get_pretrained_compatibility_metadata``.
+        Results are keyed by module path so each claim retains its owner.
 
         Returns
         -------
         dict of str to dict of str to str
-            Metadata keyed by nested module path.
+            Provider metadata keyed by nested module path. Inner keys identify
+            the provider's compatibility schema version.
         """
         metadata = {}
         for path, module in self.named_modules():
@@ -585,9 +590,10 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         self,
         checkpoint: dict[str, Any],
     ) -> None:
-        """Require checkpoint metadata to exactly match the target model.
+        """Compare checkpoint compatibility claims with the target model.
 
-        The legacy override permits missing metadata, not known mismatches.
+        Present source metadata must exactly equal all claims exposed by the
+        target. The explicit override permits absent source metadata only.
 
         Parameters
         ----------
@@ -627,7 +633,10 @@ class BaseForecastingModule(pl.LightningModule, ABC):
             )
 
     def on_save_checkpoint(self, checkpoint: dict[str, Any]) -> None:
-        """Store component compatibility metadata in a Lightning checkpoint.
+        """Store component compatibility claims in a Lightning checkpoint.
+
+        Empty provider results are omitted; all other results are stored under
+        ``PRETRAINED_COMPATIBILITY_KEY`` by nested module path.
 
         Parameters
         ----------
@@ -1309,11 +1318,12 @@ class BaseForecastingModule(pl.LightningModule, ABC):
 
     def on_load_checkpoint(self, checkpoint: dict[str, Any]) -> None:
         """
-        Perform actions when loading a checkpoint.
+        Prepare checkpoint state for Lightning's strict model-state load.
 
-        Migrates older state keys. During selective initialization, it also
-        validates compatibility and merges selected source components into the
-        otherwise freshly initialized target state.
+        This first applies supported state-key migrations. During selective
+        initialization, it then validates compatibility and replaces the
+        checkpoint state with a complete fresh target state containing only
+        the selected source component values.
 
         Parameters
         ----------

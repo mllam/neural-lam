@@ -197,7 +197,9 @@ class BaseGraphModel(StepPredictor):
     def _graph_compatibility_fingerprint(self) -> str:
         """Hash and cache the registered graph tensors and grid-node count.
 
-        The cache assumes these tensors remain immutable model structure.
+        Tensor attribute names, collection positions, dtypes, shapes, and
+        contiguous CPU bytes contribute to the hash. The cache assumes these
+        tensors remain immutable model structure.
         """
         fingerprint = hashlib.sha256()
         fingerprint.update(f"num_grid_nodes:{self.num_grid_nodes}".encode())
@@ -217,10 +219,10 @@ class BaseGraphModel(StepPredictor):
         return fingerprint.hexdigest()
 
     def get_pretrained_compatibility_metadata(self) -> dict[str, str]:
-        """Return the cached fingerprint of graph structure and features.
+        """Expose graph compatibility claims for selective initialization.
 
-        Forecasting modules use this extension point when saving and validating
-        checkpoints for selective initialization.
+        The versioned key identifies how the fingerprint was constructed so a
+        future schema can coexist with or replace ``graph_v1`` explicitly.
 
         Returns
         -------
