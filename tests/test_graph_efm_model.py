@@ -4,7 +4,7 @@ Exercises the pieces that turn the Graph-EFM single-step predictors into a
 trainable model: the ``GraphEFMForecaster`` ELBO objective, its inherited
 ensemble sampling, the ``ProbabilisticForecastingModule`` wrapping, and the
 config-aware assembly path in ``train_model`` (``build_predictor`` /
-``build_forecaster_module``). Predictors are built on the real example
+``build_forecaster``). Predictors are built on the real example
 datastore with a freshly created graph, mirroring
 ``tests/test_graph_efm_predictor.py``.
 """
@@ -26,7 +26,7 @@ from neural_lam.models import (
     GraphEFMMultiScale,
     ProbabilisticForecastingModule,
 )
-from neural_lam.train_model import build_forecaster_module, build_predictor
+from neural_lam.train_model import build_forecaster, build_predictor
 from tests.conftest import init_datastore_example
 
 pytestmark = pytest.mark.requires_real_data
@@ -448,7 +448,7 @@ def test_train_model_assembly_selects_probabilistic_path(
     assert isinstance(predictor, predictor_class)
     assert predictor.latent_dim == 4
 
-    forecaster, module_class, module_kwargs = build_forecaster_module(
+    forecaster, module_class, module_kwargs = build_forecaster(
         args, config, datastore, predictor
     )
     assert isinstance(forecaster, GraphEFMForecaster)
@@ -498,7 +498,7 @@ def test_training_checkpoint_round_trip(graph_name, output_std, tmp_path):
         config,
         datastore,
     )
-    forecaster, module_class, module_kwargs = build_forecaster_module(
+    forecaster, module_class, module_kwargs = build_forecaster(
         args,
         config,
         datastore,
@@ -799,7 +799,7 @@ def cli_graph_efm_checkpoint(request, tmp_path_factory):
     predictor = build_predictor(
         train_model.MODELS[model_name], args, config, datastore
     )
-    forecaster, module_class, module_kwargs = build_forecaster_module(
+    forecaster, module_class, module_kwargs = build_forecaster(
         args,
         config,
         datastore,

@@ -144,43 +144,6 @@ def test_invalid_objective_settings(kwargs):
         )
 
 
-
-
-@pytest.mark.parametrize(
-    "devices,num_nodes,distributed",
-    [
-        (1, 1, False),
-        ([0], 1, False),
-        (2, 1, True),
-        ([0, 1], 1, True),
-        (1, 2, True),
-        ("auto", 1, True),
-    ],
-)
-@pytest.mark.parametrize("kl_beta", [0, 1])
-def test_graph_efm_training_strategy(
-    objective, monkeypatch, devices, num_nodes, distributed, kl_beta
-):
-    """Unused-parameter detection is confined to distributed warm-up."""
-    # First-party
-    from neural_lam.utils import training_strategy
-
-    monkeypatch.setattr(torch.cuda, "device_count", lambda: 2)
-    forecaster = objective[0]
-    forecaster.kl_beta = kl_beta
-    expected = (
-        "ddp_find_unused_parameters_true"
-        if distributed and kl_beta == 0
-        else "auto"
-    )
-    assert (
-        training_strategy(
-            devices, num_nodes, find_unused_parameters=forecaster.kl_beta == 0
-        )
-        == expected
-    )
-
-
 def test_graph_efm_cli_options_and_checkpoint_overrides():
     """Stage changes override saved weights, including explicit zeros."""
     # First-party
@@ -218,3 +181,60 @@ def test_graph_efm_cli_options_and_checkpoint_overrides():
     assert resolved.learn_prior is True
     assert resolved.crps_members == 2
     assert current.latent_dim is None
+
+
+@pytest.mark.parametrize(
+    "devices,num_nodes,distributed",
+    [
+        (1, 1, False),
+        ([0], 1, False),
+        (2, 1, True),
+        ([0, 1], 1, True),
+        (1, 2, True),
+        ("auto", 1, True),
+    ],
+)
+@pytest.mark.parametrize("kl_beta", [0, 1])
+def test_graph_efm_training_strategy(
+    objective, monkeypatch, devices, num_nodes, distributed, kl_beta
+):
+    """Unused-parameter detection is confined to distributed warm-up."""
+    # First-party
+    from neural_lam.utils import training_strategy
+
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 2)
+    forecaster = objective[0]
+    forecaster.kl_beta = kl_beta
+    expected = (
+        "ddp_find_unused_parameters_true"
+        if distributed and kl_beta == 0
+        else "auto"
+    )
+    assert (
+        training_strategy(
+            devices, num_nodes, find_unused_parameters=forecaster.kl_beta == 0
+        )
+        == expected
+    )
+
+
+def test_crps_reuses_graph_across_independent_prior_trajectories(objective):
+    """Training embeds once for both variational and all prior rollouts."""
+    forecaster, predictor, mask, init, forcing, target = objective
+    forecaster.crps_weight = 1
+    forecaster.crps_members = 3
+    loss, _ = forecaster.compute_training_loss(init, forcing, target, mask)
+    assert predictor.embedding_calls == 1
+    assert len(predictor.graphs) == 3 * forcing.shape[1]
+    assert all(graph is predictor.graphs[0] for graph in predictor.graphs)
+    loss.backward()
+    assert predictor.mean.grad.abs() > 0
+
+
+def test_prior_ensemble_caches_embeddings_without_caching_samples(objective):
+    """Evaluation also shares embeddings while drawing distinct members."""
+    forecaster, predictor, mask, init, forcing, target = objective
+    ensemble, _ = forecaster.sample_ensemble(init, forcing, target, 2)
+    assert predictor.embedding_calls == 1
+    assert not torch.equal(ensemble[:, 0, :, mask], ensemble[:, 1, :, mask])
+    torch.testing.assert_close(ensemble[:, 0, :, ~mask], target[:, :, ~mask])

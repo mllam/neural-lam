@@ -223,7 +223,7 @@ def build_predictor(
     return predictor_class(**kwargs)
 
 
-def build_forecaster_module(
+def build_forecaster(
     args: Namespace,
     config: NeuralLAMConfig,
     datastore: BaseDatastore,
@@ -373,7 +373,7 @@ def load_forecasting_module_from_checkpoint(
     if is_graph_efm:
         args = resolve_graph_efm_args(args)
     predictor = build_predictor(predictor_class, args, config, datastore)
-    forecaster, module_class, _ = build_forecaster_module(
+    forecaster, module_class, _ = build_forecaster(
         args, config, datastore, predictor
     )
     return module_class.load_from_checkpoint(
@@ -929,7 +929,7 @@ def fit(
             f"The {model_config.model} model cannot be trained. Run with "
             "--eval <val/test> to evaluate a baseline."
         )
-    forecaster, module_class, module_kwargs = build_forecaster_module(
+    forecaster, module_class, module_kwargs = build_forecaster(
         hparams, config, datastore, predictor
     )
 
