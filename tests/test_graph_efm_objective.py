@@ -105,7 +105,7 @@ def test_crps_matches_pairwise_fair_estimator(objective, members):
     first = (ensemble - target.unsqueeze(1)).abs().mean(1)
     pairwise = (ensemble.unsqueeze(2) - ensemble.unsqueeze(1)).abs().sum((1, 2))
     expected = first - pairwise / (2 * members * (members - 1))
-    expected = expected[:, :, mask].sum((1, 2, 3)).mean()
+    expected = expected[:, :, mask].sum(-1).mean()
     torch.testing.assert_close(logs["crps"], expected)
     torch.testing.assert_close(loss, -logs["elbo_likelihood"] + 0.7 * expected)
     assert not any(predictor.prior_flags)

@@ -109,10 +109,10 @@ class GraphEFMForecaster(BaseProbabilisticARForecaster):
         the rollout and averaged over the batch; the loss is
         ``-likelihood + kl_beta * kl + crps_weight * crps``.
         Fair CRPS uses at least two additional prior trajectories, independent
-        of the variational posterior rollout. It is
-        summed over interior nodes, variables and time, like the likelihood,
-        and averaged over the batch. The rollout advances on the
-        predicted mean with boundary nodes overwritten by the true state.
+        of the variational posterior rollout. It sums variables and averages
+        over interior grid nodes, forecast steps and batch. The variational
+        rollout advances on the predicted mean with boundary nodes
+        overwritten by the true state.
 
         Parameters
         ----------
@@ -249,10 +249,10 @@ class GraphEFMForecaster(BaseProbabilisticARForecaster):
                 ensemble,
                 target_states,
                 mask=interior_mask_bool,
-                average_grid=False,
-                sum_vars=False,
+                average_grid=True,
+                sum_vars=True,
             )
-            crps = entry_crps.sum(dim=(1, 2, 3)).mean()
+            crps = entry_crps.mean()
             batch_loss = batch_loss + self.crps_weight * crps
             loss_components["crps"] = crps
         return batch_loss, loss_components
