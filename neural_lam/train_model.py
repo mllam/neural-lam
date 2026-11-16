@@ -96,6 +96,73 @@ class Run:
         return self.plot_dir / f"example_plots_{example_i}"
 
 
+def build_graph_efm_predictor(
+    predictor_class: type,
+    args: Namespace,
+    config: NeuralLAMConfig,
+    datastore: BaseDatastore,
+) -> Any:
+    """Instantiate a Graph-EFM predictor from CLI architecture options.
+
+    Parameters
+    ----------
+    predictor_class : type
+        Hierarchical or multiscale Graph-EFM predictor class.
+    args : Namespace
+        Architecture and forcing-window options.
+    config : NeuralLAMConfig
+        Output clamping configuration.
+    datastore : BaseDatastore
+        Graph features and standardization statistics.
+
+    Returns
+    -------
+    BaseGraphEFM
+        Configured Graph-EFM predictor.
+    """
+    defaults = ModelConfig()
+    ignored = {
+        name: getattr(defaults, name)
+        for name in (
+            "processor_layers",
+            "mesh_aggr",
+            "mesh_up_gnn_type",
+            "mesh_down_gnn_type",
+        )
+    }
+    ignored["loss"] = TrainRunConfig().loss
+    for name, default in ignored.items():
+        if getattr(args, name, default) != default:
+            logger.warning(
+                "--{} has no effect for Graph-EFM; use the "
+                "Graph-EFM CLI options instead.",
+                name,
+            )
+    prob = resolve_graph_efm_args(args)
+    prefix = "intra_level" if issubclass(predictor_class, GraphEFM) else "m2m"
+    layers = {
+        f"{part}_{prefix}_layers": getattr(prob, f"{part}_layers")
+        for part in ("prior", "encoder", "decoder")
+    }
+    return predictor_class(
+        datastore=datastore,
+        graph_name=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        latent_dim=prob.latent_dim,
+        learn_prior=prob.learn_prior,
+        prior_dist=prob.prior_dist,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        output_std=args.output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+        g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
+        m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
+        **layers,
+    )
+
+
 def build_predictor(
     predictor_class: type,
     args: Namespace,
@@ -128,46 +195,8 @@ def build_predictor(
         Predictor configured for its graph family.
     """
     if issubclass(predictor_class, (GraphEFM, GraphEFMMultiScale)):
-        defaults = ModelConfig()
-        ignored = {
-            name: getattr(defaults, name)
-            for name in (
-                "processor_layers",
-                "mesh_aggr",
-                "mesh_up_gnn_type",
-                "mesh_down_gnn_type",
-            )
-        }
-        ignored["loss"] = TrainRunConfig().loss
-        for name, default in ignored.items():
-            if getattr(args, name, default) != default:
-                logger.warning(
-                    "--{} has no effect for Graph-EFM; use the "
-                    "Graph-EFM CLI options instead.",
-                    name,
-                )
-        prob = resolve_graph_efm_args(args)
-        prefix = "intra_level" if issubclass(predictor_class, GraphEFM) else "m2m"
-        layers = {
-            f"{part}_{prefix}_layers": getattr(prob, f"{part}_layers")
-            for part in ("prior", "encoder", "decoder")
-        }
-        return predictor_class(
-            datastore=datastore,
-            graph_name=args.graph,
-            hidden_dim=args.hidden_dim,
-            hidden_layers=args.hidden_layers,
-            latent_dim=prob.latent_dim,
-            learn_prior=prob.learn_prior,
-            prior_dist=prob.prior_dist,
-            num_past_forcing_steps=args.num_past_forcing_steps,
-            num_future_forcing_steps=args.num_future_forcing_steps,
-            output_std=args.output_std,
-            output_clamping_lower=config.training.output_clamping.lower,
-            output_clamping_upper=config.training.output_clamping.upper,
-            g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
-            m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
-            **layers,
+        return build_graph_efm_predictor(
+            predictor_class, args, config, datastore
         )
     kwargs = dict(
         datastore=datastore,
