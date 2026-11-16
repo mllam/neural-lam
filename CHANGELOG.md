@@ -9,11 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Cache static mesh and edge feature embeddings across autoregressive rollout steps in `ARForecaster` for `GraphLAM` and hierarchical graph models [\#817](https://github.com/mllam/neural-lam/pull/817) @Sharkyii
+- Cache static mesh and edge feature embeddings across autoregressive rollout steps in `DeterministicARForecaster` for `GraphLAM` and hierarchical graph models [\#817](https://github.com/mllam/neural-lam/pull/817) @Sharkyii
 
 - Add deterministic and probabilistic forecaster/module interfaces with
   shared autoregressive unrolling and forecaster-owned training objectives.
   [\#700](https://github.com/mllam/neural-lam/pull/700) @Sir-Sloth-The-Lazy
+
+- Add `--gradient_checkpointing` flag for autoregressive rollout gradient checkpointing in `DeterministicARForecaster`, reducing peak activation memory during training unrolls [\#807](https://github.com/mllam/neural-lam/pull/807) @Sharkyii
 
 - Add the `hello_world_danra.py` marimo tutorial (prepare the DANRA example data, build a graph, train and evaluate `graph_lam` on CPU, all through `neural_lam.api`), executed at docs build time so the docs page shows its outputs; `train_model` now exits non-zero on errors (`@logger.catch(reraise=True)`) [\#577](https://github.com/mllam/neural-lam/pull/577) @Sharkyii
 
@@ -66,6 +68,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `requires_real_data` and `requires_training` pytest markers (the latter replaces `slow`), an automatic `quick` marker for tests needing neither, and build the dummy graph once in the plotting tests, so `pytest -m quick` gives a fast check; import mlflow lazily in `CustomMLFlowLogger` so plain `import neural_lam` no longer loads it. [\#750](https://github.com/mllam/neural-lam/pull/750) @KumarShivam1908
 
 - Modernize linting and formatting toolchain by migrating `black`/`isort`/`flake8` to Ruff (with `ANN` rules enforcing type annotation coverage in `neural_lam/`) and adding `pyproject-fmt`, `python-check-blanket-noqa`, and `no-commit-to-branch` pre-commit hooks [\#614](https://github.com/mllam/neural-lam/pull/614) @Shivampal157
+
+- Restructure the README as a concise front door with links into the docs, and move its detailed guides (install options, datastores, graph creation, training and evaluation, logging) into the docs site [\#808](https://github.com/mllam/neural-lam/pull/808) @tyrobro
 
 - Rename remaining non-canonical dimension names (`d_*`, `N_*`, `M_*`) in shape annotations and docstrings to Dimension Glossary names [\#825](https://github.com/mllam/neural-lam/pull/825) @Omega-127
 

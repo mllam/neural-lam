@@ -72,7 +72,8 @@ def unroll_forecast(
     gradient_checkpointing : bool, default False
         If True, wrap each predictor call and the static embedding operation
         in ``torch.utils.checkpoint`` so their activations are recomputed in
-        the backward pass instead of stored.
+        the backward pass instead of stored. Lowers peak memory when unrolling
+        more than one step, at the cost of extra compute.
 
     Returns
     -------

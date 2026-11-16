@@ -328,10 +328,6 @@ class BaseGraphModel(StepPredictor):
             grid_features
         )  # (B, num_grid_nodes, hidden_dim)
 
-        grid_emb = self.grid_embedder(
-            grid_features
-        )  # (B, num_grid_nodes, hidden_dim)
-
         if static_embeddings is None:
             static_embeddings = self.embed_static_features()
 
