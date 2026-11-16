@@ -1,13 +1,26 @@
 # Neural-LAM
 
-Neural-LAM is a PyTorch and PyTorch Lightning framework for high-resolution weather prediction using Graph Neural Networks. It provides a modular approach to Limited Area Modeling, supporting multiple graph-based architectures such as GraphLAM, HiLAM, and HiLAMParallel to process and predict meteorological data efficiently.
+Neural-LAM is a PyTorch and PyTorch Lightning framework for high-resolution weather prediction using Graph Neural Networks.
+It provides a modular approach to Limited Area Modeling, supporting multiple graph-based architectures such as GraphLAM, HiLAM, and HiLAMParallel to process and predict meteorological data efficiently.
 
 ```{toctree}
 :maxdepth: 2
+:caption: Getting Started
 :hidden:
 
 getting-started/installation
 getting-started/quickstart
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: User Guide
+:hidden:
+
+user-guide/datastores
+user-guide/graphs
+user-guide/training
+user-guide/logging
 ```
 
 ```{toctree}
@@ -29,6 +42,7 @@ graph_storage_spec
 ```
 
 - **[🚀 Getting Started](getting-started/installation.md)**: Installation guide and quickstart tutorial to get you up and running.
+- **📖 User Guide**: [Configuration and datastores](user-guide/datastores.md), [graph creation](user-guide/graphs.md), [training and evaluation](user-guide/training.md), [experiment logging](user-guide/logging.md).
 - **{doc}`📚 API Reference <api/index>`**: Auto-generated reference for all modules, classes, and functions.
 
 ## Key Features
