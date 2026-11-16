@@ -201,3 +201,38 @@ def test_prior_ensemble_caches_embeddings_without_caching_samples(objective):
     assert predictor.embedding_calls == 1
     assert not torch.equal(ensemble[:, 0, :, mask], ensemble[:, 1, :, mask])
     torch.testing.assert_close(ensemble[:, 0, :, ~mask], target[:, :, ~mask])
+
+
+@pytest.mark.parametrize(
+    "devices,num_nodes,distributed",
+    [
+        (1, 1, False),
+        ([0], 1, False),
+        (2, 1, True),
+        ([0, 1], 1, True),
+        (1, 2, True),
+        ("auto", 1, True),
+    ],
+)
+@pytest.mark.parametrize("kl_beta", [0, 1])
+def test_graph_efm_training_strategy(
+    objective, monkeypatch, devices, num_nodes, distributed, kl_beta
+):
+    """Unused-parameter detection is confined to distributed warm-up."""
+    # First-party
+    from neural_lam.utils import training_strategy
+
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 2)
+    forecaster = objective[0]
+    forecaster.kl_beta = kl_beta
+    expected = (
+        "ddp_find_unused_parameters_true"
+        if distributed and kl_beta == 0
+        else "auto"
+    )
+    assert (
+        training_strategy(
+            devices, num_nodes, find_unused_parameters=forecaster.kl_beta == 0
+        )
+        == expected
+    )

@@ -932,7 +932,10 @@ def fit(
         strategy=utils.training_strategy(
             devices,
             compute_config.num_nodes,
-            find_unused_parameters=isinstance(forecaster, GraphEFMForecaster),
+            find_unused_parameters=(
+                isinstance(forecaster, GraphEFMForecaster)
+                and forecaster.kl_beta == 0
+            ),
         ),
         accelerator=device_name,
         num_nodes=compute_config.num_nodes,
