@@ -176,7 +176,7 @@ class GraphEFMForecaster(BaseProbabilisticARForecaster):
 
             # Posterior latent (conditioned on target), reconstruction, and
             # -- when a KL term is needed -- the prior, in one predictor call.
-            prior_dist, posterior_dist, pred_mean, pred_std = (
+            prior_dist, var_posterior_dist, pred_mean, pred_std = (
                 predictor.posterior_step(
                     prev_state,
                     prev_prev_state,
@@ -209,7 +209,7 @@ class GraphEFMForecaster(BaseProbabilisticARForecaster):
                 kl_terms.append(
                     torch.sum(
                         torch.distributions.kl_divergence(
-                            posterior_dist, prior_dist
+                            var_posterior_dist, prior_dist
                         ),
                         dim=(1, 2),
                     )

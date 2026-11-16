@@ -443,7 +443,7 @@ class BaseGraphEFM(StepPredictor):
         torch.Tensor,
         torch.Tensor | None,
     ]:
-        """Sample a training step from the target-conditioned posterior.
+        """Sample a training step from the variational posterior approximation.
 
         Parameters
         ----------
@@ -465,8 +465,8 @@ class BaseGraphEFM(StepPredictor):
         -------
         prior : torch.distributions.Normal or None
             Conditional prior, omitted when ``compute_prior`` is False.
-        posterior : torch.distributions.Normal
-            Target-conditioned latent distribution.
+        var_posterior : torch.distributions.Normal
+            Target-conditioned variational approximation given by the encoder.
         prediction : torch.Tensor
             Shape as ``prev_state``. Rescaled and clamped decoder mean.
         pred_std : torch.Tensor or None
@@ -479,16 +479,16 @@ class BaseGraphEFM(StepPredictor):
             prev_state, prev_prev_state, forcing, target_state
         )
         assert isinstance(self.encoder, torch.nn.Module)
-        posterior = self.encoder(target_emb, graph_emb=graph_emb)
+        var_posterior = self.encoder(target_emb, graph_emb=graph_emb)
         prior = (
             self.prior_model(grid_emb, graph_emb=graph_emb)
             if compute_prior
             else None
         )
         mean, std = self.decode_state(
-            grid_emb, posterior.rsample(), graph_emb, prev_state
+            grid_emb, var_posterior.rsample(), graph_emb, prev_state
         )
-        return prior, posterior, mean, std
+        return prior, var_posterior, mean, std
 
     def decode_state(
         self,
