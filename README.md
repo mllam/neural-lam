@@ -64,47 +64,6 @@ Still, some restrictions are inevitable:
 </p>
 
 
-## Graph-EFM ensemble forecasting
-
-Use `--model graph_efm` with a hierarchical graph, or `--model graph_efm_ms`
-with a flat multiscale graph. Both train with a target-conditioned Gaussian
-negative ELBO and sample forecasts from the latent prior at evaluation time.
-The `--loss` option selects the deterministic models' objective; Graph-EFM
-always uses a Gaussian likelihood, including its log-standard-deviation term.
-Without `--output_std`, observation scales come from the datastore's one-step
-difference statistics and configured feature weights.
-
-When loading a checkpoint for evaluation or resumed training, its saved
-probabilistic settings take precedence over the current YAML section.
-
-Add this optional section alongside `datastores` in the experiment YAML:
-
-```yaml
-probabilistic:
-  latent_dim: 64
-  prior_layers: 2
-  encoder_layers: 2
-  decoder_layers: 4
-  learn_prior: true
-  prior_dist: isotropic
-  kl_beta: 1.0
-  crps_weight: 0.0
-  crps_members: 2
-  eval_ensemble_size: 5
-```
-
-Omit `latent_dim` to use `--hidden_dim`. Layer counts control same-level message
-passing for hierarchical graphs and mesh processing for flat graphs.
-A positive `crps_weight` adds fair sample CRPS from `crps_members` independent
-prior trajectories (at least two), separately from the posterior ELBO rollout.
-Both objectives sum over forecast steps and state variables; likelihood and
-CRPS use interior grid nodes, while KL sums over latent mesh nodes.
-Setting `kl_beta: 0` skips the prior in the posterior rollout; CRPS, when enabled,
-still trains the prior. Validation and testing use `eval_ensemble_size` members
-and report ensemble-mean RMSE; validation checkpoints monitor `val_mean_loss`,
-the same objective used for training. Ensemble plotting and further ensemble
-verification metrics are separate follow-ups.
-
 # Installing Neural-LAM
 
 When installing `neural-lam` you have a choice of either installing directly with `pip` or using the `uv` package manager.
@@ -589,6 +548,72 @@ To train Hi-LAM-Parallel use
 ```
 python -m neural_lam.train_model --model hi_lam_parallel --graph hierarchical ...
 ```
+
+### Graph-EFM
+
+Graph-EFM is a latent-variable ensemble forecasting model that generates
+spatially coherent weather scenarios with one network pass per forecast step.
+Use `--model graph_efm --graph hierarchical` for a hierarchical mesh or
+`--model graph_efm_ms --graph multiscale` for a flat multiscale mesh.
+The [Graph-EFM paper](https://arxiv.org/abs/2406.04759) describes the model
+and its staged training procedure.
+
+The variational objective combines a Gaussian reconstruction likelihood with
+`--kl_beta` times the KL divergence between the target-conditioned variational
+encoder and latent prior. `--loss` applies to deterministic models;
+Graph-EFM always uses Gaussian negative log likelihood. Use `--output_std`
+to learn observation scales; otherwise they come from one-step difference
+statistics and configured feature weights.
+
+Graph-EFM options are CLI arguments:
+
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `--latent_dim` | `--hidden_dim` | Latent size at each latent mesh node |
+| `--prior_layers` | 2 | Prior mesh depth |
+| `--encoder_layers` | 2 | Variational encoder mesh depth |
+| `--decoder_layers` | 4 | Decoder mesh depth |
+| `--learn_prior` / `--no-learn_prior` | learned | Learned or standard normal prior |
+| `--prior_dist` | isotropic | Isotropic or diagonal prior covariance |
+| `--kl_beta` | 1.0 | KL weight; zero skips the prior in the variational rollout |
+| `--crps_weight` | 0.0 | Fair CRPS weight; zero disables extra rollouts |
+| `--crps_members` | 2 | Independent prior trajectories for fair CRPS (at least two) |
+| `--eval_ensemble_size` | 5 | Members sampled during validation and testing |
+
+Fair CRPS uses separate prior trajectories, independent of the variational
+rollout. It sums over variables and averages over interior grid nodes,
+forecast steps and batch. The likelihood sums over interior grid nodes,
+variables and forecast steps; KL sums over latent mesh nodes and steps.
+Both variational terms are averaged over the batch.
+
+A starting curriculum is the hierarchical MEPS schedule from
+[Table 13 of the paper](https://arxiv.org/html/2406.04759v2#A9.T13):
+
+| Stage | Epochs in stage | Learning rate | Rollout steps | KL weight | CRPS weight |
+| --- | --- | --- | --- | --- | --- |
+| Autoencoder warm-up | 300 | 1e-3 | 1 | 0 | 0 |
+| Learn prior | 100 | 1e-3 | 1 | 1 | 0 |
+| Longer rollouts | 200 | 5e-4 | 4 | 1 | 0 |
+| Calibrate ensembles | 50 | 5e-4 | 4 | 1 | 1e6 |
+| Extend lead time | 100 | 5e-4 | 6 | 1 | 1e6 |
+
+Tune these weights for your dataset and observation scales. To change stage,
+load the previous checkpoint and set the new objective and rollout options:
+
+```bash
+python -m neural_lam.train_model --config_path <config> \
+  --model graph_efm --graph hierarchical --load <warmup.ckpt> \
+  --kl_beta 1 --crps_weight 0 --ar_steps_train 1 --lr 1e-3 --epochs 400
+```
+
+Unspecified Graph-EFM options inherit saved checkpoint arguments; explicit
+values, including zero, override them. Keep architecture options consistent
+with the checkpoint. Lightning resumes the epoch counter, so `--epochs` is
+the cumulative target (400 after the first two stages above).
+Omit `--restore_opt` to reset the optimizer and apply the new learning rate;
+include it to resume optimizer state within a stage. Validation checkpoints
+monitor `val_mean_loss`, the training objective; evaluation reports
+ensemble-mean RMSE.
 
 ### Persistence
 A trivial baseline model that returns the previous state unchanged at each step (`--model persistence`). Since it has no learnable parameters, it must be evaluated directly without training (e.g. `--eval val` or `--eval test`).
