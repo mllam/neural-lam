@@ -249,3 +249,54 @@ def test_fair_crps_chunking_supports_reordered_ensemble_axis():
         ensemble, target, ens_dim=0, chunk_size=2, chunk_dim=2
     )
     torch.testing.assert_close(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "average_grid,sum_vars",
+    [(False, False), (True, False), (False, True), (True, True)],
+)
+@pytest.mark.parametrize("ens_dim", [0, 1, -4])
+def test_spread_squared_matches_unbiased_variance(
+    average_grid, sum_vars, ens_dim
+):
+    # First-party
+    from neural_lam.metrics import get_metric, spread_squared
+
+    torch.manual_seed(10)
+    ensemble = torch.randn(2, 4, 3, 5, 2, requires_grad=True)
+    target = torch.zeros(2, 3, 5, 2)
+    mask = torch.tensor([True, False, True, False, True])
+    expected = mask_and_reduce_metric(
+        ensemble.var(1), mask, average_grid, sum_vars
+    )
+    actual = get_metric("spread_squared")(
+        ensemble.movedim(1, ens_dim),
+        target,
+        torch.tensor([0.1, 200.0]),
+        mask=mask,
+        average_grid=average_grid,
+        sum_vars=sum_vars,
+        ens_dim=ens_dim,
+    )
+    torch.testing.assert_close(actual, expected)
+    actual.sum().backward()
+    assert torch.isfinite(ensemble.grad).all()
+    assert ensemble.grad.abs().sum() > 0
+    assert get_metric("spread_squared") is spread_squared
+
+
+@pytest.mark.parametrize("members", [0, 1])
+def test_spread_squared_requires_multiple_members(members):
+    # First-party
+    from neural_lam.metrics import spread_squared
+
+    with pytest.raises(ValueError, match="at least two"):
+        spread_squared(
+            torch.zeros(2, members, 3, 5, 2), torch.zeros(2, 3, 5, 2)
+        )
+
+
+@pytest.mark.parametrize("kwargs", [{}, {"ens_dim": 5}])
+def test_crps_rejects_invalid_ensemble_layout(kwargs):
+    with pytest.raises(ValueError, match="ens_dim|ensemble dimension"):
+        crps_ens(torch.zeros(2, 3, 4, 5, 2), torch.zeros(2, 3, 4, 2), **kwargs)
