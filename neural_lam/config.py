@@ -86,6 +86,13 @@ class PressureLevelWeighting:
     levels for atmospheric variables, with optional explicit weights for
     other (e.g. surface) features.
 
+    Weights for each vertical variable are normalized across levels to sum to
+    1.0, while ``other_weights`` retain their explicit values. Consequently,
+    the total sum of all feature weights equals the number of atmospheric
+    variables plus the sum of ``other_weights``, which scales overall loss
+    and gradient magnitudes relative to ``UniformFeatureWeighting`` (where
+    total weight sums to 1.0).
+
     Attributes
     ----------
     variables : list[str]

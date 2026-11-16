@@ -205,6 +205,20 @@ training:
       10v: 0.1
       msl: 0.1
 ```
+
+   > **Note on loss and gradient scale:**
+   > Under `PressureLevelWeighting`, vertical weights for each atmospheric
+   > variable are normalized across levels to sum to 1.0, while
+   > `other_weights` retain their explicit values. Consequently, the total
+   > sum of all feature weights equals the number of atmospheric variables
+   > plus the sum of `other_weights` (for example, $6 \times 1.0 + 1.3 = 7.3$
+   > in the configuration above, compared to $1.0$ for
+   > `UniformFeatureWeighting`). Because loss and gradient magnitudes scale
+   > proportionally with the sum of weights, switching from uniform to
+   > pressure-level weighting changes the effective loss scale. Users
+   > should account for this when tuning learning rates or comparing loss
+   > values.
+
 3. Valid numerical range for output of each feature. The numerical range of all features default to $]-\infty, \infty[$.
 
 (This example is taken from the

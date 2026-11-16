@@ -96,6 +96,13 @@ def get_pressure_level_state_feature_weights(
     weighted proportionally to pressure levels and other features assigned
     explicit manual weights.
 
+    Weights for each vertical variable are normalized across levels to sum to
+    1.0, while ``other_weights`` retain their explicit values. Consequently,
+    the total sum of all feature weights equals the number of atmospheric
+    variables plus the sum of ``other_weights``, which scales overall loss
+    and gradient magnitudes relative to ``UniformFeatureWeighting`` (where
+    total weight sums to 1.0).
+
     Parameters
     ----------
     weighting_config : PressureLevelWeighting
