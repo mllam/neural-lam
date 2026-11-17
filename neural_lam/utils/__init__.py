@@ -2,6 +2,7 @@
 
 # Local
 from .buffer_list import BufferList
+from .forecast import create_forecast_dataset
 from .graph import (
     compute_grid_input_dim,
     load_and_register_graph,
@@ -29,6 +30,7 @@ __all__ = [
     "BufferList",
     "apply_time_crop",
     "compute_grid_input_dim",
+    "create_forecast_dataset",
     "fractional_plot_bundle",
     "get_integer_time",
     "get_time_crop_slice",
