@@ -58,7 +58,9 @@ def zero_index_m2g(
     restore : bool
         If True, undo zero-indexing (restore original indices).
     num_grid_nodes : int, optional
-        The true number of grid nodes in the datastore.
+        Total number of grid nodes, used to offset mesh node indices when
+        grid nodes are indexed before mesh nodes in the legacy graph format.
+        If None, this is estimated from the edge index.
 
     Returns
     -------
@@ -81,15 +83,15 @@ def zero_index_m2g(
             dim=0,
         )
     else:
-        if num_grid_nodes is not None:
-            num_interior_nodes = num_grid_nodes
-        elif m2g_edge_index.numel() > 0:
-            num_interior_nodes = int(m2g_edge_index[1].max().item() + 1)
-        else:
-            num_interior_nodes = 0
+        if num_grid_nodes is None:
+            num_grid_nodes = (
+                int(m2g_edge_index[1].max().item() + 1)
+                if m2g_edge_index.numel() > 0
+                else 0
+            )
         return torch.stack(
             (
-                m2g_edge_index[0] + sign * num_interior_nodes,
+                m2g_edge_index[0] + sign * num_grid_nodes,
                 m2g_edge_index[1],
             ),
             dim=0,
@@ -119,7 +121,9 @@ def zero_index_g2m(
     restore : bool
         If True, undo zero-indexing (restore original indices).
     num_grid_nodes : int, optional
-        The true number of grid nodes in the datastore.
+        Total number of grid nodes, used to offset mesh node indices when
+        grid nodes are indexed before mesh nodes in the legacy graph format.
+        If None, this is estimated from the edge index.
 
     Returns
     -------
@@ -143,16 +147,16 @@ def zero_index_g2m(
         )
     else:
         # Grid has the first indices, adjust mesh indices (row 1)
-        if num_grid_nodes is not None:
-            grid_nodes_count = num_grid_nodes
-        elif g2m_edge_index.numel() > 0:
-            grid_nodes_count = int(g2m_edge_index[0].max().item() + 1)
-        else:
-            grid_nodes_count = 0
+        if num_grid_nodes is None:
+            num_grid_nodes = (
+                int(g2m_edge_index[0].max().item() + 1)
+                if g2m_edge_index.numel() > 0
+                else 0
+            )
         return torch.stack(
             (
                 g2m_edge_index[0],
-                g2m_edge_index[1] + sign * grid_nodes_count,
+                g2m_edge_index[1] + sign * num_grid_nodes,
             ),
             dim=0,
         )
