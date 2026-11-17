@@ -2,6 +2,7 @@
 
 # Third-party
 import torch
+import torch.utils.checkpoint
 
 # Local
 from ..step_predictors.base import StepPredictor
@@ -14,6 +15,7 @@ def unroll_forecast(
     boundary_states: torch.Tensor,
     boundary_mask: torch.Tensor,
     interior_mask: torch.Tensor,
+    gradient_checkpointing: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor | None]:
     """
     Unroll one forecast auto-regressively.
@@ -59,6 +61,11 @@ def unroll_forecast(
         Shape ``(1, num_grid_nodes, 1)``. The complement of
         ``boundary_mask``, passed in rather than derived so the buffer the
         forecaster already holds is reused.
+    gradient_checkpointing : bool, default False
+        If True, wrap each predictor call in ``torch.utils.checkpoint`` so
+        its activations are recomputed in the backward pass instead of stored.
+        Lowers peak memory when unrolling more than one step, at the cost of
+        extra compute.
 
     Returns
     -------
@@ -82,7 +89,18 @@ def unroll_forecast(
         forcing = forcing_features[:, i]
         boundary_state = boundary_states[:, i]
 
-        pred_state, pred_std = predictor(prev_state, prev_prev_state, forcing)
+        if gradient_checkpointing:
+            pred_state, pred_std = torch.utils.checkpoint.checkpoint(
+                predictor,
+                prev_state,
+                prev_prev_state,
+                forcing,
+                use_reentrant=False,
+            )
+        else:
+            pred_state, pred_std = predictor(
+                prev_state, prev_prev_state, forcing
+            )
 
         new_state = boundary_mask * boundary_state + interior_mask * pred_state
 
