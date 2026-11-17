@@ -54,6 +54,7 @@ def train(
     ar_steps_eval: int = 10,
     n_example_pred: int = 1,
     create_gif: bool = False,
+    gradient_checkpointing: bool = False,
     logger: str = "wandb",
     logger_project: str = "neural_lam",
     logger_run_name: str | None = None,
@@ -137,6 +138,10 @@ def train(
         Number of qualitative example predictions to plot.
     create_gif : bool, default False
         Whether to generate GIF animations of prediction rollouts.
+    gradient_checkpointing : bool, default False
+        Whether to recompute the activations of each autoregressive training
+        step in the backward pass instead of storing them. Lowers peak memory
+        when ``ar_steps_train > 1``, at the cost of extra compute.
     logger : str, default "wandb"
         Experiment tracking logger ("wandb" or "mlflow").
     logger_project : str, default "neural_lam"
@@ -225,6 +230,7 @@ def train(
         eval=eval,
         n_example_pred=n_example_pred,
         create_gif=create_gif,
+        gradient_checkpointing=gradient_checkpointing,
     )
     data_config = DataConfig(
         num_past_forcing_steps=num_past_forcing_steps,
