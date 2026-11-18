@@ -41,6 +41,7 @@ from .models import (
     BaseHiGraphModel,
     DeterministicARForecaster,
     DeterministicForecastingModule,
+    HiLAM,
 )
 from .weather_dataset import WeatherDataModule
 
@@ -122,6 +123,11 @@ def build_predictor(
         kwargs["mesh_down_gnn_type"] = getattr(
             args, "mesh_down_gnn_type", "InteractionNet"
         )
+    if issubclass(predictor_class, HiLAM):
+        kwargs["same_level_processor_layers"] = getattr(
+            args, "same_level_processor_layers", None
+        )
+
     return predictor_class(**kwargs)
 
 
@@ -284,6 +290,18 @@ def build_parser() -> ArgumentParser:
         type=int,
         default=4,
         help="Number of GNN layers in processor GNN",
+    )
+    arch_group.add_argument(
+        "--same_level_processor_layers",
+        type=int,
+        nargs="+",
+        default=None,
+        metavar="N",
+        help=(
+            "Number of same-level message-passing layers per mesh level, "
+            "ordered from finest to coarsest. Must contain one positive "
+            "integer per mesh level. Defaults to 1 at every level."
+        ),
     )
     arch_group.add_argument(
         "--mesh_aggr",
