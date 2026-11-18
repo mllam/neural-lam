@@ -79,8 +79,9 @@ python docs/notebooks/create_reduced_meps_dataset.py
 
 Run these commands from the repository root. The dataset-reduction notebook
 requires the `data/meps_example` dataset described in the
-[README](README.md#using-neural-lam). It creates output directories under
-`data/meps_example_reduced` and overwrites matching output files on reruns.
+[datastores guide](https://mllam.github.io/neural-lam/user-guide/datastores.html).
+It creates output directories under `data/meps_example_reduced` and
+overwrites matching output files on reruns.
 Use `--input-dir` and `--output-dir` to select other locations; with
 `marimo edit`, put notebook arguments after `--`.
 
@@ -152,7 +153,10 @@ label in the form `vX.Y.Z (proposed)`.
 2. Fill in the
    [pull request template](.github/pull_request_template.md) - it contains the
    full checklists for authors, reviewers, and assignees. Link the issue with
-   `closes #<N>` or `refs #<N>` in the PR body.
+   `closes #<N>` or `refs #<N>` in the PR body. An automated check labels PRs
+   `needs-triage` and comments when no issue is linked, the template is not
+   filled in, the claimed issue is closed or assigned to someone else, or an
+   older open PR already claims the same issue.
 3. Write commit messages in **imperative form** matching the existing
    `git log` style ("Add X" not "Added X"), and keep one concern per PR.
 4. PRs land via **squash-and-merge**: the PR title becomes the single commit

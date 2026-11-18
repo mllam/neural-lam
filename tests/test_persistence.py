@@ -122,6 +122,7 @@ def test_persistence_training_error():
     mock_args.metrics_watch = []
     mock_args.var_leads_metrics_watch = "{}"
     mock_args.ar_steps_eval = 10
+    mock_args.val_interval = 1
     mock_args.model = "persistence"
     mock_args.devices = ["auto"]
 
