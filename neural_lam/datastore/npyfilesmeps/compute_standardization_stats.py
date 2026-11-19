@@ -171,6 +171,77 @@ def setup(rank: int, world_size: int) -> None:  # pylint: disable=redefined-oute
         )
 
 
+def sample_moments(batch: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    Per-sample mean and mean of squares of a batch, accumulated in float64.
+
+    The standard deviation is later computed as ``sqrt(E[x^2] - E[x]^2)``. In
+    float32 this loses most digits when the mean is large compared to the
+    standard deviation (e.g. pressure in Pa), and can even turn negative. The
+    data itself is float32, so float64 accumulators are always enough to keep
+    the difference accurate. Samples are converted one at a time so only one
+    float64 copy of a sample is held in memory, not of the whole batch.
+
+    Parameters
+    ----------
+    batch : torch.Tensor
+        Shape ``(B, N_t, num_grid_nodes, d_features)``.
+
+    Returns
+    -------
+    means : torch.Tensor
+        Shape ``(B, d_features)``, float64, on the CPU.
+    squares : torch.Tensor
+        Shape ``(B, d_features)``, float64, on the CPU. Mean of ``x**2``.
+    """
+    means, squares = [], []
+    for sample in batch:
+        sample = sample.double()  # (N_t, num_grid_nodes, d_features)
+        means.append(sample.mean(dim=(0, 1)).cpu())
+        squares.append(sample.square().mean(dim=(0, 1)).cpu())
+    return torch.stack(means), torch.stack(squares)
+
+
+def _std_from_moments(
+    mean: torch.Tensor, second_moment: torch.Tensor
+) -> torch.Tensor:
+    """
+    Standard deviation from the mean and the mean of squares.
+
+    Rounding can leave the variance of a (near) constant field slightly below
+    zero, which is clamped to zero. A variance that is clearly negative means
+    the inputs are inconsistent (e.g. moments accumulated in float32), and
+    raises instead of writing bad statistics. float64 rounding is about 1e-16
+    of the second moment, float32 about 1e-7, so 1e-9 separates the two.
+
+    Parameters
+    ----------
+    mean : torch.Tensor
+        Mean of the data, any shape.
+    second_moment : torch.Tensor
+        Mean of the squared data, same shape as ``mean``.
+
+    Returns
+    -------
+    torch.Tensor
+        Population standard deviation, same shape as ``mean``.
+
+    Raises
+    ------
+    ValueError
+        If the variance is negative by more than ``1e-9`` of the second moment.
+    """
+    variance = second_moment - mean**2
+    if torch.any(variance < -1e-9 * second_moment):
+        raise ValueError(
+            "Negative variance in standardization statistics: "
+            f"E[x^2] - E[x]^2 = {variance.tolist()} with E[x^2] = "
+            f"{second_moment.tolist()}. The mean and mean-of-squares inputs "
+            "are inconsistent."
+        )
+    return torch.sqrt(variance.clamp(min=0))
+
+
 def save_stats(
     static_dir_path: str | Path,
     means: list[torch.Tensor],
@@ -216,19 +287,23 @@ def save_stats(
     )  # (B, num_state_vars,)
     squares_tensor = (
         torch.stack(squares) if len(squares) > 1 else squares[0]
-    )  # (B, num_state_vars,)
-    mean = torch.mean(means_tensor, dim=0)  # (num_state_vars,)
-    second_moment = torch.mean(squares_tensor, dim=0)  # (num_state_vars,)
-    std = torch.sqrt(second_moment - mean**2)  # (num_state_vars,)
+    )  # (B, d_features,)
+    mean = torch.mean(means_tensor.double(), dim=0)  # (d_features,)
+    second_moment = torch.mean(squares_tensor.double(), dim=0)  # (d_features,)
+    std = _std_from_moments(mean, second_moment)  # (d_features,)
     print(
         f"Saving {filename_prefix} mean and std.-dev. to "
         f"{filename_prefix}_mean.pt and {filename_prefix}_std.pt"
     )
+    # Saved as float32: the stats are applied to float32 batches later, and a
+    # float64 tensor would upcast the whole batch
     torch.save(
-        mean.cpu(), os.path.join(static_dir_path, f"{filename_prefix}_mean.pt")
+        mean.float().cpu(),
+        os.path.join(static_dir_path, f"{filename_prefix}_mean.pt"),
     )
     torch.save(
-        std.cpu(), os.path.join(static_dir_path, f"{filename_prefix}_std.pt")
+        std.float().cpu(),
+        os.path.join(static_dir_path, f"{filename_prefix}_std.pt"),
     )
 
     if len(flux_means) == 0:
@@ -239,12 +314,12 @@ def save_stats(
     flux_squares_tensor = (
         torch.stack(flux_squares) if len(flux_squares) > 1 else flux_squares[0]
     )  # (B,)
-    flux_mean = torch.mean(flux_means_tensor)  # (,)
-    flux_second_moment = torch.mean(flux_squares_tensor)  # (,)
-    flux_std = torch.sqrt(flux_second_moment - flux_mean**2)  # (,)
+    flux_mean = torch.mean(flux_means_tensor.double())  # (,)
+    flux_second_moment = torch.mean(flux_squares_tensor.double())  # (,)
+    flux_std = _std_from_moments(flux_mean, flux_second_moment)  # (,)
     print("Saving flux mean and std.-dev. to flux_stats.pt")
     torch.save(
-        torch.stack((flux_mean, flux_std)).cpu(),
+        torch.stack((flux_mean, flux_std)).float().cpu(),
         os.path.join(static_dir_path, "flux_stats.pt"),
     )
 
@@ -344,12 +419,12 @@ def main(
         batch = torch.cat((init_batch, target_batch), dim=1)
         # Flux at 1st windowed position is index 0 in forcing
         flux_batch = forcing_batch[:, :, :, 0]
-        # (B, num_state_vars,)
-        batch_means = torch.mean(batch, dim=(1, 2)).cpu()
-        batch_squares = torch.mean(batch**2, dim=(1, 2)).cpu()
+        # (B, d_features,)
+        batch_means, batch_squares = sample_moments(batch)
         # (B,)
-        batch_flux_means = torch.mean(flux_batch, dim=(1, 2)).cpu()
-        batch_flux_squares = torch.mean(flux_batch**2, dim=(1, 2)).cpu()
+        batch_flux_means, batch_flux_squares = (
+            m[:, 0] for m in sample_moments(flux_batch.unsqueeze(-1))
+        )
         if real_masks is not None:
             mask = real_masks[batch_i]
             batch_means = batch_means[mask]
@@ -490,19 +565,16 @@ def main(
         # (B', num_times, num_grid_nodes, num_state_vars),
         # B' = step_length*B
         batch_diffs = stepped_batch[:, 1:] - stepped_batch[:, :-1]
-        # (B', num_times-1, num_grid_nodes, num_state_vars)
-        batch_diff_means = torch.mean(batch_diffs, dim=(1, 2)).cpu()
-        # (B', num_state_vars,)
-        batch_diff_squares = torch.mean(batch_diffs**2, dim=(1, 2)).cpu()
-        # (B', num_state_vars,)
+        # (B', N_t-1, num_grid_nodes, d_features)
+        batch_diff_means, batch_diff_squares = sample_moments(batch_diffs)
         if real_masks_standard is not None:
             # stepped_batch stacks the time_step_int ss_i blocks along dim 0,
             # so tile the mask (repeat, not repeat_interleave)
             mask = real_masks_standard[batch_i].repeat(time_step_int)
             batch_diff_means = batch_diff_means[mask]
             batch_diff_squares = batch_diff_squares[mask]
-        diff_means.append(batch_diff_means)
-        diff_squares.append(batch_diff_squares)
+        diff_means.append(batch_diff_means)  # (B', d_features,)
+        diff_squares.append(batch_diff_squares)  # (B', d_features,)
 
     if distributed and world_size > 1:
         dist.barrier()
