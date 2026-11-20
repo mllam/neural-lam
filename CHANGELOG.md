@@ -31,8 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fix Dependabot auto-changelog entry pattern to allow dependency Markdown links to render correctly [\#894](https://github.com/mllam/neural-lam/pull/894) @Ayushi6002
-
 - Fix `InteractionNet` and `PropagationNet` dimension mismatches when `hidden_dim` differs from `input_dim` [\#836](https://github.com/mllam/neural-lam/pull/836) @Karvy-Singh
 
 - Raise a `ValueError` for `--val_interval` below 1 in `train_model.fit`; `0` previously crashed with a `ZeroDivisionError` inside Lightning after the model was built, and negative values were silently accepted [\#847](https://github.com/mllam/neural-lam/pull/847) @nikhil3495
@@ -78,6 +76,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump [`actions/deploy-pages`](https://github.com/actions/deploy-pages) from 4 to 5 [\#866](https://github.com/mllam/neural-lam/pull/866) @dependabot
 
 - Set up dependabot to keep GitHub Actions, pre-commit hooks and `uv.lock` up to date [\#718](https://github.com/mllam/neural-lam/pull/718) @observingClouds
+
+- Fix Dependabot auto-changelog entry pattern to allow dependency Markdown links to render correctly [\#894](https://github.com/mllam/neural-lam/pull/894) @Ayushi6002
 
 - Bump [`astral-sh/setup-uv`](https://github.com/astral-sh/setup-uv) from 5 to 7 [\#870](https://github.com/mllam/neural-lam/pull/870) @dependabot
 
