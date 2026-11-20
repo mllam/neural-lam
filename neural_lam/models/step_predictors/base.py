@@ -2,6 +2,8 @@
 
 # Standard library
 from abc import ABC, abstractmethod
+from argparse import Namespace
+from typing import Any
 
 # Third-party
 import torch
@@ -408,3 +410,62 @@ class StepPredictor(nn.Module, ABC):
             )
 
         return new_state
+
+    @classmethod
+    def from_config(
+        cls,
+        args: Namespace,
+        config: Any,
+        datastore: BaseDatastore,
+    ) -> "StepPredictor":
+        """
+        Instantiate a step predictor from CLI arguments, configuration,
+        and datastore.
+
+        Subclasses may override this method to customize how their constructor
+        arguments are mapped from configuration.
+
+        Parameters
+        ----------
+        args : argparse.Namespace
+            Parsed command-line arguments.
+        config : NeuralLAMConfig
+            Root configuration for the training session.
+        datastore : BaseDatastore
+            Datastore providing grid metadata and variables.
+
+        Returns
+        -------
+        StepPredictor
+            Instantiated step predictor.
+        """
+        kwargs: dict[str, Any] = dict(
+            datastore=datastore,
+            graph_name=getattr(args, "graph", None),
+            hidden_dim=getattr(args, "hidden_dim", 64),
+            hidden_layers=getattr(args, "hidden_layers", 1),
+            processor_layers=getattr(args, "processor_layers", 2),
+            mesh_aggr=getattr(args, "mesh_aggr", "sum"),
+            num_past_forcing_steps=getattr(args, "num_past_forcing_steps", 1),
+            num_future_forcing_steps=getattr(
+                args, "num_future_forcing_steps", 1
+            ),
+            output_std=getattr(args, "output_std", False),
+            output_clamping_lower=config.training.output_clamping.lower,
+            output_clamping_upper=config.training.output_clamping.upper,
+            g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
+            m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
+        )
+        # Handle hierarchical model kwargs if applicable
+        # Local
+        from .graph.hierarchical import BaseHiGraphModel
+
+        if isinstance(cls, type) and issubclass(cls, BaseHiGraphModel):
+            kwargs["mesh_up_gnn_type"] = getattr(
+                args, "mesh_up_gnn_type", "InteractionNet"
+            )
+            kwargs["mesh_down_gnn_type"] = getattr(
+                args, "mesh_down_gnn_type", "InteractionNet"
+            )
+
+        return cls(**kwargs)
