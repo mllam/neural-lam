@@ -1,4 +1,5 @@
 # Standard library
+import shutil
 import typing
 from argparse import Namespace
 from typing import TYPE_CHECKING
@@ -10,6 +11,7 @@ import torch
 
 # First-party
 from neural_lam import config as nlconfig
+from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore.base import BaseDatastore
 from neural_lam.models import (
     BaseDeterministicForecaster,
@@ -17,6 +19,7 @@ from neural_lam.models import (
     BaseProbabilisticForecaster,
     DeterministicARForecaster,
     DeterministicForecastingModule,
+    GraphLAM,
     StepPredictor,
     unroll_forecast,
 )
@@ -604,3 +607,176 @@ def test_step_predictor_invalid_clamping_limits(lower, upper):
 
     with pytest.raises(ValueError, match="must be smaller than upper"):
         predictor.prepare_clamping_params(datastore)
+
+
+@pytest.fixture(scope="module")
+def _dummy_graph_dir(tmp_path_factory):
+    """Build the dummy 1level graph once for the test module."""
+    graph_dir = tmp_path_factory.mktemp("graph") / "1level"
+    create_graph_from_datastore(
+        datastore=DummyDatastore(),
+        output_root_path=str(graph_dir),
+        n_max_levels=1,
+    )
+    return graph_dir
+
+
+@pytest.fixture
+def dummy_datastore_with_graph(_dummy_graph_dir):
+    """Return a DummyDatastore with the pre-built 1level graph."""
+    datastore = DummyDatastore()
+    shutil.copytree(_dummy_graph_dir, datastore.root_path / "graph" / "1level")
+    return datastore
+
+
+def test_graph_lam_processor_layers_zero_init(dummy_datastore_with_graph):
+    """GraphLAM should support processor_layers=0 without crashing."""
+    predictor = GraphLAM(
+        datastore=dummy_datastore_with_graph,
+        graph_name="1level",
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=0,
+    )
+    assert predictor.processor_layers == 0
+    assert not isinstance(predictor.processor, torch.nn.Module)
+
+    # Test that identity processor passes mesh and edge reps unchanged
+    mesh_rep = torch.randn(2, 5, 4)
+    edge_rep = torch.randn(2, 10, 4)
+    out_mesh, out_edge = predictor.processor(mesh_rep, edge_rep)
+    assert torch.equal(out_mesh, mesh_rep)
+    assert torch.equal(out_edge, edge_rep)
+
+
+@pytest.mark.parametrize("mesh_aggr", ["sum", "mean"])
+@pytest.mark.parametrize("output_std", [False, True])
+def test_graph_lam_processor_layers_zero_forward_and_backward(
+    dummy_datastore_with_graph, mesh_aggr, output_std
+):
+    """GraphLAM should support forward and backward passes and state_dict
+    roundtripping with processor_layers=0."""
+    predictor = GraphLAM(
+        datastore=dummy_datastore_with_graph,
+        graph_name="1level",
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=0,
+        mesh_aggr=mesh_aggr,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        output_std=output_std,
+    )
+    forecaster = DeterministicARForecaster(
+        predictor, dummy_datastore_with_graph
+    )
+
+    B = 2
+    num_grid_nodes = predictor.num_grid_nodes
+    d_state = dummy_datastore_with_graph.get_num_data_vars(category="state")
+    d_forcing = (
+        dummy_datastore_with_graph.get_num_data_vars(category="forcing") * 3
+    )
+    init_states = torch.randn(B, 2, num_grid_nodes, d_state)
+    forcing_features = torch.randn(B, 1, num_grid_nodes, d_forcing)
+    boundary_states = torch.randn(B, 1, num_grid_nodes, d_state)
+
+    prediction, pred_std = forecaster(
+        init_states, forcing_features, boundary_states
+    )
+
+    assert prediction.shape == (B, 1, num_grid_nodes, d_state)
+    assert torch.isfinite(prediction).all()
+    if output_std:
+        assert pred_std is not None
+        assert pred_std.shape == (B, 1, num_grid_nodes, d_state)
+        assert torch.isfinite(pred_std).all()
+        loss = prediction.sum() + pred_std.sum()
+    else:
+        assert pred_std is None
+        loss = prediction.sum()
+
+    # Ensure gradients propagate through zero-layer processor
+    loss.backward()
+    for name, param in predictor.named_parameters():
+        if not param.requires_grad:
+            continue
+        if name.startswith("m2m_embedder"):
+            # m2m edge attributes are only used by processor layers
+            assert param.grad is None
+        else:
+            assert param.grad is not None, f"Missing grad for {name}"
+            assert torch.isfinite(param.grad).all(), (
+                f"Non-finite grad in {name}"
+            )
+
+    # Verify state_dict serialization and deserialization
+    state_dict = predictor.state_dict()
+    new_predictor = GraphLAM(
+        datastore=dummy_datastore_with_graph,
+        graph_name="1level",
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=0,
+        mesh_aggr=mesh_aggr,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        output_std=output_std,
+    )
+    new_predictor.load_state_dict(state_dict)
+
+
+@pytest.mark.parametrize("invalid_layers", [-1, -5])
+def test_graph_lam_negative_processor_layers_raises(
+    dummy_datastore_with_graph, invalid_layers
+):
+    """GraphLAM should raise a ValueError when processor_layers is negative."""
+    with pytest.raises(
+        ValueError, match="processor_layers must be non-negative"
+    ):
+        GraphLAM(
+            datastore=dummy_datastore_with_graph,
+            graph_name="1level",
+            processor_layers=invalid_layers,
+        )
+
+
+def test_graph_lam_positive_processor_layers_forward_prediction(
+    dummy_datastore_with_graph,
+):
+    """Existing behavior for positive processor layer counts should remain
+    unaffected."""
+    predictor = GraphLAM(
+        datastore=dummy_datastore_with_graph,
+        graph_name="1level",
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=1,
+        mesh_aggr="sum",
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        output_std=False,
+    )
+    assert isinstance(predictor.processor, torch.nn.Module)
+
+    forecaster = DeterministicARForecaster(
+        predictor, dummy_datastore_with_graph
+    )
+    B = 2
+    num_grid_nodes = predictor.num_grid_nodes
+    d_state = dummy_datastore_with_graph.get_num_data_vars(category="state")
+    d_forcing = (
+        dummy_datastore_with_graph.get_num_data_vars(category="forcing") * 3
+    )
+    init_states = torch.randn(B, 2, num_grid_nodes, d_state)
+    forcing_features = torch.randn(B, 1, num_grid_nodes, d_forcing)
+    boundary_states = torch.randn(B, 1, num_grid_nodes, d_state)
+
+    with torch.no_grad():
+        prediction, pred_std = forecaster(
+            init_states, forcing_features, boundary_states
+        )
+
+    assert prediction.shape == (B, 1, num_grid_nodes, d_state)
+    assert pred_std is None
+    assert torch.isfinite(prediction).all()

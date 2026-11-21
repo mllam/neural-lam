@@ -69,6 +69,11 @@ class GraphLAM(BaseGraphModel):
             Lower clamping limits for state variables.
         output_clamping_upper : dict, optional
             Upper clamping limits for state variables.
+
+        Raises
+        ------
+        ValueError
+            If ``processor_layers`` is negative.
         """
         super().__init__(
             datastore=datastore,
@@ -105,25 +110,33 @@ class GraphLAM(BaseGraphModel):
 
         # GNNs
         # processor
-        processor_nets = [
-            InteractionNet(
-                self.m2m_edge_index,
-                hidden_dim,
-                hidden_layers=hidden_layers,
-                aggr=mesh_aggr,
+        if processor_layers < 0:
+            raise ValueError(
+                f"processor_layers must be non-negative, got {processor_layers}"
             )
-            for _ in range(processor_layers)
-        ]
-        self.processor = pyg.nn.Sequential(
-            "mesh_rep, edge_rep",
-            [
-                (
-                    net,
-                    "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep",
+
+        if processor_layers == 0:
+            self.processor = lambda x, edge_attr: (x, edge_attr)
+        else:
+            processor_nets = [
+                InteractionNet(
+                    self.m2m_edge_index,
+                    hidden_dim,
+                    hidden_layers=hidden_layers,
+                    aggr=mesh_aggr,
                 )
-                for net in processor_nets
-            ],
-        )
+                for _ in range(processor_layers)
+            ]
+            self.processor = pyg.nn.Sequential(
+                "mesh_rep, edge_rep",
+                [
+                    (
+                        net,
+                        "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep",
+                    )
+                    for net in processor_nets
+                ],
+            )
 
     def get_num_mesh(self) -> tuple[int, int]:
         """
