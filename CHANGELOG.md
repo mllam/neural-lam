@@ -37,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix `MDPDatastore.get_xy` returning grid points in ascending order while the data keeps the stored order, which mirrored the graph north-south (or east-west) for descending latitude/longitude (e.g. ERA5); `unstack_grid_coords` now preserves the stored coordinate order [\#851](https://github.com/mllam/neural-lam/issues/851) @ArnabOPP
+
 - Fix `InteractionNet` and `PropagationNet` dimension mismatches when `hidden_dim` differs from `input_dim` [\#836](https://github.com/mllam/neural-lam/pull/836) @Karvy-Singh
 
 - Raise a `ValueError` for `--val_interval` below 1 in `train_model.fit`; `0` previously crashed with a `ZeroDivisionError` inside Lightning after the model was built, and negative values were silently accepted [\#847](https://github.com/mllam/neural-lam/pull/847) @nikhil3495
