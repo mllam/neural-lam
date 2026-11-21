@@ -11,6 +11,7 @@ from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.gnn_layers import InteractionNet, PropagationNet
 from neural_lam.models import MODELS, DeterministicARForecaster
 from tests.conftest import init_datastore_example
+from tests.dummy_datastore import DummyDatastore
 
 
 def _make_edge_index(n_send, n_rec, n_edges):
@@ -41,6 +42,7 @@ def _build_model_and_data(
     m2g_gnn_type="InteractionNet",
     mesh_up_gnn_type="InteractionNet",
     mesh_down_gnn_type="InteractionNet",
+    processor_layers=1,
 ):
     """Helper to build a model and matching random input tensors."""
     num_past_forcing_steps = 1
@@ -65,7 +67,7 @@ def _build_model_and_data(
         graph_name=graph_name,
         hidden_dim=4,
         hidden_layers=1,
-        processor_layers=1,
+        processor_layers=processor_layers,
         mesh_aggr="sum",
         num_past_forcing_steps=num_past_forcing_steps,
         num_future_forcing_steps=num_future_forcing_steps,
@@ -775,6 +777,113 @@ class TestNumericalStability:
 #
 # Section I: Model-Level Integration (Deterministic Models)
 #
+
+
+@pytest.fixture(scope="module")
+def dummy_graph_lam_datastore():
+    """Create a local datastore with the flat graph required by GraphLAM."""
+    datastore = DummyDatastore()
+    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
+    create_graph_from_datastore(
+        datastore=datastore,
+        output_root_path=str(graph_dir_path),
+        n_max_levels=1,
+    )
+    config = nlconfig.NeuralLAMConfig(
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        }
+    )
+    return datastore, config
+
+
+class TestGraphLAMProcessorLayers:
+    """Tests for GraphLAM processor layer-count edge cases."""
+
+    def test_zero_processor_layers_pass_through(
+        self, dummy_graph_lam_datastore
+    ):
+        """Zero processor layers pass representations through and allow
+        forward prediction."""
+        datastore, config = dummy_graph_lam_datastore
+
+        forecaster, predictor, init_states, forcing, boundary = (
+            _build_model_and_data(
+                datastore,
+                config,
+                "graph_lam",
+                "1level",
+                processor_layers=0,
+            )
+        )
+
+        assert predictor.processor_layers == 0
+        mesh_rep = torch.randn(
+            2, predictor.num_mesh_nodes, predictor.hidden_dim
+        )
+        edge_rep = torch.randn(
+            2, predictor.m2m_features.shape[0], predictor.hidden_dim
+        )
+        mesh_out, edge_out = predictor.processor(mesh_rep, edge_rep)
+        assert mesh_out is mesh_rep
+        assert edge_out is edge_rep
+
+        with torch.no_grad():
+            prediction, _ = forecaster(init_states, forcing, boundary)
+
+        assert prediction.shape == (
+            init_states.shape[0],
+            1,
+            *init_states.shape[2:],
+        )
+
+    def test_negative_processor_layers_raise(self, dummy_graph_lam_datastore):
+        """Negative processor layer counts are rejected clearly."""
+        datastore, _ = dummy_graph_lam_datastore
+
+        with pytest.raises(
+            ValueError, match="processor_layers must be non-negative"
+        ):
+            MODELS["graph_lam"](
+                datastore=datastore,
+                graph_name="1level",
+                processor_layers=-1,
+            )
+
+    def test_positive_processor_layers_are_preserved(
+        self, dummy_graph_lam_datastore
+    ):
+        """Positive processor counts still create the requested GNN layers."""
+        datastore, config = dummy_graph_lam_datastore
+
+        forecaster, predictor, init_states, forcing, boundary = (
+            _build_model_and_data(
+                datastore,
+                config,
+                "graph_lam",
+                "1level",
+                processor_layers=2,
+            )
+        )
+
+        processor_nets = [
+            module
+            for module in predictor.processor.modules()
+            if isinstance(module, InteractionNet)
+        ]
+        assert len(processor_nets) == 2
+
+        with torch.no_grad():
+            prediction, _ = forecaster(init_states, forcing, boundary)
+
+        assert prediction.shape == (
+            init_states.shape[0],
+            1,
+            *init_states.shape[2:],
+        )
 
 
 @pytest.mark.requires_real_data

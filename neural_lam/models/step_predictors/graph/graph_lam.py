@@ -114,16 +114,19 @@ class GraphLAM(BaseGraphModel):
             )
             for _ in range(processor_layers)
         ]
-        self.processor = pyg.nn.Sequential(
-            "mesh_rep, edge_rep",
-            [
-                (
-                    net,
-                    "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep",
-                )
-                for net in processor_nets
-            ],
-        )
+        if processor_layers == 0:
+            self.processor = lambda mesh_rep, edge_rep: (mesh_rep, edge_rep)
+        else:
+            self.processor = pyg.nn.Sequential(
+                "mesh_rep, edge_rep",
+                [
+                    (
+                        net,
+                        "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep",
+                    )
+                    for net in processor_nets
+                ],
+            )
 
     def get_num_mesh(self) -> tuple[int, int]:
         """
