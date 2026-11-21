@@ -23,7 +23,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
       - name: Build with uv
         run: uv build
-      - uses: casperdcl/deploy-pypi@v2
+      - uses: casperdcl/deploy-pypi@v3
         with:
           password: ${{ secrets.PYPI_TOKEN }}
           upload: ${{ github.event_name == 'release' && github.event.action == 'published' }}

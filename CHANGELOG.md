@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shared autoregressive unrolling and forecaster-owned training objectives.
   [\#700](https://github.com/mllam/neural-lam/pull/700) @Sir-Sloth-The-Lazy
 
+- Add `--gradient_checkpointing` flag for autoregressive rollout gradient checkpointing in `DeterministicARForecaster`, reducing peak activation memory during training unrolls [\#807](https://github.com/mllam/neural-lam/pull/807) @Sharkyii
+
 - Add the `hello_world_danra.py` marimo tutorial (prepare the DANRA example data, build a graph, train and evaluate `graph_lam` on CPU, all through `neural_lam.api`), executed at docs build time so the docs page shows its outputs; `train_model` now exits non-zero on errors (`@logger.catch(reraise=True)`) [\#577](https://github.com/mllam/neural-lam/pull/577) @Sharkyii
 
 - Add a high-level programmatic Python API (`neural_lam.api`) exposing typed keyword-only `train`, `evaluate` and `create_graph` functions; `train` and `evaluate` return a `Run` handle with the run's checkpoint and plot paths. The training CLI now parses into the typed run config dataclasses (`ModelConfig`, `TrainRunConfig`, `DataConfig`, `ComputeConfig`, `LoggingConfig`) and calls the same `neural_lam.train_model.fit` [\#715](https://github.com/mllam/neural-lam/pull/715) @GiGiKoneti
@@ -71,7 +73,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Modernize linting and formatting toolchain by migrating `black`/`isort`/`flake8` to Ruff (with `ANN` rules enforcing type annotation coverage in `neural_lam/`) and adding `pyproject-fmt`, `python-check-blanket-noqa`, and `no-commit-to-branch` pre-commit hooks [\#614](https://github.com/mllam/neural-lam/pull/614) @Shivampal157
 
+- Restructure the README as a concise front door with links into the docs, and move its detailed guides (install options, datastores, graph creation, training and evaluation, logging) into the docs site [\#808](https://github.com/mllam/neural-lam/pull/808) @tyrobro
+
 - Rename remaining non-canonical dimension names (`d_*`, `N_*`, `M_*`) in shape annotations and docstrings to Dimension Glossary names [\#825](https://github.com/mllam/neural-lam/pull/825) @Omega-127
+
+- Bump [`casperdcl/deploy-pypi`](https://github.com/casperdcl/deploy-pypi) from 2 to 3 [\#868](https://github.com/mllam/neural-lam/pull/868) @dependabot
+
+- Bump [`actions/deploy-pages`](https://github.com/actions/deploy-pages) from 4 to 5 [\#866](https://github.com/mllam/neural-lam/pull/866) @dependabot
 
 - Set up dependabot to keep GitHub Actions, pre-commit hooks and `uv.lock` up to date [\#718](https://github.com/mllam/neural-lam/pull/718) @observingClouds
 
