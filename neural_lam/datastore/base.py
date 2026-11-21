@@ -586,7 +586,18 @@ class BaseDatastore(abc.ABC):
         if not isinstance(da_or_ds.indexes.get("grid_index"), MultiIndex):
             da_or_ds = da_or_ds.set_index(grid_index=self.spatial_coordinates)
 
-        da_or_ds_unstacked = da_or_ds.unstack("grid_index")
+        # `unstack` rebuilds each spatial dimension from its sorted unique
+        # values, so remember the stored order (e.g. descending latitude) to
+        # restore it afterwards and keep the grid aligned with the data
+        grid_index = da_or_ds.indexes["grid_index"]
+        stored_order = {
+            name: grid_index.get_level_values(name).unique()
+            for name in grid_index.names
+        }
+
+        da_or_ds_unstacked = da_or_ds.unstack("grid_index").reindex(
+            stored_order
+        )
 
         # Ensure that the x, y dimensions are in the correct order
         dims = list(da_or_ds_unstacked.dims)
