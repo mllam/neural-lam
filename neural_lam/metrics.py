@@ -85,6 +85,7 @@ def mask_and_reduce_metric(
     return metric_entry_vals
 
 
+@torch.compiler.disable
 def _validate_pred_std(pred_std: torch.Tensor, metric_name: str) -> None:
     """
     Validate that ``pred_std`` contains finite, strictly positive values.
@@ -101,8 +102,6 @@ def _validate_pred_std(pred_std: torch.Tensor, metric_name: str) -> None:
     ValueError
         If ``pred_std`` contains non-positive (<= 0) or non-finite values.
     """
-    if torch.compiler.is_compiling():
-        return
     if (
         hasattr(torch, "_C")
         and hasattr(torch._C, "_functorch")

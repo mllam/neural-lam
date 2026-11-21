@@ -263,3 +263,25 @@ def test_weighted_losses_vmap_support(loss_fn):
     v_loss_batched = torch.vmap(loss_fn, in_dims=(0, 0, 0))
     res_batched = v_loss_batched(pred, target, pred_std_batched)
     assert res_batched.shape == (2,)
+
+
+@pytest.mark.parametrize("metric", [nll, crps_gauss])
+def test_probabilistic_metrics_compiled_validation(metric):
+    """Compiled probabilistic metrics validate pred_std before computation."""
+    c_metric = torch.compile(metric, backend="aot_eager")
+
+    pred = torch.tensor([[[0.0]]])
+    target = torch.tensor([[[1.0]]])
+    valid_std = torch.tensor([[[1.0]]])
+    invalid_std = torch.tensor([[[-1.0]]])
+
+    # Valid pred_std succeeds
+    res = c_metric(pred, target, valid_std)
+    assert torch.isfinite(res)
+
+    # Invalid pred_std raises ValueError even when compiled
+    with pytest.raises(
+        ValueError,
+        match="requires pred_std to contain finite, strictly positive values",
+    ):
+        c_metric(pred, target, invalid_std)
