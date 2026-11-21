@@ -476,6 +476,61 @@ def test_ensemble_forcing_uses_same_member_when_available():
     assert not torch.equal(forcing_0, forcing_1)
 
 
+@pytest.mark.parametrize("is_forecast", [False, True])
+def test_ensemble_forcing_matches_state_member_coordinate(is_forecast):
+    datastore = EnsembleDummyDatastore(
+        is_forecast=is_forecast,
+        forcing_has_ensemble=True,
+        n_ensemble_members=3,
+        n_timesteps=10,
+        n_analysis_times=4,
+        n_forecast_steps=6,
+    )
+    original_forcing = datastore._da_forcing
+    datastore._da_forcing = original_forcing.sel(ensemble_member=[2, 0, 1])
+    dataset = WeatherDataset(datastore=datastore, ar_steps=2)
+
+    # Flat sample 0 is state member 0 even though forcing member 0 is now
+    # at position 1. The same physical member must be paired in both modes.
+    _, _, forcing, _, _ = dataset[0]
+    expected = original_forcing.sel(ensemble_member=0)
+    if is_forecast:
+        expected_values = expected.isel(
+            analysis_time=0, elapsed_forecast_duration=slice(0, 5)
+        ).values[:, 0, 0]
+    else:
+        expected_values = expected.isel(time=slice(0, 5)).values[:, 0, 0]
+    torch.testing.assert_close(
+        forcing[:, 0, :],
+        torch.tensor(
+            [
+                [
+                    expected_values[i - 1],
+                    expected_values[i],
+                    expected_values[i + 1],
+                ]
+                for i in (2, 3)
+            ],
+            dtype=torch.float32,
+        ),
+    )
+
+
+def test_ensemble_forcing_without_member_coordinates_keeps_position():
+    datastore = EnsembleDummyDatastore(
+        is_forecast=False,
+        forcing_has_ensemble=True,
+        n_ensemble_members=3,
+        n_timesteps=10,
+    )
+    expected = WeatherDataset(datastore=datastore, ar_steps=2)[1][2]
+    datastore._da_state = datastore._da_state.drop_vars("ensemble_member")
+    datastore._da_forcing = datastore._da_forcing.drop_vars("ensemble_member")
+
+    forcing = WeatherDataset(datastore=datastore, ar_steps=2)[1][2]
+    torch.testing.assert_close(forcing, expected)
+
+
 def test_ensemble_forcing_without_member_dim_is_shared():
     datastore = EnsembleDummyDatastore(
         is_forecast=False,
