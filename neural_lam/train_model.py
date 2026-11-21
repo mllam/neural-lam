@@ -29,6 +29,7 @@ from .config import (
     ModelConfig,
     NeuralLAMConfig,
     OutputClamping,
+    PressureLevelWeighting,
     TrainingConfig,
     TrainRunConfig,
     UniformFeatureWeighting,
@@ -52,6 +53,7 @@ if hasattr(torch.serialization, "add_safe_globals"):
             ManualStateFeatureWeighting,
             NeuralLAMConfig,
             OutputClamping,
+            PressureLevelWeighting,
             TrainingConfig,
             UniformFeatureWeighting,
         ]

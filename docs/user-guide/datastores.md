@@ -58,7 +58,38 @@ For now the neural-lam config only defines few things:
 1. A named mapping of datastores (`datastores`), each giving the kind of datastore and the path to its config.
    Which one is the interior and which is the boundary follows from the categories each provides, see [Data categories](#data-categories) below.
 2. The weighting of different features in the loss function.
-   If you don't define the state feature weighting it will default to weighting all features equally.
+   If you don't define the state feature weighting it will default to
+   weighting all features equally (`UniformFeatureWeighting`). You can also
+   specify manual weights using `ManualStateFeatureWeighting`, or weight
+   vertical atmospheric variables proportionally to pressure levels with
+   `PressureLevelWeighting`:
+
+   ```yaml
+   training:
+     state_feature_weighting:
+       __config_class__: PressureLevelWeighting
+       variables: [z, q, t, u, v, w]
+       pressure_levels: [50, 100, 250, 500, 850, 1000]
+       name_format: "{var_name}{level}"
+       other_weights:
+         2t: 1.0
+         10u: 0.1
+         10v: 0.1
+         msl: 0.1
+   ```
+
+   > **Note on loss and gradient scale:**
+   > Under `PressureLevelWeighting`, vertical weights for each atmospheric
+   > variable are normalized across levels to sum to 1.0, while
+   > `other_weights` retain their explicit values. Consequently, the total
+   > sum of all feature weights equals the number of atmospheric variables
+   > plus the sum of `other_weights` (for example, $6 \times 1.0 + 1.3 = 7.3$
+   > in the configuration above, compared to $1.0$ for
+   > `UniformFeatureWeighting`). Switching from uniform to pressure-level
+   > weighting changes relative feature contributions and may change loss
+   > and gradient magnitudes; the effect depends on the loss function and
+   > feature errors, so account for this when tuning learning rates or
+   > comparing loss values.
 3. Valid numerical range for output of each feature.
    The numerical range of all features default to $]-\infty, \infty[$.
 
