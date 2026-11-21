@@ -3,6 +3,7 @@ import pytest
 import torch
 
 # First-party
+from neural_lam import config as nlconfig
 from neural_lam.metrics import (
     DEFINED_METRICS,
     crps_gauss,
@@ -14,6 +15,10 @@ from neural_lam.metrics import (
     wmae,
     wmse,
 )
+from neural_lam.models.forecasters.deterministic import (
+    BaseDeterministicForecaster,
+)
+from tests.dummy_datastore import DummyDatastore
 
 
 def _single_residual_case(residual=1.0):
@@ -145,3 +150,138 @@ def test_probabilistic_losses_support_pred_std_broadcasting():
             sum_vars=False,
         ),
     )
+
+
+@pytest.mark.parametrize("metric", [nll, crps_gauss])
+@pytest.mark.parametrize(
+    "invalid_std",
+    [
+        torch.tensor([0.0]),
+        torch.tensor([-1.0]),
+        torch.tensor([float("nan")]),
+        torch.tensor([float("inf")]),
+        torch.tensor([-float("inf")]),
+        torch.tensor([1.0, 0.0]),
+        torch.tensor([1.0, -0.5]),
+        torch.tensor([1.0, float("nan")]),
+        torch.tensor([1.0, float("inf")]),
+    ],
+)
+def test_pred_std_validation_raises_value_error(metric, invalid_std):
+    """Probabilistic metrics reject non-positive or non-finite pred_std."""
+    pred, target = _single_residual_case()
+    if invalid_std.numel() > 1:
+        pred = pred.expand(1, 1, 1, invalid_std.numel())
+        target = target.expand_as(pred)
+
+    with pytest.raises(
+        ValueError,
+        match="requires pred_std to contain finite, strictly positive values",
+    ):
+        metric(pred, target, invalid_std)
+
+
+@pytest.mark.parametrize("loss_fn", [wmse, wmae])
+def test_weighted_losses_support_zero_weight_feature_exclusion(loss_fn):
+    """Zero feature weights (pred_std=inf) exclude features with 0 gradient."""
+    pred = torch.tensor([[2.0, 3.0]], requires_grad=True)
+    target = torch.tensor([[1.0, 1.0]])
+    pred_std = torch.tensor([1.0, float("inf")])
+
+    loss = loss_fn(pred, target, pred_std)
+    loss.backward()
+
+    assert torch.isfinite(loss)
+    assert loss.item() == 1.0
+    torch.testing.assert_close(
+        pred.grad,
+        torch.tensor(
+            [[2.0 if loss_fn is wmse else 1.0, 0.0]], dtype=torch.float32
+        ),
+    )
+
+
+@pytest.mark.parametrize("loss_name", ["wmse", "wmae"])
+def test_forecaster_zero_weight_feature_exclusion_regression(loss_name):
+    """A zero manual feature weight produces finite loss and zero gradient."""
+
+    class SimpleForecaster(BaseDeterministicForecaster):
+        @property
+        def predicts_std(self) -> bool:
+            return False
+
+        def forward(self, init_states, forcing_features, boundary_states):
+            return init_states[:, -1:], None
+
+    datastore = DummyDatastore()
+    state_names = datastore.get_vars_names("state")
+    weights = {name: 1.0 for name in state_names}
+    weights[state_names[0]] = 0.0
+
+    cfg = nlconfig.NeuralLAMConfig(
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind="mdp", config_path=datastore.root_path
+            )
+        },
+        training=nlconfig.TrainingConfig(
+            state_feature_weighting=nlconfig.ManualStateFeatureWeighting(
+                weights=weights
+            )
+        ),
+    )
+
+    forecaster = SimpleForecaster(
+        datastore=datastore, config=cfg, loss=loss_name
+    )
+    assert torch.isinf(forecaster.per_var_std[0])
+
+    pred = torch.ones((1, 1, 10, 5), requires_grad=True)
+    target = torch.zeros((1, 1, 10, 5))
+
+    loss = forecaster.compute_loss_from_forecast(pred, target, pred_std=None)
+    loss.backward()
+
+    assert torch.isfinite(loss)
+    assert loss.item() == 4.0
+    assert torch.all(pred.grad[..., 0] == 0.0)
+    assert torch.all(pred.grad[..., 1:] > 0.0)
+
+
+@pytest.mark.parametrize("loss_fn", [wmse, wmae])
+def test_weighted_losses_vmap_support(loss_fn):
+    """Weighted losses work under torch.vmap without control flow errors."""
+    pred = torch.randn(2, 5, 3)
+    target = torch.randn(2, 5, 3)
+    pred_std = torch.ones(3)
+
+    v_loss_shared = torch.vmap(loss_fn, in_dims=(0, 0, None))
+    res_shared = v_loss_shared(pred, target, pred_std)
+    assert res_shared.shape == (2,)
+
+    pred_std_batched = torch.ones(2, 5, 3)
+    v_loss_batched = torch.vmap(loss_fn, in_dims=(0, 0, 0))
+    res_batched = v_loss_batched(pred, target, pred_std_batched)
+    assert res_batched.shape == (2,)
+
+
+@pytest.mark.parametrize("metric", [nll, crps_gauss])
+def test_probabilistic_metrics_compiled_validation(metric):
+    """Compiled probabilistic metrics validate pred_std before computation."""
+    c_metric = torch.compile(metric, backend="aot_eager")
+
+    pred = torch.tensor([[[0.0]]])
+    target = torch.tensor([[[1.0]]])
+    valid_std = torch.tensor([[[1.0]]])
+    invalid_std = torch.tensor([[[-1.0]]])
+
+    # Valid pred_std succeeds
+    res = c_metric(pred, target, valid_std)
+    assert torch.isfinite(res)
+
+    # Invalid pred_std raises ValueError even when compiled
+    with pytest.raises(
+        ValueError,
+        match="requires pred_std to contain finite, strictly positive values",
+    ):
+        c_metric(pred, target, invalid_std)
