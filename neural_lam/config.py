@@ -89,9 +89,10 @@ class PressureLevelWeighting:
     Weights for each vertical variable are normalized across levels to sum to
     1.0, while ``other_weights`` retain their explicit values. Consequently,
     the total sum of all feature weights equals the number of atmospheric
-    variables plus the sum of ``other_weights``, which scales overall loss
-    and gradient magnitudes relative to ``UniformFeatureWeighting`` (where
-    total weight sums to 1.0).
+    variables plus the sum of ``other_weights``. Switching from uniform to
+    pressure-level weighting changes relative feature contributions and may
+    change loss and gradient magnitudes depending on the loss function and
+    feature errors.
 
     Attributes
     ----------

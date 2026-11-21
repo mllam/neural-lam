@@ -213,11 +213,11 @@ training:
    > sum of all feature weights equals the number of atmospheric variables
    > plus the sum of `other_weights` (for example, $6 \times 1.0 + 1.3 = 7.3$
    > in the configuration above, compared to $1.0$ for
-   > `UniformFeatureWeighting`). Because loss and gradient magnitudes scale
-   > proportionally with the sum of weights, switching from uniform to
-   > pressure-level weighting changes the effective loss scale. Users
-   > should account for this when tuning learning rates or comparing loss
-   > values.
+   > `UniformFeatureWeighting`). Switching from uniform to pressure-level
+   > weighting changes relative feature contributions and may change loss
+   > and gradient magnitudes; the effect depends on the loss function and
+   > feature errors, so account for this when tuning learning rates or
+   > comparing loss values.
 
 3. Valid numerical range for output of each feature. The numerical range of all features default to $]-\infty, \infty[$.
 
