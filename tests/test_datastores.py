@@ -599,3 +599,106 @@ def test_symlinked_config_resolves_to_the_real_directory():
 
     assert datastore.root_path == linked.resolve().parent
     assert datastore.root_path.name == "danra_100m_winds"
+
+
+@pytest.mark.requires_real_data
+@pytest.mark.parametrize(
+    "lon, lat",
+    [
+        ([10.0, 11.0], [57.0, 55.0, 53.0]),  # descending latitude
+        ([11.0, 10.0], [53.0, 55.0, 57.0]),  # descending longitude
+        ([11.0, 10.0], [57.0, 55.0, 53.0]),  # both descending
+    ],
+)
+def test_get_xy_preserves_stored_coordinate_order(tmp_path, lon, lat):
+    """`get_xy` must keep the stored order of `grid_index`, so that its rows
+    line up with `get_dataarray` and `get_lat_lon` for descending coordinates
+    (e.g. ERA5 latitude 90 -> -90)."""
+    nlon, nlat = len(lon), len(lat)
+    t = np.datetime64("2022-04-01T00:00") + np.arange(24) * np.timedelta64(
+        3, "h"
+    )
+    # value encodes the stored position of each grid point
+    vals = 10 * np.arange(nlon)[:, None] + np.arange(nlat)[None, :]
+    xr.Dataset(
+        {
+            "t2m": (
+                ("time", "longitude", "latitude"),
+                np.broadcast_to(vals, (24, nlon, nlat)).astype(float),
+            )
+        },
+        coords={"time": t, "longitude": lon, "latitude": lat},
+    ).to_zarr(tmp_path / "in.zarr", mode="w")
+
+    def split(start, end):
+        return {"start": start, "end": end}
+
+    stats = {
+        "ops": ["mean", "std", "diff_mean", "diff_std"],
+        "dims": ["grid_index", "time"],
+    }
+    config = {
+        "schema_version": "v0.5.0",
+        "dataset_version": "v0.1.0",
+        "output": {
+            "variables": {"state": ["time", "grid_index", "state_feature"]},
+            "coord_ranges": {
+                "time": {
+                    "start": "2022-04-01T00:00",
+                    "end": "2022-04-03T21:00",
+                    "step": "PT3H",
+                }
+            },
+            "splitting": {
+                "dim": "time",
+                "splits": {
+                    "train": {
+                        **split("2022-04-01T00:00", "2022-04-02T00:00"),
+                        "compute_statistics": stats,
+                    },
+                    "val": split("2022-04-02T03:00", "2022-04-03T00:00"),
+                    "test": split("2022-04-03T03:00", "2022-04-03T21:00"),
+                },
+            },
+        },
+        "inputs": {
+            "surface": {
+                "path": str(tmp_path / "in.zarr"),
+                "dims": ["time", "longitude", "latitude"],
+                "variables": ["t2m"],
+                "dim_mapping": {
+                    "time": {"method": "rename", "dim": "time"},
+                    "grid_index": {
+                        "method": "stack",
+                        "dims": ["longitude", "latitude"],
+                    },
+                    "state_feature": {
+                        "method": "stack_variables_by_var_name",
+                        "name_format": "{var_name}",
+                    },
+                },
+                "target_output_variable": "state",
+            }
+        },
+        "extra": {"projection": {"class_name": "PlateCarree", "kwargs": {}}},
+    }
+    config_path = tmp_path / "ds.yaml"
+    config_path.write_text(yaml.safe_dump(config))
+
+    datastore = MDPDatastore(config_path=config_path, n_boundary_points=0)
+
+    da = datastore.get_dataarray("state", split="train").isel(
+        time=0, state_feature=0
+    )
+    expected_xy = np.array(
+        [[lon[int(v) // 10], lat[int(v) % 10]] for v in da.values]
+    )
+
+    xy_stacked = datastore.get_xy("state", stacked=True)
+    np.testing.assert_array_equal(xy_stacked, expected_xy)
+    np.testing.assert_array_equal(xy_stacked, datastore.get_lat_lon("state"))
+
+    xy_unstacked = datastore.get_xy("state", stacked=False)
+    assert xy_unstacked.shape == (nlon, nlat, 2)
+    np.testing.assert_array_equal(xy_unstacked[:, 0, 0], lon)
+    np.testing.assert_array_equal(xy_unstacked[0, :, 1], lat)
