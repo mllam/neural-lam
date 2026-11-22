@@ -2,7 +2,6 @@
 
 # Standard library
 import hashlib
-from functools import cached_property
 
 # Third-party
 import torch
@@ -29,6 +28,7 @@ class BaseGraphModel(StepPredictor):
     mesh_static_features: torch.Tensor | list[torch.Tensor]
     m2m_features: torch.Tensor | list[torch.Tensor]
     m2m_edge_index: torch.Tensor | list[torch.Tensor]
+    _graph_compatibility_fingerprint: str
 
     _GRAPH_COMPATIBILITY_ATTRIBUTES = (
         "g2m_edge_index",
@@ -137,6 +137,9 @@ class BaseGraphModel(StepPredictor):
             graph_name,
             mesh_node_features_scaling=grid_xy_max_span,
         )
+        self._graph_compatibility_fingerprint = (
+            self._compute_graph_compatibility_fingerprint()
+        )
 
         # Specify dimensions of data
         self.num_mesh_nodes, _ = self.get_num_mesh()
@@ -193,13 +196,12 @@ class BaseGraphModel(StepPredictor):
         # Compute indices and define clamping functions
         self.prepare_clamping_params(datastore)
 
-    @cached_property
-    def _graph_compatibility_fingerprint(self) -> str:
-        """Hash and cache the registered graph tensors and grid-node count.
+    def _compute_graph_compatibility_fingerprint(self) -> str:
+        """Hash the construction-time graph tensors and grid-node count.
 
         Tensor attribute names, collection positions, dtypes, shapes, and
-        contiguous CPU bytes contribute to the hash. The cache assumes these
-        tensors remain immutable model structure.
+        contiguous CPU bytes contribute to the hash. The result is stored
+        before Lightning can cast buffers to the runtime training precision.
         """
         fingerprint = hashlib.sha256()
         fingerprint.update(f"num_grid_nodes:{self.num_grid_nodes}".encode())
@@ -215,22 +217,29 @@ class BaseGraphModel(StepPredictor):
                 fingerprint.update(f"{attribute_name}:{index}".encode())
                 fingerprint.update(str(tensor_cpu.dtype).encode())
                 fingerprint.update(str(tuple(tensor_cpu.shape)).encode())
-                fingerprint.update(tensor_cpu.numpy().tobytes())
+                fingerprint.update(
+                    tensor_cpu.view(torch.uint8).numpy().tobytes()
+                )
         return fingerprint.hexdigest()
 
-    def get_pretrained_compatibility_metadata(self) -> dict[str, str]:
+    def get_pretrained_compatibility_metadata(
+        self,
+    ) -> dict[str, dict[str, object]]:
         """Expose graph compatibility claims for selective initialization.
 
-        The versioned key identifies how the fingerprint was constructed so a
-        future schema can coexist with or replace ``graph_v1`` explicitly.
+        The fingerprint is independent of later device and precision changes.
 
         Returns
         -------
-        dict of str to str
-            Versioned SHA-256 graph fingerprint used to validate selective
-            checkpoint initialization.
+        dict of str to dict of str to object
+            Versioned graph claim used to validate selective initialization.
         """
-        return {"graph_v1": self._graph_compatibility_fingerprint}
+        return {
+            "graph": {
+                "version": 1,
+                "value": self._graph_compatibility_fingerprint,
+            }
+        }
 
     def get_num_mesh(self) -> tuple[int, int]:
         """

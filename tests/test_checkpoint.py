@@ -4,6 +4,7 @@ from pathlib import Path
 # Third-party
 import pytorch_lightning as pl
 import torch
+from lightning_fabric.plugins.precision import HalfPrecision
 
 # First-party
 from neural_lam import config as nlconfig
@@ -16,13 +17,8 @@ from neural_lam.models import (
 from tests.dummy_datastore import DummyDatastore
 
 
-def test_saved_checkpoint_excludes_datastore_and_forecaster(tmp_path):
-    """
-    Regression check for issue #148: heavy non-pickle-safe objects
-    (`datastore`, `forecaster`) must be excluded from the saved Lightning
-    hyperparameters so that checkpoints stay small and portable, and so
-    that `load_from_checkpoint` requires them to be passed in explicitly.
-    """
+def build_checkpoint_model():
+    """Build the small GraphLAM module used by checkpoint regressions."""
     datastore = DummyDatastore()
 
     # Build the minimum graph the GraphLAM predictor needs.
@@ -67,6 +63,17 @@ def test_saved_checkpoint_excludes_datastore_and_forecaster(tmp_path):
         n_example_pred=1,
         val_steps_to_log=[1],
     )
+    return model
+
+
+def test_saved_checkpoint_excludes_datastore_and_forecaster(tmp_path):
+    """
+    Regression check for issue #148: heavy non-pickle-safe objects
+    (`datastore`, `forecaster`) must be excluded from the saved Lightning
+    hyperparameters so that checkpoints stay small and portable, and so
+    that `load_from_checkpoint` requires them to be passed in explicitly.
+    """
+    model = build_checkpoint_model()
 
     # Lightning's in-memory hparams must already drop these.
     assert "datastore" not in model.hparams
@@ -90,3 +97,27 @@ def test_saved_checkpoint_excludes_datastore_and_forecaster(tmp_path):
     assert "hyper_parameters" in ckpt
     assert "datastore" not in ckpt["hyper_parameters"]
     assert "forecaster" not in ckpt["hyper_parameters"]
+
+
+def test_bf16_graph_buffers_do_not_break_checkpoint_save(tmp_path):
+    """Save ordinary checkpoints after Lightning converts buffers to BF16."""
+    model = build_checkpoint_model()
+    fingerprint = model.forecaster.predictor._graph_compatibility_fingerprint
+    HalfPrecision("bf16-true").convert_module(model)
+    assert model.forecaster.predictor._graph_compatibility_fingerprint == (
+        fingerprint
+    )
+
+    trainer = pl.Trainer(
+        default_root_dir=tmp_path,
+        accelerator="cpu",
+        max_epochs=0,
+        logger=False,
+        enable_checkpointing=False,
+    )
+    trainer.strategy.connect(model)
+    checkpoint_path = tmp_path / "bf16.ckpt"
+    trainer.save_checkpoint(checkpoint_path, weights_only=False)
+
+    checkpoint = torch.load(checkpoint_path, weights_only=False)
+    assert "neural_lam_pretrained_compatibility" in checkpoint

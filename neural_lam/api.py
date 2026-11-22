@@ -37,6 +37,7 @@ def train(
     pretrained_components: list[str] | None = None,
     freeze_components: list[str] | None = None,
     allow_missing_compatibility_metadata: bool = False,
+    allow_incompatible_pretrained_behavior: bool = False,
     graph: str = "multiscale",
     hidden_dim: int = 64,
     hidden_layers: int = 1,
@@ -100,15 +101,22 @@ def train(
     restore_opt : bool, default False
         Whether to restore optimizer state when loading checkpoint.
     pretrained_checkpoint : str or None, optional
-        Checkpoint used to initialize selected components for fresh training.
+        Checkpoint used to initialize selected GraphLAM components for fresh
+        training. Cannot be combined with ``load``, evaluation, or
+        ``restore_opt``.
     pretrained_components : list of str or None, optional
         Nested module paths, such as ``forecaster.predictor.processor``, to
         initialize from ``pretrained_checkpoint``.
     freeze_components : list of str or None, optional
-        Nested module paths whose parameters should remain frozen.
+        Nested module paths whose parameters should remain frozen during
+        training. This setting is not available during evaluation.
     allow_missing_compatibility_metadata : bool, default False
         Allow a legacy pretrained checkpoint without compatibility metadata.
-        The caller then assumes responsibility for graph compatibility.
+        The caller then assumes responsibility for graph and model-behavior
+        compatibility.
+    allow_incompatible_pretrained_behavior : bool, default False
+        Allow known model execution-setting differences during selective
+        initialization. A warning identifies the accepted differences.
     graph : str, default "multiscale"
         Name of the graph to load from the datastore graph directory.
     hidden_dim : int, default 64
@@ -245,6 +253,9 @@ def train(
         freeze_components=freeze_components,
         allow_missing_compatibility_metadata=(
             allow_missing_compatibility_metadata
+        ),
+        allow_incompatible_pretrained_behavior=(
+            allow_incompatible_pretrained_behavior
         ),
         eval=eval,
         n_example_pred=n_example_pred,

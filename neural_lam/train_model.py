@@ -302,7 +302,14 @@ def build_parser() -> ArgumentParser:
         "--allow_missing_compatibility_metadata",
         action="store_true",
         help="Allow a legacy pretrained checkpoint without compatibility "
-        "metadata; the caller assumes graph compatibility responsibility",
+        "metadata; the caller assumes graph and model-behavior compatibility "
+        "responsibility",
+    )
+    runtime_group.add_argument(
+        "--allow_incompatible_pretrained_behavior",
+        action="store_true",
+        help="Allow known model execution-setting differences when loading "
+        "pretrained components",
     )
 
     # Model architecture
@@ -634,6 +641,14 @@ def fit(
             "allow_missing_compatibility_metadata requires "
             "pretrained_checkpoint and pretrained_components."
         )
+    if (
+        train_config.allow_incompatible_pretrained_behavior
+        and not has_pretrained_checkpoint
+    ):
+        raise ValueError(
+            "allow_incompatible_pretrained_behavior requires "
+            "pretrained_checkpoint and pretrained_components."
+        )
     if train_config.eval and train_config.freeze_components:
         raise ValueError("freeze_components is only supported for training.")
 
@@ -757,6 +772,12 @@ def fit(
     predictor_class = MODELS[model_config.model]
     predictor = build_predictor(predictor_class, hparams, config, datastore)
 
+    if has_pretrained_checkpoint and not predictor.supports_pretrained_transfer:
+        raise ValueError(
+            f"Selective pretrained initialization is not supported for "
+            f"{model_config.model!r}."
+        )
+
     if not train_config.eval and not predictor.trainable:
         raise ValueError(
             f"The {model_config.model} model cannot be trained. Run with "
@@ -793,6 +814,9 @@ def fit(
             allow_missing_compatibility_metadata=(
                 train_config.allow_missing_compatibility_metadata
             ),
+            allow_incompatible_pretrained_behavior=(
+                train_config.allow_incompatible_pretrained_behavior
+            ),
             **_checkpoint_loading_kwargs(),
             **module_kwargs,
         )
@@ -805,6 +829,10 @@ def fit(
             raise ValueError(
                 "freeze_components leaves no trainable parameters."
             )
+        utils.log_on_rank_zero(
+            "Frozen model components: "
+            + ", ".join(train_config.freeze_components)
+        )
 
     prefix = f"eval-{train_config.eval}-" if train_config.eval else "train-"
     if logging_config.logger_run_name:

@@ -361,6 +361,9 @@ class TrainRunConfig:
     allow_missing_compatibility_metadata : bool, default False
         Whether selective initialization may use a legacy checkpoint without
         compatibility metadata.
+    allow_incompatible_pretrained_behavior : bool, default False
+        Whether selective initialization may use weights with known model
+        execution-setting differences.
     """
 
     epochs: int = 200
@@ -388,6 +391,7 @@ class TrainRunConfig:
     pretrained_components: list[str] = dataclasses.field(default_factory=list)
     freeze_components: list[str] = dataclasses.field(default_factory=list)
     allow_missing_compatibility_metadata: bool = False
+    allow_incompatible_pretrained_behavior: bool = False
 
 
 @dataclasses.dataclass

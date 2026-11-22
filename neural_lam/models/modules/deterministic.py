@@ -56,6 +56,7 @@ class DeterministicForecastingModule(BaseForecastingModule):
         args: Any | None = None,
         pretrained_components: list[str] | None = None,
         allow_missing_compatibility_metadata: bool = False,
+        allow_incompatible_pretrained_behavior: bool = False,
     ) -> None:
         """
         Initialize the module and its deterministic evaluation metrics.
@@ -103,6 +104,9 @@ class DeterministicForecastingModule(BaseForecastingModule):
         allow_missing_compatibility_metadata : bool, default False
             Whether selective initialization may proceed when a checkpoint
             predates compatibility metadata. Known mismatches remain errors.
+        allow_incompatible_pretrained_behavior : bool, default False
+            Whether selective initialization may proceed when known model
+            execution settings differ. Graph mismatches remain errors.
         """
         super().__init__(
             forecaster=forecaster,
@@ -120,6 +124,9 @@ class DeterministicForecastingModule(BaseForecastingModule):
             pretrained_components=pretrained_components,
             allow_missing_compatibility_metadata=(
                 allow_missing_compatibility_metadata
+            ),
+            allow_incompatible_pretrained_behavior=(
+                allow_incompatible_pretrained_behavior
             ),
             args=args,
         )

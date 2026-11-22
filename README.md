@@ -502,7 +502,7 @@ Use the environment variable `MLFLOW_TRACKING_URI` to set the URI of the MLFlow 
 
 ## Train Models
 Models can be trained using `python -m neural_lam.train_model --config_path <config_path>`.
-Run `python neural_lam.train_model --help` for a full list of training options.
+Run `python -m neural_lam.train_model --help` for a full list of training options.
 A few of the key ones are outlined below:
 
 * `--config_path`: Path to the configuration for neural-lam (for example in `data/myexperiment/config.yaml`).
@@ -519,7 +519,8 @@ Checkpoints of trained models are stored under `runs/<run-name>/checkpoints/`, a
 ### Transfer learning
 
 Selected model components can initialize a fresh training run from a trusted
-Lightning checkpoint. A dotted module path identifies a nested module by
+Lightning checkpoint. This workflow currently supports GraphLAM. A dotted
+module path identifies a nested module by
 joining its attribute names with periods. For example,
 `forecaster.predictor.processor` means the `processor` module inside
 `predictor`, which is inside `forecaster`. This command transfers GraphLAM's
@@ -547,14 +548,20 @@ should remain frozen.
 trainer state. It is therefore distinct from, and cannot be combined with,
 `--load`, which resumes a complete training checkpoint. Every selected
 component must exist in both models with exactly matching state keys and tensor
-shapes. Selective transfer also requires matching graph structure and features.
-For graph-based models, Neural-LAM compares fingerprints of the registered graph
-tensors and grid-node count; this does not verify broader dataset or feature
-semantics. Checkpoints created before this metadata was introduced are rejected
-by default. To use a trusted legacy checkpoint after verifying its graph, add
-`--allow_missing_compatibility_metadata`; this emits a warning and makes the
-caller responsible for compatibility. A stored fingerprint mismatch can never
-be overridden. Cross-topology transfer is not supported.
+shapes. Selective transfer also requires the same normalized graph structure,
+node ordering and graph features. Neural-LAM records graph identity before
+runtime precision conversion, so training precision does not affect this check.
+Matching graph identity does not verify dataset-variable meaning, ordering,
+units, normalization statistics, or scientific suitability.
+
+Known GraphLAM execution settings, including mesh aggregation, must also match.
+Use `--allow_incompatible_pretrained_behavior` only for an intentional
+behavior-changing experiment; it warns with the accepted differences. A graph
+mismatch cannot be overridden, and cross-topology transfer is unsupported.
+Checkpoints created before compatibility metadata was introduced are rejected by
+default. To use a trusted legacy checkpoint after verifying its graph and model
+settings, add `--allow_missing_compatibility_metadata`; this emits a warning and
+makes the caller responsible for both forms of compatibility.
 
 The implemented models are:
 

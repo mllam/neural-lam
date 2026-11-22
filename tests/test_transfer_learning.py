@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 import pytorch_lightning as pl
 import torch
+from lightning_fabric.plugins.precision import DoublePrecision
 from torch.utils.data import DataLoader
 
 # First-party
@@ -32,6 +33,20 @@ class ReducedStateDummyDatastore(DummyDatastore):
     """Dummy datastore with fewer target state variables."""
 
     N_FEATURES = dict(DummyDatastore.N_FEATURES, state=3)
+
+
+class MetadataProvider(torch.nn.Module):
+    """Configurable provider used to exercise the metadata contract."""
+
+    def __init__(self, result):
+        super().__init__()
+        self.result = result
+
+    def get_pretrained_compatibility_metadata(self):
+        """Return the configured result or raise the configured exception."""
+        if isinstance(self.result, Exception):
+            raise self.result
+        return self.result
 
 
 def create_flat_graph(datastore):
@@ -67,6 +82,7 @@ def build_module(
     metrics_watch=None,
     restore_opt=False,
     args=None,
+    mesh_aggr="sum",
 ):
     """Build a small deterministic GraphLAM forecasting module."""
     if val_steps_to_log is None:
@@ -89,6 +105,7 @@ def build_module(
         hidden_dim=hidden_dim,
         hidden_layers=1,
         processor_layers=1,
+        mesh_aggr=mesh_aggr,
         num_past_forcing_steps=0,
         num_future_forcing_steps=0,
     )
@@ -146,6 +163,7 @@ def load_selected_components(
     target_datastore,
     components=TRANSFER_COMPONENTS,
     allow_missing_compatibility_metadata=False,
+    allow_incompatible_pretrained_behavior=False,
 ):
     """Load selected source components into a fresh target module."""
     return DeterministicForecastingModule.load_from_checkpoint(
@@ -166,6 +184,9 @@ def load_selected_components(
         pretrained_components=list(components),
         allow_missing_compatibility_metadata=(
             allow_missing_compatibility_metadata
+        ),
+        allow_incompatible_pretrained_behavior=(
+            allow_incompatible_pretrained_behavior
         ),
         map_location="cpu",
         strict=True,
@@ -322,7 +343,9 @@ def test_legacy_checkpoint_requires_explicit_compatibility_override(
 
     with pytest.warns(
         UserWarning,
-        match="caller is responsible for graph compatibility",
+        match=(
+            "caller is responsible for graph and model-behavior compatibility"
+        ),
     ):
         loaded = load_selected_components(
             checkpoint_path,
@@ -337,6 +360,111 @@ def test_legacy_checkpoint_requires_explicit_compatibility_override(
         loaded.forecaster.predictor.processor.state_dict(),
         source.forecaster.predictor.processor.state_dict(),
     )
+
+
+@pytest.mark.parametrize(
+    ("metadata", "match"),
+    [
+        (None, "not a mapping"),
+        ({"forecaster.predictor": {"graph_v1": "value"}}, "exactly"),
+    ],
+)
+def test_malformed_metadata_cannot_use_missing_metadata_override(
+    different_feature_datastores, tmp_path, metadata, match
+):
+    """Distinguish malformed present metadata from absent legacy metadata."""
+    source_datastore, target_datastore = different_feature_datastores
+    source, _ = build_module(source_datastore)
+    target, target_config = build_module(target_datastore)
+    checkpoint_path = tmp_path / "malformed_metadata.ckpt"
+    save_lightning_checkpoint(source, checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, weights_only=False)
+    checkpoint["neural_lam_pretrained_compatibility"] = metadata
+    torch.save(checkpoint, checkpoint_path)
+
+    with pytest.raises(ValueError, match=match):
+        load_selected_components(
+            checkpoint_path,
+            target,
+            target_config,
+            target_datastore,
+            components=("forecaster.predictor.processor",),
+            allow_missing_compatibility_metadata=True,
+        )
+
+
+def test_unsupported_metadata_versions_are_reported(
+    different_feature_datastores, tmp_path
+):
+    """Reject unsupported document and claim versions explicitly."""
+    source_datastore, target_datastore = different_feature_datastores
+    source, _ = build_module(source_datastore)
+    target, target_config = build_module(target_datastore)
+    checkpoint_path = tmp_path / "unsupported_version.ckpt"
+    save_lightning_checkpoint(source, checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, weights_only=False)
+    metadata = checkpoint["neural_lam_pretrained_compatibility"]
+    metadata["format_version"] = 2
+    torch.save(checkpoint, checkpoint_path)
+
+    with pytest.raises(ValueError, match="format version 2.*unsupported"):
+        load_selected_components(
+            checkpoint_path,
+            target,
+            target_config,
+            target_datastore,
+            components=("forecaster.predictor.processor",),
+            allow_incompatible_pretrained_behavior=True,
+        )
+
+    metadata["format_version"] = 1
+    metadata["providers"]["forecaster.predictor"]["graph"]["version"] = 2
+    torch.save(checkpoint, checkpoint_path)
+    with pytest.raises(
+        ValueError, match="Unsupported compatibility claim version"
+    ):
+        load_selected_components(
+            checkpoint_path,
+            target,
+            target_config,
+            target_datastore,
+            components=("forecaster.predictor.processor",),
+            allow_incompatible_pretrained_behavior=True,
+        )
+
+
+@pytest.mark.parametrize(
+    ("result", "match"),
+    [
+        ({}, "returned no claims"),
+        ("invalid", "must contain claims"),
+        (
+            RuntimeError("provider failure"),
+            "provider at 'invalid_provider' failed",
+        ),
+    ],
+)
+def test_compatibility_provider_contract(
+    different_feature_datastores, result, match
+):
+    """Report invalid provider output with the owning module path."""
+    source_datastore, _ = different_feature_datastores
+    module, _ = build_module(source_datastore)
+    module.invalid_provider = MetadataProvider(result)
+
+    with pytest.raises(ValueError, match=match):
+        module._get_pretrained_compatibility_metadata()
+
+
+def test_compatibility_provider_must_be_callable(different_feature_datastores):
+    """Reject provider attributes that cannot produce metadata."""
+    source_datastore, _ = different_feature_datastores
+    module, _ = build_module(source_datastore)
+    module.invalid_provider = torch.nn.Module()
+    module.invalid_provider.get_pretrained_compatibility_metadata = "invalid"
+
+    with pytest.raises(ValueError, match="not callable"):
+        module._get_pretrained_compatibility_metadata()
 
 
 def test_multiple_component_validation_is_atomic(
@@ -365,28 +493,21 @@ def test_multiple_component_validation_is_atomic(
     assert_state_equal(target.state_dict(), target_state_before)
 
 
-@pytest.mark.parametrize("failure", ["missing", "mismatch"])
-def test_graph_compatibility_is_required(
-    different_feature_datastores, tmp_path, failure
+def test_graph_compatibility_metadata_is_required(
+    different_feature_datastores, tmp_path
 ):
-    """Reject missing or mismatched graph compatibility metadata."""
+    """Reject a checkpoint with no compatibility metadata."""
     source_datastore, target_datastore = different_feature_datastores
     source, _ = build_module(source_datastore)
     target, target_config = build_module(target_datastore)
     target_state_before = clone_state(target)
-    checkpoint_path = tmp_path / f"graph_{failure}.ckpt"
+    checkpoint_path = tmp_path / "graph_missing.ckpt"
     save_lightning_checkpoint(source, checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, weights_only=False)
+    del checkpoint["neural_lam_pretrained_compatibility"]
+    torch.save(checkpoint, checkpoint_path)
 
-    if failure == "missing":
-        checkpoint = torch.load(checkpoint_path, weights_only=False)
-        del checkpoint["neural_lam_pretrained_compatibility"]
-        torch.save(checkpoint, checkpoint_path)
-        error = "does not contain compatibility metadata"
-    else:
-        target.forecaster.predictor.m2m_edge_index[0, 0] += 1
-        error = "incompatible with the target model graph"
-
-    with pytest.raises(ValueError, match=error):
+    with pytest.raises(ValueError, match="does not contain compatibility"):
         load_selected_components(
             checkpoint_path,
             target,
@@ -396,6 +517,137 @@ def test_graph_compatibility_is_required(
         )
 
     assert_state_equal(target.state_dict(), target_state_before)
+
+
+def test_graph_compatibility_rejects_different_loaded_graph(tmp_path):
+    """Reject graph differences present before predictor construction."""
+    source_datastore = DummyDatastore(n_grid_points=81)
+    target_datastore = ReducedStateDummyDatastore(n_grid_points=81)
+    create_flat_graph(source_datastore)
+    create_flat_graph(target_datastore)
+    target_graph_path = (
+        Path(target_datastore.root_path)
+        / "graph"
+        / "1level"
+        / "m2m_features.pt"
+    )
+    target_features = torch.load(target_graph_path, weights_only=True)
+    target_features[0][0, 0] += 1
+    torch.save(target_features, target_graph_path)
+
+    source, _ = build_module(source_datastore)
+    target, target_config = build_module(target_datastore)
+    checkpoint_path = tmp_path / "graph_mismatch.ckpt"
+    save_lightning_checkpoint(source, checkpoint_path)
+
+    with pytest.raises(
+        ValueError, match="incompatible with the target model graph"
+    ):
+        load_selected_components(
+            checkpoint_path,
+            target,
+            target_config,
+            target_datastore,
+            components=("forecaster.predictor.processor",),
+            allow_incompatible_pretrained_behavior=True,
+        )
+
+
+def test_full_restore_rejects_known_graph_mismatch(tmp_path):
+    """Do not relabel full checkpoint state with a different target graph."""
+    source_datastore = DummyDatastore(n_grid_points=81)
+    target_datastore = DummyDatastore(n_grid_points=81)
+    create_flat_graph(source_datastore)
+    create_flat_graph(target_datastore)
+    target_graph_path = (
+        Path(target_datastore.root_path)
+        / "graph"
+        / "1level"
+        / "m2m_features.pt"
+    )
+    target_features = torch.load(target_graph_path, weights_only=True)
+    target_features[0][0, 0] += 1
+    torch.save(target_features, target_graph_path)
+
+    source, _ = build_module(source_datastore)
+    target, target_config = build_module(target_datastore)
+    checkpoint_path = tmp_path / "full_restore_graph_mismatch.ckpt"
+    save_lightning_checkpoint(source, checkpoint_path)
+
+    with pytest.raises(
+        ValueError, match="incompatible with the target model graph"
+    ):
+        DeterministicForecastingModule.load_from_checkpoint(
+            checkpoint_path,
+            forecaster=target.forecaster,
+            config=target_config,
+            datastore=target_datastore,
+            map_location="cpu",
+            strict=True,
+            **_checkpoint_loading_kwargs(),
+        )
+
+
+def test_graph_identity_is_stable_across_fp64_transfer(
+    different_feature_datastores, tmp_path
+):
+    """Use construction-time graph identity after runtime FP64 conversion."""
+    source_datastore, target_datastore = different_feature_datastores
+    source, _ = build_module(source_datastore)
+    target, target_config = build_module(target_datastore)
+    source_predictor = source.forecaster.predictor
+    fingerprint = source_predictor._graph_compatibility_fingerprint
+    DoublePrecision().convert_module(source)
+    assert source_predictor._graph_compatibility_fingerprint == fingerprint
+
+    checkpoint_path = tmp_path / "fp64_source.ckpt"
+    save_lightning_checkpoint(source, checkpoint_path)
+    loaded = load_selected_components(
+        checkpoint_path,
+        target,
+        target_config,
+        target_datastore,
+        components=("forecaster.predictor.processor",),
+    )
+
+    assert_state_equal(
+        loaded.forecaster.predictor.processor.state_dict(),
+        source.forecaster.predictor.processor.state_dict(),
+    )
+
+
+def test_model_behavior_mismatch_requires_explicit_override(
+    different_feature_datastores, tmp_path
+):
+    """Reject changed execution semantics unless the caller opts in."""
+    source_datastore, target_datastore = different_feature_datastores
+    source, _ = build_module(source_datastore, mesh_aggr="sum")
+    target, target_config = build_module(target_datastore, mesh_aggr="mean")
+    checkpoint_path = tmp_path / "behavior_mismatch.ckpt"
+    save_lightning_checkpoint(source, checkpoint_path)
+
+    with pytest.raises(ValueError, match="incompatible model behavior"):
+        load_selected_components(
+            checkpoint_path,
+            target,
+            target_config,
+            target_datastore,
+            components=("forecaster.predictor.processor",),
+        )
+
+    with pytest.warns(UserWarning, match="mesh_aggr"):
+        loaded = load_selected_components(
+            checkpoint_path,
+            target,
+            target_config,
+            target_datastore,
+            components=("forecaster.predictor.processor",),
+            allow_incompatible_pretrained_behavior=True,
+        )
+    assert_state_equal(
+        loaded.forecaster.predictor.processor.state_dict(),
+        source.forecaster.predictor.processor.state_dict(),
+    )
 
 
 def test_target_hyperparameters_override_source_checkpoint(
@@ -515,6 +767,48 @@ def test_transferred_checkpoint_full_reload_does_not_reinitialize(
 
     assert resumed._pretrained_components == ()
     assert_state_equal(resumed.state_dict(), transferred.state_dict())
+
+
+def test_transfer_selection_is_consumed_before_same_instance_restore(
+    different_feature_datastores, tmp_path
+):
+    """Restore complete state on an instance previously used for transfer."""
+    source_datastore, target_datastore = different_feature_datastores
+    source, _ = build_module(source_datastore)
+    target, target_config = build_module(target_datastore)
+    source_checkpoint = tmp_path / "one_shot_source.ckpt"
+    save_lightning_checkpoint(source, source_checkpoint)
+    transferred = load_selected_components(
+        source_checkpoint,
+        target,
+        target_config,
+        target_datastore,
+        components=("forecaster.predictor.processor",),
+    )
+    assert transferred._pretrained_components == ()
+
+    complete, _ = build_module(target_datastore)
+    with torch.no_grad():
+        complete.forecaster.predictor.output_map[0].weight.fill_(7)
+    complete_state = clone_state(complete)
+    complete_checkpoint = tmp_path / "complete_target.ckpt"
+    save_lightning_checkpoint(complete, complete_checkpoint)
+
+    with torch.no_grad():
+        transferred.forecaster.predictor.output_map[0].weight.fill_(123)
+    trainer = pl.Trainer(
+        default_root_dir=tmp_path,
+        accelerator="cpu",
+        max_epochs=0,
+        logger=False,
+        enable_checkpointing=False,
+    )
+    trainer.strategy.connect(transferred)
+    connector = trainer._checkpoint_connector
+    connector.resume_start(complete_checkpoint, weights_only=False)
+    connector.restore_model()
+
+    assert_state_equal(transferred.state_dict(), complete_state)
 
 
 @pytest.mark.requires_training

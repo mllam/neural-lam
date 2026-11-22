@@ -5,7 +5,7 @@ forecasting modules."""
 import os
 import warnings
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 # Third-party
@@ -15,6 +15,7 @@ import pytorch_lightning as pl
 import torch
 import xarray as xr
 from PIL import Image
+from pytorch_lightning.utilities.rank_zero import rank_zero_warn
 
 # First-party
 from neural_lam.utils import get_integer_time
@@ -32,6 +33,8 @@ Batch = tuple[
 ]
 
 PRETRAINED_COMPATIBILITY_KEY = "neural_lam_pretrained_compatibility"
+PRETRAINED_COMPATIBILITY_FORMAT_VERSION = 1
+PRETRAINED_COMPATIBILITY_CLAIMS = {"graph", "model_behavior"}
 
 
 class BaseForecastingModule(pl.LightningModule, ABC):
@@ -86,6 +89,7 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         args: Any | None = None,
         pretrained_components: list[str] | None = None,
         allow_missing_compatibility_metadata: bool = False,
+        allow_incompatible_pretrained_behavior: bool = False,
     ) -> None:
         """
         Initialize the BaseForecastingModule.
@@ -141,6 +145,9 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         allow_missing_compatibility_metadata : bool, default False
             Whether selective initialization may proceed when a checkpoint
             predates compatibility metadata. Known mismatches remain errors.
+        allow_incompatible_pretrained_behavior : bool, default False
+            Whether selective initialization may proceed when known GraphLAM
+            execution settings differ. Graph mismatches remain errors.
         """
         super().__init__()
         # Pre-refactor ``ARModel`` checkpoints saved every hyperparameter nested
@@ -213,8 +220,19 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         self._pretrained_components = self._validate_component_paths(
             pretrained_components or []
         )
+        predictor = getattr(forecaster, "predictor", None)
+        if self._pretrained_components and not getattr(
+            predictor, "supports_pretrained_transfer", False
+        ):
+            raise ValueError(
+                "The target predictor does not support selective pretrained "
+                "initialization."
+            )
         self._allow_missing_compatibility_metadata = (
             allow_missing_compatibility_metadata
+        )
+        self._allow_incompatible_pretrained_behavior = (
+            allow_incompatible_pretrained_behavior
         )
         self.matched_metrics: set = set()
 
@@ -562,29 +580,184 @@ class BaseForecastingModule(pl.LightningModule, ABC):
 
     def _get_pretrained_compatibility_metadata(
         self,
-    ) -> dict[str, dict[str, str]]:
+    ) -> dict[str, Any]:
         """Collect versioned compatibility claims from nested components.
 
         Components opt in by defining ``get_pretrained_compatibility_metadata``.
+        Providers must return deterministic, serialization-safe claim records.
         Results are keyed by module path so each claim retains its owner.
 
         Returns
         -------
-        dict of str to dict of str to str
-            Provider metadata keyed by nested module path. Inner keys identify
-            the provider's compatibility schema version.
+        dict of str to Any
+            Versioned metadata document, or an empty dictionary when no nested
+            component provides compatibility claims.
+
+        Raises
+        ------
+        ValueError
+            If a provider is invalid, fails, or returns malformed metadata.
         """
-        metadata = {}
+        providers = {}
         for path, module in self.named_modules():
             metadata_provider = getattr(
                 module, "get_pretrained_compatibility_metadata", None
             )
             if metadata_provider is None:
                 continue
-            component_metadata = metadata_provider()
-            if component_metadata:
-                metadata[path] = component_metadata
+            if not callable(metadata_provider):
+                raise ValueError(
+                    f"Compatibility metadata provider at {path!r} is not "
+                    "callable."
+                )
+            try:
+                component_metadata = metadata_provider()
+            except Exception as exc:
+                raise ValueError(
+                    f"Compatibility metadata provider at {path!r} failed."
+                ) from exc
+            if not component_metadata:
+                raise ValueError(
+                    f"Compatibility metadata provider at {path!r} returned "
+                    "no claims."
+                )
+            providers[path] = component_metadata
+
+        if not providers:
+            return {}
+        metadata = {
+            "format_version": PRETRAINED_COMPATIBILITY_FORMAT_VERSION,
+            "providers": providers,
+        }
+        self._validate_compatibility_metadata(metadata, origin="target model")
         return metadata
+
+    @staticmethod
+    def _is_compatibility_value(value: Any) -> bool:
+        """Return whether a value belongs to the metadata value subset."""
+        if value is None or isinstance(value, (bool, float, int, str)):
+            return True
+        if isinstance(value, list):
+            return all(
+                BaseForecastingModule._is_compatibility_value(item)
+                for item in value
+            )
+        if isinstance(value, dict):
+            return all(
+                isinstance(key, str)
+                and BaseForecastingModule._is_compatibility_value(item)
+                for key, item in value.items()
+            )
+        return False
+
+    @staticmethod
+    def _validate_compatibility_metadata(
+        metadata: Any,
+        *,
+        origin: str,
+    ) -> Mapping[str, Any]:
+        """Validate and return providers from one metadata document.
+
+        Parameters
+        ----------
+        metadata : Any
+            Metadata document to validate.
+        origin : str
+            Description used to identify invalid metadata in errors.
+
+        Returns
+        -------
+        mapping of str to Any
+            Validated provider records keyed by nested module path.
+
+        Raises
+        ------
+        ValueError
+            If the document, provider, or claim schema is unsupported.
+        """
+        if not isinstance(metadata, dict):
+            raise ValueError(
+                f"{origin} compatibility metadata is not a mapping."
+            )
+        if set(metadata) != {"format_version", "providers"}:
+            raise ValueError(
+                f"{origin} compatibility metadata must contain exactly "
+                "'format_version' and 'providers'."
+            )
+        version = metadata["format_version"]
+        if (
+            type(version) is not int
+            or version != PRETRAINED_COMPATIBILITY_FORMAT_VERSION
+        ):
+            raise ValueError(
+                f"{origin} compatibility metadata format version {version!r} "
+                f"is unsupported; expected "
+                f"{PRETRAINED_COMPATIBILITY_FORMAT_VERSION}."
+            )
+        providers = metadata["providers"]
+        if not isinstance(providers, dict) or not providers:
+            raise ValueError(
+                f"{origin} compatibility metadata must contain providers."
+            )
+        for path, claims in providers.items():
+            if not isinstance(path, str) or not path:
+                raise ValueError(
+                    f"{origin} compatibility metadata has an invalid provider "
+                    f"path {path!r}."
+                )
+            if not isinstance(claims, dict) or not claims:
+                raise ValueError(
+                    f"{origin} compatibility provider {path!r} must contain "
+                    "claims."
+                )
+            for claim_name, claim in claims.items():
+                if not isinstance(claim_name, str) or not claim_name:
+                    raise ValueError(
+                        f"{origin} compatibility provider {path!r} has an "
+                        f"invalid claim name {claim_name!r}."
+                    )
+                if claim_name not in PRETRAINED_COMPATIBILITY_CLAIMS:
+                    raise ValueError(
+                        f"{origin} compatibility provider {path!r} has an "
+                        f"unsupported claim {claim_name!r}."
+                    )
+                if not isinstance(claim, dict) or set(claim) != {
+                    "version",
+                    "value",
+                }:
+                    raise ValueError(
+                        f"{origin} compatibility claim "
+                        f"{path!r}.{claim_name} must contain exactly 'version' "
+                        "and 'value'."
+                    )
+                claim_version = claim["version"]
+                if type(claim_version) is not int or claim_version < 1:
+                    raise ValueError(
+                        f"{origin} compatibility claim "
+                        f"{path!r}.{claim_name} has invalid version "
+                        f"{claim_version!r}."
+                    )
+                if not BaseForecastingModule._is_compatibility_value(
+                    claim["value"]
+                ):
+                    raise ValueError(
+                        f"{origin} compatibility claim "
+                        f"{path!r}.{claim_name} has a non-serializable value."
+                    )
+        return providers
+
+    @staticmethod
+    def _format_behavior_differences(source: Any, target: Any) -> str:
+        """Format differing model-behavior fields for diagnostics."""
+        if isinstance(source, Mapping) and isinstance(target, Mapping):
+            differences = [
+                f"{key}: checkpoint={source.get(key)!r}, "
+                f"target={target.get(key)!r}"
+                for key in sorted(set(source) | set(target))
+                if source.get(key) != target.get(key)
+            ]
+            return "; ".join(differences)
+        return f"checkpoint={source!r}, target={target!r}"
 
     def _validate_pretrained_compatibility(
         self,
@@ -592,8 +765,9 @@ class BaseForecastingModule(pl.LightningModule, ABC):
     ) -> None:
         """Compare checkpoint compatibility claims with the target model.
 
-        Present source metadata must exactly equal all claims exposed by the
-        target. The explicit override permits absent source metadata only.
+        Provider and claim schemas must match exactly. Missing metadata and
+        known model-behavior differences have separate explicit overrides;
+        graph and schema mismatches always fail.
 
         Parameters
         ----------
@@ -607,17 +781,20 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         """
         target_metadata = self._get_pretrained_compatibility_metadata()
         if not target_metadata:
-            return
+            raise ValueError(
+                "The target model does not provide compatibility metadata; "
+                "selective pretrained initialization is unsupported."
+            )
 
-        source_metadata = checkpoint.get(PRETRAINED_COMPATIBILITY_KEY)
-        if source_metadata is None:
+        if PRETRAINED_COMPATIBILITY_KEY not in checkpoint:
             if self._allow_missing_compatibility_metadata:
-                warnings.warn(
+                rank_zero_warn(
                     "The pretrained checkpoint does not contain compatibility "
                     "metadata. Continuing because "
                     "allow_missing_compatibility_metadata=True; the caller "
-                    "is responsible for graph compatibility.",
-                    UserWarning,
+                    "is responsible for graph and model-behavior "
+                    "compatibility.",
+                    category=UserWarning,
                     stacklevel=2,
                 )
                 return
@@ -626,17 +803,86 @@ class BaseForecastingModule(pl.LightningModule, ABC):
                 "metadata. Recreate it with a Neural-LAM version that stores "
                 "graph fingerprints."
             )
-        if source_metadata != target_metadata:
+        source_metadata = checkpoint[PRETRAINED_COMPATIBILITY_KEY]
+        source_providers = self._validate_compatibility_metadata(
+            source_metadata,
+            origin="checkpoint",
+        )
+        target_providers = target_metadata["providers"]
+        source_paths = set(source_providers)
+        target_paths = set(target_providers)
+        if source_paths != target_paths:
             raise ValueError(
-                "The pretrained checkpoint is incompatible with the target "
-                "model graph topology, node ordering, or graph features."
+                "Compatibility metadata provider paths differ: "
+                f"missing={sorted(target_paths - source_paths)}, "
+                f"unexpected={sorted(source_paths - target_paths)}."
             )
+
+        for path in sorted(target_paths):
+            source_claims = source_providers[path]
+            target_claims = target_providers[path]
+            source_names = set(source_claims)
+            target_names = set(target_claims)
+            if source_names != target_names:
+                raise ValueError(
+                    f"Compatibility claims differ for provider {path!r}: "
+                    f"missing={sorted(target_names - source_names)}, "
+                    f"unexpected={sorted(source_names - target_names)}."
+                )
+            for claim_name in sorted(target_names):
+                source_claim = source_claims[claim_name]
+                target_claim = target_claims[claim_name]
+                if source_claim["version"] != target_claim["version"]:
+                    raise ValueError(
+                        f"Unsupported compatibility claim version for "
+                        f"{path!r}.{claim_name}: checkpoint="
+                        f"{source_claim['version']!r}, "
+                        f"target={target_claim['version']!r}."
+                    )
+                source_value = source_claim["value"]
+                target_value = target_claim["value"]
+                if source_value == target_value:
+                    continue
+                if (
+                    claim_name == "model_behavior"
+                    and self._allow_incompatible_pretrained_behavior
+                ):
+                    differences = self._format_behavior_differences(
+                        source_value, target_value
+                    )
+                    rank_zero_warn(
+                        "The pretrained checkpoint uses incompatible model "
+                        "behavior. Continuing because "
+                        "allow_incompatible_pretrained_behavior=True; "
+                        f"{differences}.",
+                        category=UserWarning,
+                        stacklevel=2,
+                    )
+                    continue
+                if claim_name == "graph":
+                    raise ValueError(
+                        "The pretrained checkpoint is incompatible with the "
+                        "target model graph topology, node ordering, or graph "
+                        "features."
+                    )
+                if claim_name == "model_behavior":
+                    differences = self._format_behavior_differences(
+                        source_value, target_value
+                    )
+                    raise ValueError(
+                        "The pretrained checkpoint uses incompatible model "
+                        f"behavior: {differences}."
+                    )
+                raise ValueError(
+                    f"Compatibility claim {path!r}.{claim_name} differs "
+                    "between checkpoint and target."
+                )
 
     def on_save_checkpoint(self, checkpoint: dict[str, Any]) -> None:
         """Store component compatibility claims in a Lightning checkpoint.
 
-        Empty provider results are omitted; all other results are stored under
-        ``PRETRAINED_COMPATIBILITY_KEY`` by nested module path.
+        Provider claims are validated and wrapped in a versioned document under
+        ``PRETRAINED_COMPATIBILITY_KEY``.
 
         Parameters
         ----------
@@ -1378,6 +1624,15 @@ class BaseForecastingModule(pl.LightningModule, ABC):
             checkpoint["state_dict"] = self._merge_pretrained_component_state(
                 loaded_state_dict
             )
+            # Selection is an initialization instruction, not persistent load
+            # behavior. Later restores on this instance must load full state.
+            self._pretrained_components = ()
+            self._allow_missing_compatibility_metadata = False
+            self._allow_incompatible_pretrained_behavior = False
+        elif PRETRAINED_COMPATIBILITY_KEY in checkpoint:
+            # Full restores remain compatible with metadata-free legacy
+            # checkpoints, but a known mismatch must not be relabeled on save.
+            self._validate_pretrained_compatibility(checkpoint)
 
         if not self.restore_opt:
             opt = self.configure_optimizers()

@@ -76,6 +76,7 @@ def test_eval_without_load_warning(eval_val, load_val, expect_warning):
     mock_args.pretrained_components = []
     mock_args.freeze_components = []
     mock_args.allow_missing_compatibility_metadata = False
+    mock_args.allow_incompatible_pretrained_behavior = False
 
     with patch(
         "neural_lam.train_model.ArgumentParser.parse_args",
@@ -116,6 +117,7 @@ def test_create_gif_forwarded_to_forecasting_module():
     mock_args.pretrained_components = []
     mock_args.freeze_components = []
     mock_args.allow_missing_compatibility_metadata = False
+    mock_args.allow_incompatible_pretrained_behavior = False
 
     captured_kwargs = {}
 
@@ -233,6 +235,10 @@ def test_steps_to_log_validation(cli_args, match_err):
             "requires pretrained_checkpoint",
         ),
         (
+            ["--allow_incompatible_pretrained_behavior"],
+            "requires pretrained_checkpoint",
+        ),
+        (
             [
                 "--load",
                 "resume.ckpt",
@@ -332,6 +338,7 @@ def test_pretrained_checkpoint_uses_lightning_loader(config):
         """Minimal trainable predictor accepted by the fit setup."""
 
         trainable = True
+        supports_pretrained_transfer = True
 
         def __init__(self, **_kwargs):
             pass
@@ -368,6 +375,9 @@ def test_pretrained_checkpoint_uses_lightning_loader(config):
         patch("neural_lam.train_model.pl.Trainer", return_value=trainer),
         patch("neural_lam.train_model.utils.setup_training_logger"),
         patch("neural_lam.train_model.utils.init_training_logger_metrics"),
+        patch(
+            "neural_lam.train_model.utils.log_on_rank_zero"
+        ) as log_on_rank_zero,
     ):
         getattr(main, "__wrapped__", main)(
             [
@@ -380,6 +390,7 @@ def test_pretrained_checkpoint_uses_lightning_loader(config):
                 "--freeze_components",
                 component,
                 "--allow_missing_compatibility_metadata",
+                "--allow_incompatible_pretrained_behavior",
             ]
         )
 
@@ -389,10 +400,51 @@ def test_pretrained_checkpoint_uses_lightning_loader(config):
     assert call_kwargs["strict"] is True
     assert call_kwargs["map_location"] == "cpu"
     assert call_kwargs["allow_missing_compatibility_metadata"] is True
+    assert call_kwargs["allow_incompatible_pretrained_behavior"] is True
     loaded_model.freeze_components.assert_called_once_with([component])
+    log_on_rank_zero.assert_called_once_with(
+        f"Frozen model components: {component}"
+    )
     trainer.fit.assert_called_once()
     assert trainer.fit.call_args.kwargs["model"] is loaded_model
     assert trainer.fit.call_args.kwargs["ckpt_path"] is None
+
+
+def test_pretrained_checkpoint_rejects_unsupported_predictor(config):
+    """Fail explicitly until a predictor defines transfer compatibility."""
+
+    class UnsupportedPredictor:
+        trainable = True
+        supports_pretrained_transfer = False
+
+        def __init__(self, **_kwargs):
+            pass
+
+    datastore = MagicMock()
+    datastore.get_vars_names.return_value = []
+    component = "forecaster.predictor.processor"
+    with (
+        patch(
+            "neural_lam.train_model.load_config_and_datastore",
+            return_value=(config, datastore, None),
+        ),
+        patch("neural_lam.train_model.WeatherDataModule"),
+        patch(
+            "neural_lam.train_model.MODELS",
+            {"graph_lam": UnsupportedPredictor},
+        ),
+    ):
+        with pytest.raises(ValueError, match="not supported"):
+            getattr(main, "__wrapped__", main)(
+                [
+                    "--config_path",
+                    "dummy.yaml",
+                    "--pretrained_checkpoint",
+                    "source.ckpt",
+                    "--pretrained_components",
+                    component,
+                ]
+            )
 
 
 def test_load_keeps_standard_lightning_resume_path(config):

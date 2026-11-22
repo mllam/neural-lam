@@ -131,6 +131,7 @@ def test_persistence_training_error():
     mock_args.pretrained_components = []
     mock_args.freeze_components = []
     mock_args.allow_missing_compatibility_metadata = False
+    mock_args.allow_incompatible_pretrained_behavior = False
 
     mock_predictor = MagicMock()
     mock_predictor.trainable = False

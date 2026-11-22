@@ -209,6 +209,7 @@ def test_config_parity(monkeypatch, tmp_path):
             "--freeze_components",
             component,
             "--allow_missing_compatibility_metadata",
+            "--allow_incompatible_pretrained_behavior",
         ]
     )
     train_model.run(args)
@@ -217,6 +218,7 @@ def test_config_parity(monkeypatch, tmp_path):
         pretrained_components=[component],
         freeze_components=[component],
         allow_missing_compatibility_metadata=True,
+        allow_incompatible_pretrained_behavior=True,
     )
     assert captured[0][1] == captured[1][1]
 
