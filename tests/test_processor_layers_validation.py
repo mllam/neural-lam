@@ -61,9 +61,7 @@ def test_negative_processor_layers_raises_value_error(
 
 
 @pytest.mark.parametrize("model_cls", HIERARCHICAL_MODELS)
-def test_zero_processor_layers_is_supported(
-    model_cls, hierarchical_datastore
-):
+def test_zero_processor_layers_is_supported(model_cls, hierarchical_datastore):
     """Zero layers must construct a model with no processor steps."""
     model = _build_model(model_cls, hierarchical_datastore, 0)
 
