@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Raise a descriptive `ValueError` for negative `processor_layers` in `HiLAM` and `HiLAMParallel` instead of silently building no processors or failing with a bare `AssertionError` [\#900](https://github.com/mllam/neural-lam/issues/900) @YuvrajVerma09arch
+- Raise a descriptive `ValueError` for negative `processor_layers` in `HiLAM` and `HiLAMParallel` instead of silently building no processors or failing with a bare `AssertionError` [\#904](https://github.com/mllam/neural-lam/pull/904) @YuvrajVerma09arch
 
 - Fix `InteractionNet` and `PropagationNet` dimension mismatches when `hidden_dim` differs from `input_dim` [\#836](https://github.com/mllam/neural-lam/pull/836) @Karvy-Singh
 
