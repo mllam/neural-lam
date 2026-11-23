@@ -289,6 +289,34 @@ def test_npyfilesmeps_analysis_times_unique():
     assert da_state.analysis_time.to_index().is_unique
 
 
+@pytest.mark.requires_real_data
+def test_npyfilesmeps_single_member_has_no_ensemble_dim(tmp_path):
+    """With `num_ensemble_members: 1` the store is not an ensemble, so its
+    state must be member 0 without an `ensemble_member` dim."""
+    datastore_ens = init_datastore_example("npyfilesmeps")
+    for name in ("samples", "static"):
+        (tmp_path / name).symlink_to((datastore_ens.root_path / name).resolve())
+    config = yaml.safe_load(
+        Path(DATASTORES_EXAMPLES["npyfilesmeps"]).read_text()
+    )
+    config["dataset"]["num_ensemble_members"] = 1
+    config_path = tmp_path / "meps.datastore.yaml"
+    config_path.write_text(yaml.safe_dump(config))
+
+    datastore = init_datastore("npyfilesmeps", config_path)
+    assert not datastore.is_ensemble
+
+    da_state = datastore.get_dataarray(category="state", split="train")
+    assert da_state.dims == datastore.expected_dim_order("state")
+    da_member_0 = datastore_ens.get_dataarray(
+        category="state", split="train"
+    ).isel(ensemble_member=0)
+    np.testing.assert_array_equal(
+        da_state.isel(analysis_time=0).values,
+        da_member_0.isel(analysis_time=0).values,
+    )
+
+
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_boundary_mask(datastore_name):
     """Check that the `datastore.boundary_mask` property is implemented and

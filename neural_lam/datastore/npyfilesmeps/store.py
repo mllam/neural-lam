@@ -260,8 +260,9 @@ class NpyFilesDatastoreMEPS(BaseDatastore):
             The data array for the given category and split, with dimensions
             per category:
 
-            * state: ``[elapsed_forecast_duration, analysis_time, grid_index,``
-              ``feature, ensemble_member]``
+            * state: ``[analysis_time, elapsed_forecast_duration,``
+              ``ensemble_member, grid_index, state_feature]``, without
+              ``ensemble_member`` when ``num_ensemble_members`` is 1
             * forcing: ``[elapsed_forecast_duration, analysis_time,``
               ``grid_index, feature]``
             * static: ``[grid_index, feature]``
@@ -277,7 +278,13 @@ class NpyFilesDatastoreMEPS(BaseDatastore):
                     member=member,
                 )
                 das.append(da_member)
-            da = xr.concat(das, dim="ensemble_member")
+            # A single member is deterministic data: is_ensemble is False, so
+            # expected_dim_order has no ensemble_member dim to stack onto
+            da = (
+                xr.concat(das, dim="ensemble_member")
+                if self.is_ensemble
+                else das[0]
+            )
 
         elif category == "forcing":
             # the forcing features are in separate files, so we need to load
