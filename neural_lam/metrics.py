@@ -102,13 +102,15 @@ def _validate_pred_std(pred_std: torch.Tensor, metric_name: str) -> None:
     ValueError
         If ``pred_std`` contains non-positive (<= 0) or non-finite values.
     """
-    if (
+    check_tensor = pred_std
+    while (
         hasattr(torch, "_C")
         and hasattr(torch._C, "_functorch")
-        and torch._C._functorch.is_batchedtensor(pred_std)
+        and torch._C._functorch.is_batchedtensor(check_tensor)
     ):
-        return
-    if not torch.all((pred_std > 0) & torch.isfinite(pred_std)):
+        check_tensor = torch._C._functorch.get_unwrapped(check_tensor)
+
+    if not torch.all((check_tensor > 0) & torch.isfinite(check_tensor)):
         raise ValueError(
             f"{metric_name} requires pred_std to contain finite, "
             "strictly positive values (pred_std > 0)."

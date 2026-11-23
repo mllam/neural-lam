@@ -285,3 +285,26 @@ def test_probabilistic_metrics_compiled_validation(metric):
         match="requires pred_std to contain finite, strictly positive values",
     ):
         c_metric(pred, target, invalid_std)
+
+
+@pytest.mark.parametrize("metric", [nll, crps_gauss])
+def test_probabilistic_metrics_vmap_support_and_validation(metric):
+    """vmap on probabilistic metrics validates pred_std and supports batches."""
+    pred = torch.zeros(2, 1, 1)
+    target = torch.ones_like(pred)
+    valid_std = torch.ones_like(pred)
+    invalid_std = -torch.ones_like(pred)
+
+    v_metric = torch.vmap(metric)
+
+    # Valid batched pred_std succeeds
+    res = v_metric(pred, target, valid_std)
+    assert res.shape == (2,)
+    assert torch.all(torch.isfinite(res))
+
+    # Invalid batched pred_std raises ValueError
+    with pytest.raises(
+        ValueError,
+        match="requires pred_std to contain finite, strictly positive values",
+    ):
+        v_metric(pred, target, invalid_std)
