@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix a second `api.train`/`api.evaluate` in the same Python session (or a retry after a crashed run) failing with `Run ... is already active` when using `logger="mlflow"`; `CustomMLFlowLogger` now ends its MLflow run in `finalize`, keeping the finished/failed status [\#906](https://github.com/mllam/neural-lam/pull/906) @AshNicolus
+
 - Fix `InteractionNet` and `PropagationNet` dimension mismatches when `hidden_dim` differs from `input_dim` [\#836](https://github.com/mllam/neural-lam/pull/836) @Karvy-Singh
 
 - Raise a `ValueError` for `--val_interval` below 1 in `train_model.fit`; `0` previously crashed with a `ZeroDivisionError` inside Lightning after the model was built, and negative values were silently accepted [\#847](https://github.com/mllam/neural-lam/pull/847) @nikhil3495
