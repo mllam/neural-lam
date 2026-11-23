@@ -682,9 +682,7 @@ def plot_prediction(
         subplot_kw={"projection": datastore.coords_projection},
     )
 
-    for ax, da, subtitle in zip(
-        axes, (da_target, da_prediction), ("Ground Truth", "Prediction")
-    ):
+    meshes = [
         plot_on_axis(
             ax=ax,
             da=da,
@@ -696,12 +694,18 @@ def plot_prediction(
             boundary_alpha=boundary_alpha,
             crop_to_interior=crop_to_interior,
         )
+        for ax, da, subtitle in zip(
+            axes, (da_target, da_prediction), ("Ground Truth", "Prediction")
+        )
+    ]
 
     if title:
         fig.suptitle(title, size=_TITLE_SIZE)
 
+    # Not axes[0].collections[0]: cartopy adds coastlines and borders as
+    # collections before the mesh, and those have a default 0-1 norm
     cbar = fig.colorbar(
-        axes[0].collections[0],
+        meshes[0],
         ax=axes,
         orientation="horizontal",
         location="bottom",
