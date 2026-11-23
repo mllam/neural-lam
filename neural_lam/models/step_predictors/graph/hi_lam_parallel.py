@@ -67,6 +67,11 @@ class HiLAMParallel(BaseHiGraphModel):
         output_clamping_upper : dict, optional
             Upper clamping limits for state variables.
         """
+        if processor_layers < 0:
+            raise ValueError(
+                f"processor_layers must be >= 0, got {processor_layers}"
+            )
+
         super().__init__(
             datastore=datastore,
             graph_name=graph_name,
