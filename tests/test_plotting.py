@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 # Third-party
 import matplotlib
+import matplotlib.collections
 import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
@@ -141,10 +142,18 @@ def test_plot_prediction() -> None:
     assert len(ground_truth_ax.collections) == 1
     assert len(prediction_ax.collections) == 1
 
-    assert ground_truth_ax.collections[0].norm.vmin == expected_vmin
-    assert ground_truth_ax.collections[0].norm.vmax == expected_vmax
-    assert prediction_ax.collections[0].norm.vmin == expected_vmin
-    assert prediction_ax.collections[0].norm.vmax == expected_vmax
+    ground_truth_mesh, prediction_mesh = (
+        next(
+            c
+            for c in ax.collections
+            if isinstance(c, matplotlib.collections.QuadMesh)
+        )
+        for ax in (ground_truth_ax, prediction_ax)
+    )
+    assert ground_truth_mesh.norm.vmin == expected_vmin
+    assert ground_truth_mesh.norm.vmax == expected_vmax
+    assert prediction_mesh.norm.vmin == expected_vmin
+    assert prediction_mesh.norm.vmax == expected_vmax
 
 
 def test_plot_prediction_colorbar_uses_data_range(
