@@ -250,5 +250,5 @@ datastores:
 For npy-file based datastores you must separately run the command that creates the variables used for standardization:
 
 ```bash
-python -m neural_lam.datastore.npyfilesmeps.compute_standardization_stats <path-to-datastore-config>
+python -m neural_lam.datastore.npyfilesmeps.compute_standardization_stats --datastore_config_path <path-to-datastore-config>
 ```

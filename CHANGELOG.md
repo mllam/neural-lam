@@ -35,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Raise a `ValueError` for `--val_interval` below 1 in `train_model.fit`; `0` previously crashed with a `ZeroDivisionError` inside Lightning after the model was built, and negative values were silently accepted [\#847](https://github.com/mllam/neural-lam/pull/847) @nikhil3495
 
-- Fix the `mllam_data_prep` commands in the datastores guide passing the datastore config with a nonexistent `--config` flag instead of as a positional argument [\#893](https://github.com/mllam/neural-lam/pull/893) @Ritwik389
+- Fix CLI usage in the datastores guide: the `mllam_data_prep` commands passed the datastore config with a nonexistent `--config` flag instead of as a positional argument, and the `compute_standardization_stats` command passed it positionally instead of with `--datastore_config_path` [\#893](https://github.com/mllam/neural-lam/pull/893) @Ritwik389
 
 - Fix shifted test spatial loss map titles and `spatial_loss_maps/loss_t{n}.pdf` filenames when `val_steps_to_log` contains steps outside the evaluation rollout [\#752](https://github.com/mllam/neural-lam/pull/752) @vikramsingh920
 
