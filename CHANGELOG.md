@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fix the shared colorbar in `plot_prediction` showing a 0-1 range instead of the data range, as it was attached to the first collection on the axis, which cartopy makes the coastline artist rather than the data mesh [\#TBD](https://github.com/mllam/neural-lam/pull/TBD) @nikhil3495
+- Fix the shared colorbar in `plot_prediction` showing a 0-1 range instead of the data range; it was attached to the first collection on the axis, which is the cartopy coastline artist rather than the data mesh [\#903](https://github.com/mllam/neural-lam/pull/903) @nikhil3495
 
 - Fix `InteractionNet` and `PropagationNet` dimension mismatches when `hidden_dim` differs from `input_dim` [\#836](https://github.com/mllam/neural-lam/pull/836) @Karvy-Singh
 
