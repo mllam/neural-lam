@@ -443,8 +443,14 @@ class MDPDatastore(BaseDatastore):
             )
 
         ds_unstacked = self.unstack_grid_coords(da_or_ds=self._ds)
-        da_state_variable = (
-            ds_unstacked["state"].isel(time=0).isel(state_feature=0)
+        # The mask is a field over the grid only, so drop every other state
+        # dim (time, state_feature and, for ensemble data, ensemble_member)
+        da_state_variable = ds_unstacked["state"].isel(
+            {
+                dim: 0
+                for dim in ds_unstacked["state"].dims
+                if dim not in self.spatial_coordinates
+            }
         )
         da_domain_allzero = xr.zeros_like(da_state_variable)
         # slice(n, -n) is empty (not "the whole array") when n == 0
