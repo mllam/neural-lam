@@ -121,3 +121,29 @@ def test_no_credentials_error_propagates_on_second_figure(
         logger_instance.log_image("err", figs)
 
     assert mock_mlflow.call_count == 2
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"), [("success", "FINISHED"), ("failed", "FAILED")]
+)
+def test_finalize_ends_run_so_next_logger_can_start(tmp_path, status, expected):
+    """`finalize` must end the run `__init__` started, so a second logger in
+    the same process (e.g. `api.train` then `api.evaluate` in a notebook) can
+    start its own run, and must keep the status Lightning reported."""
+    # Third-party
+    import mlflow
+
+    kwargs = dict(
+        experiment_name="test",
+        tracking_uri=f"file://{tmp_path / 'mlruns'}",
+        save_dir=str(tmp_path),
+    )
+    first = CustomMLFlowLogger(run_name="first", **kwargs)
+    first.finalize(status)
+
+    assert mlflow.active_run() is None
+    assert first.experiment.get_run(first.run_id).info.status == expected
+
+    second = CustomMLFlowLogger(run_name="second", **kwargs)
+    second.finalize("success")
+    assert mlflow.active_run() is None

@@ -72,6 +72,29 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         """
         return self._save_dir
 
+    def finalize(self, status: str = "success") -> None:
+        """
+        Mark the MLflow run as finished or failed and end it.
+
+        Lightning calls this after every ``fit``/``test`` and when training
+        fails. ``__init__`` starts the run with ``mlflow.start_run``, which
+        keeps it active for the whole Python process until it is ended, so
+        without this a second logger in the same process (e.g. ``api.train``
+        followed by ``api.evaluate`` in a notebook) cannot start its run.
+
+        Parameters
+        ----------
+        status : str, default "success"
+            Outcome passed by Lightning, ``"success"`` or ``"failed"``.
+        """
+        super().finalize(status)
+        # Third-party
+        import mlflow
+
+        # Explicit status: end_run defaults to FINISHED, which would
+        # overwrite the FAILED status set by super().finalize
+        mlflow.end_run(status="FAILED" if status == "failed" else "FINISHED")
+
     def log_image(
         self,
         key: str,
