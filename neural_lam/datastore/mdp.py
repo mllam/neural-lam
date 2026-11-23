@@ -89,8 +89,23 @@ class MDPDatastore(BaseDatastore):
             raise ValueError("Could not determine dim_order from inputs.")
         # get_xy and grid_shape_state treat the first dimension as x. Checked
         # before the zarr is built, so a rejected config never writes one
-        y_like = ("y", "lat", "latitude", "rlat")
-        x_like = ("x", "lon", "longitude", "rlon")
+        # plain, geographic, rotated-pole, CF standard and WRF names
+        y_like = (
+            "y",
+            "lat",
+            "latitude",
+            "rlat",
+            "projection_y_coordinate",
+            "south_north",
+        )
+        x_like = (
+            "x",
+            "lon",
+            "longitude",
+            "rlon",
+            "projection_x_coordinate",
+            "west_east",
+        )
         if dim_order[0] in y_like and dim_order[1] in x_like:
             raise ValueError(
                 f"`grid_index` is stacked from {list(dim_order)}, but the "

@@ -431,7 +431,13 @@ def test_mdp_geographic_spatial_coordinates(tmp_path):
 @pytest.mark.requires_real_data
 @pytest.mark.parametrize(
     "x_dim, y_dim",
-    [("x", "y"), ("longitude", "latitude"), ("rlon", "rlat")],
+    [
+        ("x", "y"),
+        ("longitude", "latitude"),
+        ("rlon", "rlat"),
+        ("projection_x_coordinate", "projection_y_coordinate"),
+        ("west_east", "south_north"),
+    ],
 )
 def test_mdp_reversed_spatial_coordinates_raises(tmp_path, x_dim, y_dim):
     """Stacking `grid_index` y-first would silently swap x and y in
