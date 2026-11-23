@@ -650,6 +650,34 @@ def test_model_behavior_mismatch_requires_explicit_override(
     )
 
 
+@pytest.mark.parametrize("malformed_value", [None, {}])
+def test_behavior_override_rejects_malformed_claim(
+    different_feature_datastores, tmp_path, malformed_value
+):
+    """Require a valid behavior record before applying its override."""
+    source_datastore, target_datastore = different_feature_datastores
+    source, _ = build_module(source_datastore)
+    target, target_config = build_module(target_datastore)
+    checkpoint_path = tmp_path / "malformed_behavior.ckpt"
+    save_lightning_checkpoint(source, checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, weights_only=False)
+    metadata = checkpoint["neural_lam_pretrained_compatibility"]
+    metadata["providers"]["forecaster.predictor"]["model_behavior"]["value"] = (
+        malformed_value
+    )
+    torch.save(checkpoint, checkpoint_path)
+
+    with pytest.raises(ValueError, match="model_behavior version 1 requires"):
+        load_selected_components(
+            checkpoint_path,
+            target,
+            target_config,
+            target_datastore,
+            components=("forecaster.predictor.processor",),
+            allow_incompatible_pretrained_behavior=True,
+        )
+
+
 def test_target_hyperparameters_override_source_checkpoint(
     different_feature_datastores, tmp_path
 ):

@@ -35,6 +35,12 @@ Batch = tuple[
 PRETRAINED_COMPATIBILITY_KEY = "neural_lam_pretrained_compatibility"
 PRETRAINED_COMPATIBILITY_FORMAT_VERSION = 1
 PRETRAINED_COMPATIBILITY_CLAIMS = {"graph", "model_behavior"}
+PRETRAINED_MODEL_BEHAVIOR_FIELDS = {
+    "predictor",
+    "mesh_aggr",
+    "g2m_gnn_type",
+    "m2g_gnn_type",
+}
 
 
 class BaseForecastingModule(pl.LightningModule, ABC):
@@ -744,6 +750,31 @@ class BaseForecastingModule(pl.LightningModule, ABC):
                         f"{origin} compatibility claim "
                         f"{path!r}.{claim_name} has a non-serializable value."
                     )
+                value = claim["value"]
+                if (
+                    claim_version == 1
+                    and claim_name == "graph"
+                    and (not isinstance(value, str) or not value)
+                ):
+                    raise ValueError(
+                        f"{origin} compatibility claim {path!r}.graph version "
+                        "1 requires a non-empty fingerprint string."
+                    )
+                if claim_version == 1 and claim_name == "model_behavior":
+                    if (
+                        not isinstance(value, dict)
+                        or set(value) != PRETRAINED_MODEL_BEHAVIOR_FIELDS
+                        or not all(
+                            isinstance(field_value, str) and field_value
+                            for field_value in value.values()
+                        )
+                    ):
+                        raise ValueError(
+                            f"{origin} compatibility claim "
+                            f"{path!r}.model_behavior version 1 requires "
+                            "non-empty string values for exactly "
+                            f"{sorted(PRETRAINED_MODEL_BEHAVIOR_FIELDS)}."
+                        )
         return providers
 
     @staticmethod
