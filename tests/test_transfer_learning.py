@@ -322,7 +322,6 @@ def test_invalid_component_state_does_not_modify_target(
             target_config,
             target_datastore,
             components=("forecaster.predictor.processor",),
-            allow_missing_compatibility_metadata=(failure == "mismatch"),
         )
 
     assert_state_equal(target.state_dict(), target_state_before)
@@ -366,7 +365,10 @@ def test_legacy_checkpoint_requires_explicit_compatibility_override(
     ("metadata", "match"),
     [
         (None, "not a mapping"),
-        ({"forecaster.predictor": {"graph_v1": "value"}}, "exactly"),
+        (
+            {"forecaster.predictor": {"graph_v1": "value"}},
+            "unsupported field",
+        ),
     ],
 )
 def test_malformed_metadata_cannot_use_missing_metadata_override(
@@ -393,51 +395,11 @@ def test_malformed_metadata_cannot_use_missing_metadata_override(
         )
 
 
-def test_unsupported_metadata_versions_are_reported(
-    different_feature_datastores, tmp_path
-):
-    """Reject unsupported document and claim versions explicitly."""
-    source_datastore, target_datastore = different_feature_datastores
-    source, _ = build_module(source_datastore)
-    target, target_config = build_module(target_datastore)
-    checkpoint_path = tmp_path / "unsupported_version.ckpt"
-    save_lightning_checkpoint(source, checkpoint_path)
-    checkpoint = torch.load(checkpoint_path, weights_only=False)
-    metadata = checkpoint["neural_lam_pretrained_compatibility"]
-    metadata["format_version"] = 2
-    torch.save(checkpoint, checkpoint_path)
-
-    with pytest.raises(ValueError, match="format version 2.*unsupported"):
-        load_selected_components(
-            checkpoint_path,
-            target,
-            target_config,
-            target_datastore,
-            components=("forecaster.predictor.processor",),
-            allow_incompatible_pretrained_behavior=True,
-        )
-
-    metadata["format_version"] = 1
-    metadata["providers"]["forecaster.predictor"]["graph"]["version"] = 2
-    torch.save(checkpoint, checkpoint_path)
-    with pytest.raises(
-        ValueError, match="Unsupported compatibility claim version"
-    ):
-        load_selected_components(
-            checkpoint_path,
-            target,
-            target_config,
-            target_datastore,
-            components=("forecaster.predictor.processor",),
-            allow_incompatible_pretrained_behavior=True,
-        )
-
-
 @pytest.mark.parametrize(
     ("result", "match"),
     [
-        ({}, "returned no claims"),
-        ("invalid", "must contain claims"),
+        ({}, "returned no fields"),
+        ("invalid", "must contain fields"),
         (
             RuntimeError("provider failure"),
             "provider at 'invalid_provider' failed",
@@ -651,7 +613,7 @@ def test_model_behavior_mismatch_requires_explicit_override(
 
 
 @pytest.mark.parametrize("malformed_value", [None, {}])
-def test_behavior_override_rejects_malformed_claim(
+def test_behavior_override_rejects_malformed_metadata(
     different_feature_datastores, tmp_path, malformed_value
 ):
     """Require a valid behavior record before applying its override."""
@@ -662,12 +624,10 @@ def test_behavior_override_rejects_malformed_claim(
     save_lightning_checkpoint(source, checkpoint_path)
     checkpoint = torch.load(checkpoint_path, weights_only=False)
     metadata = checkpoint["neural_lam_pretrained_compatibility"]
-    metadata["providers"]["forecaster.predictor"]["model_behavior"]["value"] = (
-        malformed_value
-    )
+    metadata["forecaster.predictor"]["model_behavior"] = malformed_value
     torch.save(checkpoint, checkpoint_path)
 
-    with pytest.raises(ValueError, match="model_behavior version 1 requires"):
+    with pytest.raises(ValueError, match="model_behavior requires"):
         load_selected_components(
             checkpoint_path,
             target,

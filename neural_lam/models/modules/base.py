@@ -5,7 +5,7 @@ forecasting modules."""
 import os
 import warnings
 from abc import ABC, abstractmethod
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from typing import Any
 
 # Third-party
@@ -33,8 +33,7 @@ Batch = tuple[
 ]
 
 PRETRAINED_COMPATIBILITY_KEY = "neural_lam_pretrained_compatibility"
-PRETRAINED_COMPATIBILITY_FORMAT_VERSION = 1
-PRETRAINED_COMPATIBILITY_CLAIMS = {"graph", "model_behavior"}
+PRETRAINED_COMPATIBILITY_FIELDS = {"graph", "model_behavior"}
 PRETRAINED_MODEL_BEHAVIOR_FIELDS = {
     "predictor",
     "mesh_aggr",
@@ -475,19 +474,19 @@ class BaseForecastingModule(pl.LightningModule, ABC):
             module without parameters.
         """
         paths = self._validate_component_paths(components)
-        resolved_components: list[tuple[str, torch.nn.Module]] = []
+        resolved_components: list[torch.nn.Module] = []
         for path in paths:
             try:
                 component = self.get_submodule(path)
             except AttributeError as exc:
                 raise ValueError(f"Unknown component path {path!r}.") from exc
-            if not tuple(component.parameters()):
+            if next(component.parameters(), None) is None:
                 raise ValueError(
                     f"Component {path!r} does not contain parameters to freeze."
                 )
-            resolved_components.append((path, component))
+            resolved_components.append(component)
 
-        for _, component in resolved_components:
+        for component in resolved_components:
             component.requires_grad_(False)
 
     def _merge_pretrained_component_state(
@@ -496,8 +495,8 @@ class BaseForecastingModule(pl.LightningModule, ABC):
     ) -> dict[str, Any]:
         """Merge selected checkpoint components into fresh target state.
 
-        All selected components are validated before any source values are
-        applied to the returned state.
+        Source values are applied only to the returned state; the model remains
+        unchanged until Lightning performs its strict state load.
 
         Parameters
         ----------
@@ -516,7 +515,6 @@ class BaseForecastingModule(pl.LightningModule, ABC):
             If a selected component is absent or structurally incompatible.
         """
         target_state = self.state_dict()
-        selected_source_state: dict[str, Any] = {}
 
         for path in self._pretrained_components:
             try:
@@ -577,27 +575,26 @@ class BaseForecastingModule(pl.LightningModule, ABC):
                     f"{'; '.join(shape_mismatches)}."
                 )
 
-            selected_source_state.update(
+            target_state.update(
                 {key: source_state[key] for key in expected_keys}
             )
 
-        target_state.update(selected_source_state)
         return target_state
 
     def _get_pretrained_compatibility_metadata(
         self,
     ) -> dict[str, Any]:
-        """Collect versioned compatibility claims from nested components.
+        """Collect compatibility fields from nested components.
 
         Components opt in by defining ``get_pretrained_compatibility_metadata``.
-        Providers must return deterministic, serialization-safe claim records.
-        Results are keyed by module path so each claim retains its owner.
+        Providers must return deterministic graph and model-behavior values.
+        Results are keyed by module path so each field retains its owner.
 
         Returns
         -------
         dict of str to Any
-            Versioned metadata document, or an empty dictionary when no nested
-            component provides compatibility claims.
+            Provider metadata keyed by nested module path, or an empty
+            dictionary when no nested component provides compatibility fields.
 
         Raises
         ------
@@ -625,44 +622,25 @@ class BaseForecastingModule(pl.LightningModule, ABC):
             if not component_metadata:
                 raise ValueError(
                     f"Compatibility metadata provider at {path!r} returned "
-                    "no claims."
+                    "no fields."
                 )
             providers[path] = component_metadata
 
         if not providers:
             return {}
-        metadata = {
-            "format_version": PRETRAINED_COMPATIBILITY_FORMAT_VERSION,
-            "providers": providers,
-        }
-        self._validate_compatibility_metadata(metadata, origin="target model")
-        return metadata
-
-    @staticmethod
-    def _is_compatibility_value(value: Any) -> bool:
-        """Return whether a value belongs to the metadata value subset."""
-        if value is None or isinstance(value, (bool, float, int, str)):
-            return True
-        if isinstance(value, list):
-            return all(
-                BaseForecastingModule._is_compatibility_value(item)
-                for item in value
-            )
-        if isinstance(value, dict):
-            return all(
-                isinstance(key, str)
-                and BaseForecastingModule._is_compatibility_value(item)
-                for key, item in value.items()
-            )
-        return False
+        self._validate_compatibility_metadata(
+            providers,
+            origin="target model",
+        )
+        return providers
 
     @staticmethod
     def _validate_compatibility_metadata(
         metadata: Any,
         *,
         origin: str,
-    ) -> Mapping[str, Any]:
-        """Validate and return providers from one metadata document.
+    ) -> dict[str, Any]:
+        """Validate and return metadata keyed by provider path.
 
         Parameters
         ----------
@@ -673,94 +651,52 @@ class BaseForecastingModule(pl.LightningModule, ABC):
 
         Returns
         -------
-        mapping of str to Any
-            Validated provider records keyed by nested module path.
+        dict of str to Any
+            Validated compatibility fields keyed by nested module path.
 
         Raises
         ------
         ValueError
-            If the document, provider, or claim schema is unsupported.
+            If the metadata, provider, or field schema is unsupported.
         """
         if not isinstance(metadata, dict):
             raise ValueError(
                 f"{origin} compatibility metadata is not a mapping."
             )
-        if set(metadata) != {"format_version", "providers"}:
-            raise ValueError(
-                f"{origin} compatibility metadata must contain exactly "
-                "'format_version' and 'providers'."
-            )
-        version = metadata["format_version"]
-        if (
-            type(version) is not int
-            or version != PRETRAINED_COMPATIBILITY_FORMAT_VERSION
-        ):
-            raise ValueError(
-                f"{origin} compatibility metadata format version {version!r} "
-                f"is unsupported; expected "
-                f"{PRETRAINED_COMPATIBILITY_FORMAT_VERSION}."
-            )
-        providers = metadata["providers"]
-        if not isinstance(providers, dict) or not providers:
+        if not metadata:
             raise ValueError(
                 f"{origin} compatibility metadata must contain providers."
             )
-        for path, claims in providers.items():
+        for path, fields in metadata.items():
             if not isinstance(path, str) or not path:
                 raise ValueError(
                     f"{origin} compatibility metadata has an invalid provider "
                     f"path {path!r}."
                 )
-            if not isinstance(claims, dict) or not claims:
+            if not isinstance(fields, dict) or not fields:
                 raise ValueError(
                     f"{origin} compatibility provider {path!r} must contain "
-                    "claims."
+                    "fields."
                 )
-            for claim_name, claim in claims.items():
-                if not isinstance(claim_name, str) or not claim_name:
+            for field_name, value in fields.items():
+                if not isinstance(field_name, str) or not field_name:
                     raise ValueError(
                         f"{origin} compatibility provider {path!r} has an "
-                        f"invalid claim name {claim_name!r}."
+                        f"invalid field name {field_name!r}."
                     )
-                if claim_name not in PRETRAINED_COMPATIBILITY_CLAIMS:
+                if field_name not in PRETRAINED_COMPATIBILITY_FIELDS:
                     raise ValueError(
                         f"{origin} compatibility provider {path!r} has an "
-                        f"unsupported claim {claim_name!r}."
+                        f"unsupported field {field_name!r}."
                     )
-                if not isinstance(claim, dict) or set(claim) != {
-                    "version",
-                    "value",
-                }:
-                    raise ValueError(
-                        f"{origin} compatibility claim "
-                        f"{path!r}.{claim_name} must contain exactly 'version' "
-                        "and 'value'."
-                    )
-                claim_version = claim["version"]
-                if type(claim_version) is not int or claim_version < 1:
-                    raise ValueError(
-                        f"{origin} compatibility claim "
-                        f"{path!r}.{claim_name} has invalid version "
-                        f"{claim_version!r}."
-                    )
-                if not BaseForecastingModule._is_compatibility_value(
-                    claim["value"]
+                if field_name == "graph" and (
+                    not isinstance(value, str) or not value
                 ):
                     raise ValueError(
-                        f"{origin} compatibility claim "
-                        f"{path!r}.{claim_name} has a non-serializable value."
+                        f"{origin} compatibility field {path!r}.graph requires "
+                        "a non-empty fingerprint string."
                     )
-                value = claim["value"]
-                if (
-                    claim_version == 1
-                    and claim_name == "graph"
-                    and (not isinstance(value, str) or not value)
-                ):
-                    raise ValueError(
-                        f"{origin} compatibility claim {path!r}.graph version "
-                        "1 requires a non-empty fingerprint string."
-                    )
-                if claim_version == 1 and claim_name == "model_behavior":
+                if field_name == "model_behavior":
                     if (
                         not isinstance(value, dict)
                         or set(value) != PRETRAINED_MODEL_BEHAVIOR_FIELDS
@@ -770,33 +706,33 @@ class BaseForecastingModule(pl.LightningModule, ABC):
                         )
                     ):
                         raise ValueError(
-                            f"{origin} compatibility claim "
-                            f"{path!r}.model_behavior version 1 requires "
+                            f"{origin} compatibility field "
+                            f"{path!r}.model_behavior requires "
                             "non-empty string values for exactly "
                             f"{sorted(PRETRAINED_MODEL_BEHAVIOR_FIELDS)}."
                         )
-        return providers
+        return metadata
 
     @staticmethod
-    def _format_behavior_differences(source: Any, target: Any) -> str:
+    def _format_behavior_differences(
+        source: dict[str, str],
+        target: dict[str, str],
+    ) -> str:
         """Format differing model-behavior fields for diagnostics."""
-        if isinstance(source, Mapping) and isinstance(target, Mapping):
-            differences = [
-                f"{key}: checkpoint={source.get(key)!r}, "
-                f"target={target.get(key)!r}"
-                for key in sorted(set(source) | set(target))
-                if source.get(key) != target.get(key)
-            ]
-            return "; ".join(differences)
-        return f"checkpoint={source!r}, target={target!r}"
+        differences = [
+            f"{key}: checkpoint={source[key]!r}, target={target[key]!r}"
+            for key in sorted(source)
+            if source[key] != target[key]
+        ]
+        return "; ".join(differences)
 
     def _validate_pretrained_compatibility(
         self,
         checkpoint: dict[str, Any],
     ) -> None:
-        """Compare checkpoint compatibility claims with the target model.
+        """Compare checkpoint compatibility fields with the target model.
 
-        Provider and claim schemas must match exactly. Missing metadata and
+        Provider and field schemas must match exactly. Missing metadata and
         known model-behavior differences have separate explicit overrides;
         graph and schema mismatches always fail.
 
@@ -839,7 +775,7 @@ class BaseForecastingModule(pl.LightningModule, ABC):
             source_metadata,
             origin="checkpoint",
         )
-        target_providers = target_metadata["providers"]
+        target_providers = target_metadata
         source_paths = set(source_providers)
         target_paths = set(target_providers)
         if source_paths != target_paths:
@@ -850,37 +786,32 @@ class BaseForecastingModule(pl.LightningModule, ABC):
             )
 
         for path in sorted(target_paths):
-            source_claims = source_providers[path]
-            target_claims = target_providers[path]
-            source_names = set(source_claims)
-            target_names = set(target_claims)
+            source_fields = source_providers[path]
+            target_fields = target_providers[path]
+            source_names = set(source_fields)
+            target_names = set(target_fields)
             if source_names != target_names:
                 raise ValueError(
-                    f"Compatibility claims differ for provider {path!r}: "
+                    f"Compatibility fields differ for provider {path!r}: "
                     f"missing={sorted(target_names - source_names)}, "
                     f"unexpected={sorted(source_names - target_names)}."
                 )
-            for claim_name in sorted(target_names):
-                source_claim = source_claims[claim_name]
-                target_claim = target_claims[claim_name]
-                if source_claim["version"] != target_claim["version"]:
-                    raise ValueError(
-                        f"Unsupported compatibility claim version for "
-                        f"{path!r}.{claim_name}: checkpoint="
-                        f"{source_claim['version']!r}, "
-                        f"target={target_claim['version']!r}."
-                    )
-                source_value = source_claim["value"]
-                target_value = target_claim["value"]
+            for field_name in sorted(target_names):
+                source_value = source_fields[field_name]
+                target_value = target_fields[field_name]
                 if source_value == target_value:
                     continue
-                if (
-                    claim_name == "model_behavior"
-                    and self._allow_incompatible_pretrained_behavior
-                ):
-                    differences = self._format_behavior_differences(
-                        source_value, target_value
+                if field_name == "graph":
+                    raise ValueError(
+                        "The pretrained checkpoint is incompatible with the "
+                        "target model graph topology, node ordering, or graph "
+                        "features."
                     )
+                differences = self._format_behavior_differences(
+                    source_value,
+                    target_value,
+                )
+                if self._allow_incompatible_pretrained_behavior:
                     rank_zero_warn(
                         "The pretrained checkpoint uses incompatible model "
                         "behavior. Continuing because "
@@ -890,29 +821,15 @@ class BaseForecastingModule(pl.LightningModule, ABC):
                         stacklevel=2,
                     )
                     continue
-                if claim_name == "graph":
-                    raise ValueError(
-                        "The pretrained checkpoint is incompatible with the "
-                        "target model graph topology, node ordering, or graph "
-                        "features."
-                    )
-                if claim_name == "model_behavior":
-                    differences = self._format_behavior_differences(
-                        source_value, target_value
-                    )
-                    raise ValueError(
-                        "The pretrained checkpoint uses incompatible model "
-                        f"behavior: {differences}."
-                    )
                 raise ValueError(
-                    f"Compatibility claim {path!r}.{claim_name} differs "
-                    "between checkpoint and target."
+                    "The pretrained checkpoint uses incompatible model "
+                    f"behavior: {differences}."
                 )
 
     def on_save_checkpoint(self, checkpoint: dict[str, Any]) -> None:
-        """Store component compatibility claims in a Lightning checkpoint.
+        """Store component compatibility fields in a Lightning checkpoint.
 
-        Provider claims are validated and wrapped in a versioned document under
+        Provider fields are validated and stored by module path under
         ``PRETRAINED_COMPATIBILITY_KEY``.
 
         Parameters

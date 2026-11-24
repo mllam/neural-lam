@@ -224,22 +224,17 @@ class BaseGraphModel(StepPredictor):
 
     def get_pretrained_compatibility_metadata(
         self,
-    ) -> dict[str, dict[str, object]]:
-        """Expose graph compatibility claims for selective initialization.
+    ) -> dict[str, object]:
+        """Expose graph compatibility fields for selective initialization.
 
         The fingerprint is independent of later device and precision changes.
 
         Returns
         -------
-        dict of str to dict of str to object
-            Versioned graph claim used to validate selective initialization.
+        dict of str to object
+            Graph fingerprint used to validate selective initialization.
         """
-        return {
-            "graph": {
-                "version": 1,
-                "value": self._graph_compatibility_fingerprint,
-            }
-        }
+        return {"graph": self._graph_compatibility_fingerprint}
 
     def get_num_mesh(self) -> tuple[int, int]:
         """

@@ -142,23 +142,20 @@ class GraphLAM(BaseGraphModel):
 
     def get_pretrained_compatibility_metadata(
         self,
-    ) -> dict[str, dict[str, object]]:
-        """Expose GraphLAM graph and execution-behavior compatibility claims.
+    ) -> dict[str, object]:
+        """Expose GraphLAM graph and execution-behavior compatibility fields.
 
         Returns
         -------
-        dict of str to dict of str to object
-            Versioned graph and model-behavior claims.
+        dict of str to object
+            Graph fingerprint and model-behavior fields.
         """
         metadata = super().get_pretrained_compatibility_metadata()
         metadata["model_behavior"] = {
-            "version": 1,
-            "value": {
-                "predictor": "graph_lam",
-                "mesh_aggr": self.mesh_aggr,
-                "g2m_gnn_type": self.g2m_gnn_type,
-                "m2g_gnn_type": self.m2g_gnn_type,
-            },
+            "predictor": "graph_lam",
+            "mesh_aggr": self.mesh_aggr,
+            "g2m_gnn_type": self.g2m_gnn_type,
+            "m2g_gnn_type": self.m2g_gnn_type,
         }
         return metadata
 
