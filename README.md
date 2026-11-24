@@ -92,9 +92,10 @@ Checkpoints of trained models are stored under `runs/<run-name>/checkpoints/`, a
 ### Transfer learning
 
 Selected model components can initialize a fresh training run from a trusted
-Lightning checkpoint. This workflow currently supports GraphLAM. A dotted
-module path identifies a nested module by
-joining its attribute names with periods. For example,
+Lightning checkpoint. This workflow currently supports GraphLAM. Configure the
+target datastore and graph as for an ordinary training run, then provide the
+source checkpoint and components to transfer. A dotted module path identifies a
+nested module by joining its attribute names with periods. For example,
 `forecaster.predictor.processor` means the `processor` module inside
 `predictor`, which is inside `forecaster`. This command transfers GraphLAM's
 processor and mesh embedders while leaving dataset-dependent input and output
@@ -112,10 +113,31 @@ python -m neural_lam.train_model \
         forecaster.predictor.m2m_embedder
 ```
 
-Add `--freeze_components forecaster.predictor.processor` to keep the
-transferred processor parameters fixed during training. Freezing is a run
-setting rather than checkpoint state, so repeat it when resuming a run that
-should remain frozen.
+The three component paths above are the tested transfer setup for reusing the
+processor across datastores with different state-variable counts. All
+transferred components are fine-tuned by default. Add
+`--freeze_components forecaster.predictor.processor` to keep the processor
+fixed instead. Freezing is a run setting rather than checkpoint state, so repeat
+it when resuming a run that should remain frozen.
+
+The same workflow is available through the Python API:
+
+```python
+from neural_lam.api import train
+
+run = train(
+    config_path="<target-config>",
+    model="graph_lam",
+    graph="<target-graph>",
+    pretrained_checkpoint="<source-checkpoint>",
+    pretrained_components=[
+        "forecaster.predictor.processor",
+        "forecaster.predictor.mesh_embedder",
+        "forecaster.predictor.m2m_embedder",
+    ],
+    freeze_components=["forecaster.predictor.processor"],
+)
+```
 
 `--pretrained_checkpoint` starts a fresh run with a new optimizer, epoch and
 trainer state. It is therefore distinct from, and cannot be combined with,
@@ -131,10 +153,10 @@ Known GraphLAM execution settings, including mesh aggregation, must also match.
 Use `--allow_incompatible_pretrained_behavior` only for an intentional
 behavior-changing experiment; it warns with the accepted differences. A graph
 mismatch cannot be overridden, and cross-topology transfer is unsupported.
-Checkpoints created before compatibility metadata was introduced are rejected by
-default. To use a trusted legacy checkpoint after verifying its graph and model
-settings, add `--allow_missing_compatibility_metadata`; this emits a warning and
-makes the caller responsible for both forms of compatibility.
+Checkpoints created before compatibility metadata was introduced are rejected
+by default. To use a trusted legacy checkpoint after verifying its graph and
+model settings, add `--allow_missing_compatibility_metadata`; this emits a
+warning and makes the caller responsible for both forms of compatibility.
 
 The implemented models are:
 
