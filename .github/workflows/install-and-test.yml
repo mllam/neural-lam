@@ -12,7 +12,7 @@
 #
 # We only run uv in CI: pip cannot do extras-based index routing and resolving
 # the right CPU/GPU torch wheel with pip is brittle. The pip install path is
-# still documented in the README for users who prefer it.
+# still documented in the installation guide for users who prefer it.
 #
 # Hosts used to run the tests:
 # - ubuntu-latest for CPU: these are on github
@@ -33,8 +33,6 @@ name: CPU+GPU testing
 
 on: [push, pull_request, workflow_dispatch]
 
-
-
 jobs:
   tests:
     runs-on: ${{ matrix.runner }}
@@ -53,7 +51,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v6
@@ -112,7 +110,7 @@ jobs:
           pytest -vv -s tests/test_datasets.py::test_single_batch
 
       - name: Upload test figures
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-figures-${{ matrix.device }}
           path: tests/test_outputs/

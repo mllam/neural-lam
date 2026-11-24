@@ -168,6 +168,6 @@ def test_load_config_and_datastore_forwards_n_boundary_points(tmp_path):
 
     _, datastore, _ = nlconfig.load_config_and_datastore(str(config_path))
 
-    grid_shape = datastore.grid_shape_state
+    grid_shape = datastore.rectilinear_grid_shape
     expected_interior = (grid_shape.x - 10) * (grid_shape.y - 10)
     assert int((datastore.boundary_mask.values == 0).sum()) == expected_interior
