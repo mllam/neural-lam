@@ -124,6 +124,7 @@ def test_persistence_training_error():
     mock_args.ar_steps_eval = 10
     mock_args.ar_steps_train = 1
     mock_args.train_steps_to_log = []
+    mock_args.val_interval = 1
     mock_args.model = "persistence"
     mock_args.devices = ["auto"]
     mock_args.restore_opt = False

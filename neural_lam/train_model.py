@@ -425,6 +425,15 @@ def build_parser() -> ArgumentParser:
         default=2,
         help="Number of sanity validation steps to run before training",
     )
+    train_group.add_argument(
+        "--gradient_checkpointing",
+        action="store_true",
+        help=(
+            "If set, recompute the activations of each autoregressive step "
+            "in the backward pass instead of storing them. Lowers peak "
+            "memory when --ar_steps_train > 1, at the cost of extra compute."
+        ),
+    )
 
     # Evaluation options
     eval_group = parser.add_argument_group("Evaluation Options")
@@ -651,6 +660,11 @@ def fit(
         )
     if train_config.eval and train_config.freeze_components:
         raise ValueError("freeze_components is only supported for training.")
+    if train_config.val_interval < 1:
+        raise ValueError(
+            "val_interval must be at least 1, got "
+            f"{train_config.val_interval}. Adjust --val_interval."
+        )
 
     for phase, max_steps in [
         ("train", train_config.ar_steps_train),
@@ -784,7 +798,11 @@ def fit(
             "--eval <val/test> to evaluate a baseline."
         )
     forecaster = DeterministicARForecaster(
-        predictor, datastore, config=config, loss=train_config.loss
+        predictor,
+        datastore,
+        config=config,
+        loss=train_config.loss,
+        gradient_checkpointing=train_config.gradient_checkpointing,
     )
 
     module_kwargs: dict[str, Any] = dict(
