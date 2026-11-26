@@ -1,8 +1,5 @@
 """Base class for graph-based step predictors."""
 
-# Standard library
-import hashlib
-
 # Third-party
 import torch
 
@@ -28,21 +25,6 @@ class BaseGraphModel(StepPredictor):
     mesh_static_features: torch.Tensor | list[torch.Tensor]
     m2m_features: torch.Tensor | list[torch.Tensor]
     m2m_edge_index: torch.Tensor | list[torch.Tensor]
-    _graph_compatibility_fingerprint: str
-
-    _GRAPH_COMPATIBILITY_ATTRIBUTES = (
-        "g2m_edge_index",
-        "m2g_edge_index",
-        "m2m_edge_index",
-        "mesh_up_edge_index",
-        "mesh_down_edge_index",
-        "g2m_features",
-        "m2g_features",
-        "m2m_features",
-        "mesh_up_features",
-        "mesh_down_features",
-        "mesh_static_features",
-    )
 
     def __init__(
         self,
@@ -137,10 +119,6 @@ class BaseGraphModel(StepPredictor):
             graph_name,
             mesh_node_features_scaling=grid_xy_max_span,
         )
-        self._graph_compatibility_fingerprint = (
-            self._compute_graph_compatibility_fingerprint()
-        )
-
         # Specify dimensions of data
         self.num_mesh_nodes, _ = self.get_num_mesh()
         utils.log_on_rank_zero(
@@ -195,46 +173,6 @@ class BaseGraphModel(StepPredictor):
 
         # Compute indices and define clamping functions
         self.prepare_clamping_params(datastore)
-
-    def _compute_graph_compatibility_fingerprint(self) -> str:
-        """Hash the construction-time graph tensors and grid-node count.
-
-        Tensor attribute names, collection positions, dtypes, shapes, and
-        contiguous CPU bytes contribute to the hash. The result is stored
-        before Lightning can cast buffers to the runtime training precision.
-        """
-        fingerprint = hashlib.sha256()
-        fingerprint.update(f"num_grid_nodes:{self.num_grid_nodes}".encode())
-        for attribute_name in self._GRAPH_COMPATIBILITY_ATTRIBUTES:
-            attribute = getattr(self, attribute_name)
-            tensors = (
-                (attribute,)
-                if isinstance(attribute, torch.Tensor)
-                else attribute
-            )
-            for index, tensor in enumerate(tensors):
-                tensor_cpu = tensor.detach().cpu().contiguous()
-                fingerprint.update(f"{attribute_name}:{index}".encode())
-                fingerprint.update(str(tensor_cpu.dtype).encode())
-                fingerprint.update(str(tuple(tensor_cpu.shape)).encode())
-                fingerprint.update(
-                    tensor_cpu.view(torch.uint8).numpy().tobytes()
-                )
-        return fingerprint.hexdigest()
-
-    def get_pretrained_compatibility_metadata(
-        self,
-    ) -> dict[str, object]:
-        """Expose graph compatibility fields for selective initialization.
-
-        The fingerprint is independent of later device and precision changes.
-
-        Returns
-        -------
-        dict of str to object
-            Graph fingerprint used to validate selective initialization.
-        """
-        return {"graph": self._graph_compatibility_fingerprint}
 
     def get_num_mesh(self) -> tuple[int, int]:
         """

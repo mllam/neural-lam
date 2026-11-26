@@ -1,5 +1,6 @@
 # Standard library
 import inspect
+import os
 from argparse import Namespace
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
@@ -23,6 +24,7 @@ loguru.logger.catch = _mock_catch  # type: ignore[assignment]
 from neural_lam.models import MODELS, BaseHiGraphModel  # noqa: E402
 from neural_lam.train_model import (  # noqa: E402
     _checkpoint_loading_kwargs,
+    _load_trusted_checkpoint,
     build_predictor,
     load_forecasting_module_from_checkpoint,
     main,
@@ -50,6 +52,22 @@ def test_checkpoint_loading_kwargs_follow_lightning_signature(
         return_value=signature,
     ):
         assert _checkpoint_loading_kwargs() == expected
+
+
+def test_trusted_checkpoint_load_for_older_lightning_restores_environment():
+    """Force full loading only around loaders without ``weights_only``."""
+    loader = MagicMock(return_value="loaded")
+    variable = "TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"
+    with (
+        patch(
+            "neural_lam.train_model.inspect.signature",
+            return_value=SimpleNamespace(parameters={}),
+        ),
+        patch.dict(os.environ, {variable: "original"}),
+    ):
+        assert _load_trusted_checkpoint(loader, "model.ckpt") == "loaded"
+        assert os.environ[variable] == "original"
+    loader.assert_called_once_with("model.ckpt")
 
 
 @pytest.mark.parametrize(
@@ -368,7 +386,9 @@ def test_pretrained_checkpoint_uses_lightning_loader(config):
             "neural_lam.train_model.MODELS",
             {"graph_lam": TrainablePredictor},
         ),
-        patch("neural_lam.train_model.DeterministicARForecaster"),
+        patch(
+            "neural_lam.train_model.DeterministicARForecaster"
+        ) as forecaster_class,
         patch(
             "neural_lam.train_model.DeterministicForecastingModule."
             "load_from_checkpoint",
@@ -397,9 +417,12 @@ def test_pretrained_checkpoint_uses_lightning_loader(config):
                 component,
                 "--allow_missing_compatibility_metadata",
                 "--allow_incompatible_pretrained_behavior",
+                "--precision",
+                "64",
             ]
         )
 
+    forecaster_class.return_value.double.assert_called_once_with()
     load_from_checkpoint.assert_called_once()
     call_kwargs = load_from_checkpoint.call_args.kwargs
     assert call_kwargs["pretrained_components"] == [component]

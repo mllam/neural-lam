@@ -93,13 +93,43 @@ def _checkpoint_loading_kwargs() -> dict[str, bool]:
     -------
     dict of str to bool
         ``weights_only=False`` when Lightning exposes that loader argument,
-        otherwise an empty mapping for versions whose reader already defaults
-        to full checkpoint loading.
+        otherwise an empty mapping so the trusted-loader wrapper can use the
+        PyTorch compatibility setting.
     """
     parameters = inspect.signature(
         DeterministicForecastingModule.load_from_checkpoint
     ).parameters
     return {"weights_only": False} if "weights_only" in parameters else {}
+
+
+def _load_trusted_checkpoint(
+    checkpoint_loader: Any,
+    checkpoint_path: str | Path,
+    **kwargs: Any,
+) -> Any:
+    """Load a trusted checkpoint across supported Lightning versions.
+
+    Lightning versions without a ``weights_only`` argument rely on PyTorch's
+    process setting to preserve full checkpoint loading on PyTorch 2.6+.
+    """
+    loading_kwargs = _checkpoint_loading_kwargs()
+    if loading_kwargs:
+        return checkpoint_loader(
+            checkpoint_path,
+            **loading_kwargs,
+            **kwargs,
+        )
+
+    variable = "TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"
+    previous_value = os.environ.get(variable)
+    os.environ[variable] = "1"
+    try:
+        return checkpoint_loader(checkpoint_path, **kwargs)
+    finally:
+        if previous_value is None:
+            os.environ.pop(variable, None)
+        else:
+            os.environ[variable] = previous_value
 
 
 def build_predictor(
@@ -198,12 +228,12 @@ def load_forecasting_module_from_checkpoint(
     checkpoint_loader = cast(
         "Any", DeterministicForecastingModule.load_from_checkpoint
     )
-    return checkpoint_loader(
+    return _load_trusted_checkpoint(
+        checkpoint_loader,
         ckpt_path,
         forecaster=forecaster,
         datastore=datastore,
         datastore_boundary=datastore_boundary,
-        **_checkpoint_loading_kwargs(),
     )
 
 
@@ -804,6 +834,11 @@ def fit(
         loss=train_config.loss,
         gradient_checkpointing=train_config.gradient_checkpointing,
     )
+    if has_pretrained_checkpoint and str(compute_config.precision) in {
+        "64",
+        "64-true",
+    }:
+        forecaster.double()
 
     module_kwargs: dict[str, Any] = dict(
         forecaster=forecaster,
@@ -824,7 +859,8 @@ def fit(
         checkpoint_loader = cast(
             "Any", DeterministicForecastingModule.load_from_checkpoint
         )
-        model = checkpoint_loader(
+        model = _load_trusted_checkpoint(
+            checkpoint_loader,
             train_config.pretrained_checkpoint,
             map_location="cpu",
             strict=True,
@@ -835,7 +871,6 @@ def fit(
             allow_incompatible_pretrained_behavior=(
                 train_config.allow_incompatible_pretrained_behavior
             ),
-            **_checkpoint_loading_kwargs(),
             **module_kwargs,
         )
     else:

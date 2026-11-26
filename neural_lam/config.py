@@ -351,6 +351,10 @@ class TrainRunConfig:
         Number of example predictions to plot during testing.
     create_gif : bool, default False
         Whether to create animation GIFs during evaluation.
+    gradient_checkpointing : bool, default False
+        Whether to recompute the activations of each autoregressive training
+        step in the backward pass instead of storing them. Lowers peak memory
+        when ``ar_steps_train > 1``, at the cost of extra compute.
     pretrained_checkpoint : str or None, default None
         Checkpoint used to initialize selected components for a fresh run.
     pretrained_components : list of str, default []
@@ -364,10 +368,6 @@ class TrainRunConfig:
     allow_incompatible_pretrained_behavior : bool, default False
         Whether selective initialization may use weights with known model
         execution-setting differences.
-    gradient_checkpointing : bool, default False
-        Whether to recompute the activations of each autoregressive training
-        step in the backward pass instead of storing them. Lowers peak memory
-        when ``ar_steps_train > 1``, at the cost of extra compute.
     """
 
     epochs: int = 200
@@ -391,12 +391,12 @@ class TrainRunConfig:
     eval: str | None = None
     n_example_pred: int = 1
     create_gif: bool = False
+    gradient_checkpointing: bool = False
     pretrained_checkpoint: str | None = None
     pretrained_components: list[str] = dataclasses.field(default_factory=list)
     freeze_components: list[str] = dataclasses.field(default_factory=list)
     allow_missing_compatibility_metadata: bool = False
     allow_incompatible_pretrained_behavior: bool = False
-    gradient_checkpointing: bool = False
 
 
 @dataclasses.dataclass

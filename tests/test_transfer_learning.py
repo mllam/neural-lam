@@ -515,8 +515,8 @@ def test_graph_compatibility_rejects_different_loaded_graph(tmp_path):
         )
 
 
-def test_full_restore_rejects_known_graph_mismatch(tmp_path):
-    """Do not relabel full checkpoint state with a different target graph."""
+def test_full_restore_skips_transfer_compatibility_validation(tmp_path):
+    """Keep compatibility checks scoped to selective initialization."""
     source_datastore = DummyDatastore(n_grid_points=81)
     target_datastore = DummyDatastore(n_grid_points=81)
     create_flat_graph(source_datastore)
@@ -536,18 +536,16 @@ def test_full_restore_rejects_known_graph_mismatch(tmp_path):
     checkpoint_path = tmp_path / "full_restore_graph_mismatch.ckpt"
     save_lightning_checkpoint(source, checkpoint_path)
 
-    with pytest.raises(
-        ValueError, match="incompatible with the target model graph"
-    ):
-        DeterministicForecastingModule.load_from_checkpoint(
-            checkpoint_path,
-            forecaster=target.forecaster,
-            config=target_config,
-            datastore=target_datastore,
-            map_location="cpu",
-            strict=True,
-            **_checkpoint_loading_kwargs(),
-        )
+    loaded = DeterministicForecastingModule.load_from_checkpoint(
+        checkpoint_path,
+        forecaster=target.forecaster,
+        config=target_config,
+        datastore=target_datastore,
+        map_location="cpu",
+        strict=True,
+        **_checkpoint_loading_kwargs(),
+    )
+    assert_state_equal(loaded.state_dict(), source.state_dict())
 
 
 def test_graph_identity_is_stable_across_fp64_transfer(
@@ -560,7 +558,12 @@ def test_graph_identity_is_stable_across_fp64_transfer(
     source_predictor = source.forecaster.predictor
     fingerprint = source_predictor._graph_compatibility_fingerprint
     DoublePrecision().convert_module(source)
+    target.forecaster.double()
     assert source_predictor._graph_compatibility_fingerprint == fingerprint
+
+    precise_value = 1 + 2**-30
+    with torch.no_grad():
+        next(source_predictor.processor.parameters()).fill_(precise_value)
 
     checkpoint_path = tmp_path / "fp64_source.ckpt"
     save_lightning_checkpoint(source, checkpoint_path)
@@ -576,6 +579,10 @@ def test_graph_identity_is_stable_across_fp64_transfer(
         loaded.forecaster.predictor.processor.state_dict(),
         source.forecaster.predictor.processor.state_dict(),
     )
+    loaded_value = next(
+        loaded.forecaster.predictor.processor.parameters()
+    ).flatten()[0]
+    assert loaded_value.item() == precise_value
 
 
 def test_model_behavior_mismatch_requires_explicit_override(

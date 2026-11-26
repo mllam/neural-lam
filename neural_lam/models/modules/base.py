@@ -1577,11 +1577,6 @@ class BaseForecastingModule(pl.LightningModule, ABC):
             self._pretrained_components = ()
             self._allow_missing_compatibility_metadata = False
             self._allow_incompatible_pretrained_behavior = False
-        elif PRETRAINED_COMPATIBILITY_KEY in checkpoint:
-            # Full restores remain compatible with metadata-free legacy
-            # checkpoints, but a known mismatch must not be relabeled on save.
-            self._validate_pretrained_compatibility(checkpoint)
-
         if not self.restore_opt:
             opt = self.configure_optimizers()
             checkpoint["optimizer_states"] = [opt.state_dict()]

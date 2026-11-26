@@ -18,77 +18,6 @@ A few of the key ones are outlined below:
 
 Checkpoints of trained models are stored under `runs/<run-name>/checkpoints/`, alongside Lightning and logger outputs for the same run.
 
-(transfer-learning)=
-## Transfer learning
-
-Selected model components can initialize a fresh GraphLAM training run from a
-trusted Lightning checkpoint. Configure the target datastore and graph as for
-an ordinary training run, then provide the source checkpoint and components to
-transfer:
-
-```bash
-python -m neural_lam.train_model \
-    --config_path <target-config> \
-    --model graph_lam \
-    --graph <target-graph> \
-    --pretrained_checkpoint <source-checkpoint> \
-    --pretrained_components \
-        forecaster.predictor.processor \
-        forecaster.predictor.mesh_embedder \
-        forecaster.predictor.m2m_embedder
-```
-
-The three component paths above are the tested setup for reusing the processor
-across datastores with different state-variable counts. A dotted module path
-such as `forecaster.predictor.processor` identifies the `processor` module
-inside `predictor`, which is inside `forecaster`. Dataset-dependent input and
-output layers remain newly initialized.
-
-Transferred components are fine-tuned by default. Add
-`--freeze_components forecaster.predictor.processor` to keep the processor
-fixed instead. Freezing is a run setting rather than checkpoint state, so repeat
-it when resuming a run that should remain frozen.
-
-The same workflow is available through the Python API:
-
-```python
-from neural_lam.api import train
-
-run = train(
-    config_path="<target-config>",
-    model="graph_lam",
-    graph="<target-graph>",
-    pretrained_checkpoint="<source-checkpoint>",
-    pretrained_components=[
-        "forecaster.predictor.processor",
-        "forecaster.predictor.mesh_embedder",
-        "forecaster.predictor.m2m_embedder",
-    ],
-    freeze_components=["forecaster.predictor.processor"],
-)
-```
-
-`--pretrained_checkpoint` starts a fresh run with a new optimizer, epoch and
-trainer state. It cannot be combined with `--load`, which resumes a complete
-training checkpoint. Every selected component must exist in both models with
-exactly matching state keys and tensor shapes.
-
-Selective transfer also requires the same normalized graph structure, node
-ordering and graph features. Neural-LAM records graph identity before runtime
-precision conversion, so training precision does not affect this check.
-Matching graph identity does not verify dataset-variable meaning, ordering,
-units, normalization statistics or scientific suitability.
-
-Known GraphLAM execution settings, including mesh aggregation, must also match.
-Use `--allow_incompatible_pretrained_behavior` only for an intentional
-behavior-changing experiment; it warns with the accepted differences. A graph
-mismatch cannot be overridden, and cross-topology transfer is unsupported.
-
-Checkpoints created before compatibility metadata was introduced are rejected
-by default. To use a trusted legacy checkpoint after verifying its graph and
-model settings, add `--allow_missing_compatibility_metadata`; this emits a
-warning and makes the caller responsible for both forms of compatibility.
-
 The implemented models are:
 
 ### Graph-LAM
@@ -166,6 +95,77 @@ srun -ul python -m neural_lam.train_model \
 When using on a system without SLURM, where all GPU's are visible, it is possible to select a subset of GPU's to use for training with the `devices` cli argument, e.g. `--devices 0 1` to use the first 2 GPU's.
 
 > **DGX Spark / container compatibility:** see [issue #163](https://github.com/mllam/neural-lam/issues/163) for a list of currently known-working and known-failing PyTorch / CUDA / container combinations on DGX Spark.
+
+(transfer-learning)=
+## Transfer learning
+
+Selected model components can initialize a fresh GraphLAM training run from a
+trusted Lightning checkpoint. Configure the target datastore and graph as for
+an ordinary training run, then provide the source checkpoint and components to
+transfer:
+
+```bash
+python -m neural_lam.train_model \
+    --config_path <target-config> \
+    --model graph_lam \
+    --graph <target-graph> \
+    --pretrained_checkpoint <source-checkpoint> \
+    --pretrained_components \
+        forecaster.predictor.processor \
+        forecaster.predictor.mesh_embedder \
+        forecaster.predictor.m2m_embedder
+```
+
+The three component paths above are the tested setup for reusing the processor
+across datastores with different state-variable counts. A dotted module path
+such as `forecaster.predictor.processor` identifies the `processor` module
+inside `predictor`, which is inside `forecaster`. Dataset-dependent input and
+output layers remain newly initialized.
+
+Transferred components are fine-tuned by default. Add
+`--freeze_components forecaster.predictor.processor` to keep the processor
+fixed instead. Freezing is a run setting rather than checkpoint state, so repeat
+it when resuming a run that should remain frozen.
+
+The same workflow is available through the Python API:
+
+```python
+from neural_lam.api import train
+
+run = train(
+    config_path="<target-config>",
+    model="graph_lam",
+    graph="<target-graph>",
+    pretrained_checkpoint="<source-checkpoint>",
+    pretrained_components=[
+        "forecaster.predictor.processor",
+        "forecaster.predictor.mesh_embedder",
+        "forecaster.predictor.m2m_embedder",
+    ],
+    freeze_components=["forecaster.predictor.processor"],
+)
+```
+
+`--pretrained_checkpoint` starts a fresh run with a new optimizer, epoch and
+trainer state. It cannot be combined with `--load`, which resumes a complete
+training checkpoint. Every selected component must exist in both models with
+exactly matching state keys and tensor shapes.
+
+Selective transfer also requires the same normalized graph structure, node
+ordering and graph features. Neural-LAM records graph identity before runtime
+precision conversion, so training precision does not affect this check.
+Matching graph identity does not verify dataset-variable meaning, ordering,
+units, normalization statistics or scientific suitability.
+
+Known GraphLAM execution settings, including mesh aggregation, must also match.
+Use `--allow_incompatible_pretrained_behavior` only for an intentional
+behavior-changing experiment; it warns with the accepted differences. A graph
+mismatch cannot be overridden, and cross-topology transfer is unsupported.
+
+Checkpoints created before compatibility metadata was introduced are rejected
+by default. To use a trusted legacy checkpoint after verifying its graph and
+model settings, add `--allow_missing_compatibility_metadata`; this emits a
+warning and makes the caller responsible for both forms of compatibility.
 
 ## Evaluate Models
 
