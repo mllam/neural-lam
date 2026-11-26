@@ -23,7 +23,7 @@ class InteractionNet(pyg.nn.MessagePassing):
     def __init__(
         self,
         edge_index: torch.Tensor,
-        input_dim: int,
+        feature_dim: int,
         update_edges: bool = True,
         hidden_layers: int = 1,
         hidden_dim: int | None = None,
@@ -39,15 +39,18 @@ class InteractionNet(pyg.nn.MessagePassing):
         edge_index : torch.Tensor
             Edge connectivity tensor in PyG format.
             Shape ``(2, num_edges)``.
-        input_dim : int
-            Dimensionality of both node and edge input representations.
+        feature_dim : int
+            Width of each node and edge representation. The edge MLP
+            concatenates three such representations and the aggregation MLP
+            concatenates two; both MLPs produce representations of this width.
         update_edges : bool, optional
             If ``True``, compute and return updated edge representations in
             addition to node representations. Default is ``True``.
         hidden_layers : int, optional
             Number of hidden layers in each MLP. Default is ``1``.
         hidden_dim : int or None, optional
-            Width of hidden layers. If ``None``, defaults to ``input_dim``.
+            Width of the internal MLP layers. If ``None``, defaults to
+            ``feature_dim``.
         edge_chunk_sizes : list[int] or None, optional
             Chunk sizes for splitting edge representations across separate
             MLPs. ``None`` uses a single shared MLP.
@@ -67,8 +70,8 @@ class InteractionNet(pyg.nn.MessagePassing):
         super().__init__(aggr=aggr)
 
         if hidden_dim is None:
-            # Default to input dim if not explicitly given
-            hidden_dim = input_dim
+            # Keep the MLP width constant unless an internal width is given.
+            hidden_dim = feature_dim
 
         self.num_rec = edge_index[1].max() + 1
         # edge_index is expected to be zero-based and local:
@@ -87,10 +90,10 @@ class InteractionNet(pyg.nn.MessagePassing):
 
         # Create MLPs
         edge_mlp_recipe = (
-            [3 * input_dim] + [hidden_dim] * hidden_layers + [input_dim]
+            [3 * feature_dim] + [hidden_dim] * hidden_layers + [feature_dim]
         )
         aggr_mlp_recipe = (
-            [2 * input_dim] + [hidden_dim] * hidden_layers + [input_dim]
+            [2 * feature_dim] + [hidden_dim] * hidden_layers + [feature_dim]
         )
 
         if edge_chunk_sizes is None:
@@ -125,22 +128,22 @@ class InteractionNet(pyg.nn.MessagePassing):
         ----------
         send_rep : torch.Tensor
             Sender node representations.
-            Shape ``(num_send, input_dim)``.
+            Shape ``(num_send, feature_dim)``.
         rec_rep : torch.Tensor
             Receiver node representations.
-            Shape ``(num_rec, input_dim)``.
+            Shape ``(num_rec, feature_dim)``.
         edge_rep : torch.Tensor
             Edge representations.
-            Shape ``(num_edges, input_dim)``.
+            Shape ``(num_edges, feature_dim)``.
 
         Returns
         -------
         rec_rep : torch.Tensor
             Updated receiver node representations.
-            Shape ``(num_rec, input_dim)``.
+            Shape ``(num_rec, feature_dim)``.
         edge_rep : torch.Tensor
             Updated edge representations.
-            Shape ``(num_edges, input_dim)``.
+            Shape ``(num_edges, feature_dim)``.
             Only returned when ``update_edges=True``.
         """
         # Always concatenate to [rec_nodes, send_nodes] for propagation,
@@ -206,7 +209,7 @@ class PropagationNet(InteractionNet):
     def __init__(
         self,
         edge_index: torch.Tensor,
-        input_dim: int,
+        feature_dim: int,
         update_edges: bool = True,
         hidden_layers: int = 1,
         hidden_dim: int | None = None,
@@ -224,7 +227,7 @@ class PropagationNet(InteractionNet):
         # Use mean aggregation in propagation version to avoid instability
         super().__init__(
             edge_index,
-            input_dim,
+            feature_dim,
             update_edges=update_edges,
             hidden_layers=hidden_layers,
             hidden_dim=hidden_dim,
