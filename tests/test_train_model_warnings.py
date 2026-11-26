@@ -1,5 +1,6 @@
 # Standard library
 import inspect
+import os
 from argparse import Namespace
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
@@ -22,6 +23,8 @@ loguru.logger.catch = _mock_catch  # type: ignore[assignment]
 # First-party
 from neural_lam.models import MODELS, BaseHiGraphModel  # noqa: E402
 from neural_lam.train_model import (  # noqa: E402
+    _checkpoint_loading_kwargs,
+    _load_trusted_checkpoint,
     build_predictor,
     load_forecasting_module_from_checkpoint,
     main,
@@ -30,6 +33,41 @@ from neural_lam.train_model import (  # noqa: E402
 if TYPE_CHECKING:
     # First-party
     from neural_lam.config import NeuralLAMConfig  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    ("parameters", "expected"),
+    [
+        ({}, {}),
+        ({"weights_only": object()}, {"weights_only": False}),
+    ],
+)
+def test_checkpoint_loading_kwargs_follow_lightning_signature(
+    parameters, expected
+):
+    """Pass ``weights_only`` only when Lightning exposes the argument."""
+    signature = SimpleNamespace(parameters=parameters)
+    with patch(
+        "neural_lam.train_model.inspect.signature",
+        return_value=signature,
+    ):
+        assert _checkpoint_loading_kwargs() == expected
+
+
+def test_trusted_checkpoint_load_for_older_lightning_restores_environment():
+    """Force full loading only around loaders without ``weights_only``."""
+    loader = MagicMock(return_value="loaded")
+    variable = "TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"
+    with (
+        patch(
+            "neural_lam.train_model.inspect.signature",
+            return_value=SimpleNamespace(parameters={}),
+        ),
+        patch.dict(os.environ, {variable: "original"}),
+    ):
+        assert _load_trusted_checkpoint(loader, "model.ckpt") == "loaded"
+        assert os.environ[variable] == "original"
+    loader.assert_called_once_with("model.ckpt")
 
 
 @pytest.mark.parametrize(
@@ -51,6 +89,12 @@ def test_eval_without_load_warning(eval_val, load_val, expect_warning):
     mock_args.var_leads_metrics_watch = "{}"
     mock_args.ar_steps_eval = 10
     mock_args.ar_steps_train = 10
+    mock_args.restore_opt = False
+    mock_args.pretrained_checkpoint = None
+    mock_args.pretrained_components = []
+    mock_args.freeze_components = []
+    mock_args.allow_missing_compatibility_metadata = False
+    mock_args.allow_incompatible_pretrained_behavior = False
     mock_args.val_interval = 1
 
     with patch(
@@ -88,6 +132,12 @@ def test_create_gif_forwarded_to_forecasting_module():
     mock_args.create_gif = True
     mock_args.devices = ["auto"]
     mock_args.model = "graph_lam"
+    mock_args.restore_opt = False
+    mock_args.pretrained_checkpoint = None
+    mock_args.pretrained_components = []
+    mock_args.freeze_components = []
+    mock_args.allow_missing_compatibility_metadata = False
+    mock_args.allow_incompatible_pretrained_behavior = False
 
     captured_kwargs = {}
 
@@ -192,6 +242,77 @@ def test_steps_to_log_validation(cli_args, match_err):
             )
 
 
+@pytest.mark.parametrize(
+    ("cli_args", "match"),
+    [
+        (["--pretrained_checkpoint", ""], "must not be empty"),
+        (
+            ["--pretrained_checkpoint", "source.ckpt"],
+            "must be set together",
+        ),
+        (
+            ["--pretrained_components", "forecaster.predictor.processor"],
+            "must be set together",
+        ),
+        (
+            ["--allow_missing_compatibility_metadata"],
+            "requires pretrained_checkpoint",
+        ),
+        (
+            ["--allow_incompatible_pretrained_behavior"],
+            "requires pretrained_checkpoint",
+        ),
+        (
+            [
+                "--load",
+                "resume.ckpt",
+                "--pretrained_checkpoint",
+                "source.ckpt",
+                "--pretrained_components",
+                "forecaster.predictor.processor",
+            ],
+            "cannot be combined with load",
+        ),
+        (
+            [
+                "--eval",
+                "test",
+                "--pretrained_checkpoint",
+                "source.ckpt",
+                "--pretrained_components",
+                "forecaster.predictor.processor",
+            ],
+            "only supported for training",
+        ),
+        (
+            [
+                "--restore_opt",
+                "--pretrained_checkpoint",
+                "source.ckpt",
+                "--pretrained_components",
+                "forecaster.predictor.processor",
+            ],
+            "restore_opt cannot be used",
+        ),
+        (
+            [
+                "--eval",
+                "test",
+                "--freeze_components",
+                "forecaster.predictor.processor",
+            ],
+            "freeze_components is only supported for training",
+        ),
+    ],
+)
+def test_pretrained_option_validation(cli_args, match):
+    """Reject ambiguous selective-loading run configurations early."""
+    with pytest.raises(ValueError, match=match):
+        getattr(main, "__wrapped__", main)(
+            ["--config_path", "dummy.yaml"] + cli_args
+        )
+
+
 def make_args(**overrides):
     """Predictor args as stored in a checkpoint, with per-test overrides."""
     args = dict(
@@ -232,6 +353,183 @@ def config():
             )
         ),
     )
+
+
+def test_pretrained_checkpoint_uses_lightning_loader(config):
+    """Initialize through Lightning but start Trainer without resume state."""
+
+    class TrainablePredictor:
+        """Minimal trainable predictor accepted by the fit setup."""
+
+        trainable = True
+        supports_pretrained_transfer = True
+
+        def __init__(self, **_kwargs):
+            pass
+
+    datastore = MagicMock()
+    datastore.get_vars_names.return_value = []
+    component = "forecaster.predictor.processor"
+    loaded_model = MagicMock()
+    loaded_model.parameters.return_value = [SimpleNamespace(requires_grad=True)]
+    trainer = MagicMock(global_rank=0)
+    val_checkpoint = MagicMock(best_model_path="")
+    latest_checkpoint = MagicMock(best_model_path="")
+
+    with (
+        patch(
+            "neural_lam.train_model.load_config_and_datastore",
+            return_value=(config, datastore, None),
+        ),
+        patch("neural_lam.train_model.WeatherDataModule"),
+        patch(
+            "neural_lam.train_model.MODELS",
+            {"graph_lam": TrainablePredictor},
+        ),
+        patch(
+            "neural_lam.train_model.DeterministicARForecaster"
+        ) as forecaster_class,
+        patch(
+            "neural_lam.train_model.DeterministicForecastingModule."
+            "load_from_checkpoint",
+            return_value=loaded_model,
+        ) as load_from_checkpoint,
+        patch(
+            "neural_lam.train_model.pl.callbacks.ModelCheckpoint",
+            side_effect=[val_checkpoint, latest_checkpoint],
+        ),
+        patch("neural_lam.train_model.pl.Trainer", return_value=trainer),
+        patch("neural_lam.train_model.utils.setup_training_logger"),
+        patch("neural_lam.train_model.utils.init_training_logger_metrics"),
+        patch(
+            "neural_lam.train_model.utils.log_on_rank_zero"
+        ) as log_on_rank_zero,
+    ):
+        getattr(main, "__wrapped__", main)(
+            [
+                "--config_path",
+                "dummy.yaml",
+                "--pretrained_checkpoint",
+                "source.ckpt",
+                "--pretrained_components",
+                component,
+                "--freeze_components",
+                component,
+                "--allow_missing_compatibility_metadata",
+                "--allow_incompatible_pretrained_behavior",
+                "--precision",
+                "64",
+            ]
+        )
+
+    forecaster_class.return_value.double.assert_called_once_with()
+    load_from_checkpoint.assert_called_once()
+    call_kwargs = load_from_checkpoint.call_args.kwargs
+    assert call_kwargs["pretrained_components"] == [component]
+    assert call_kwargs["strict"] is True
+    assert call_kwargs["map_location"] == "cpu"
+    assert call_kwargs["allow_missing_compatibility_metadata"] is True
+    assert call_kwargs["allow_incompatible_pretrained_behavior"] is True
+    loaded_model.freeze_components.assert_called_once_with([component])
+    log_on_rank_zero.assert_called_once_with(
+        f"Frozen model components: {component}"
+    )
+    trainer.fit.assert_called_once()
+    assert trainer.fit.call_args.kwargs["model"] is loaded_model
+    assert trainer.fit.call_args.kwargs["ckpt_path"] is None
+
+
+def test_pretrained_checkpoint_rejects_unsupported_predictor(config):
+    """Fail explicitly until a predictor defines transfer compatibility."""
+
+    class UnsupportedPredictor:
+        trainable = True
+        supports_pretrained_transfer = False
+
+        def __init__(self, **_kwargs):
+            pass
+
+    datastore = MagicMock()
+    datastore.get_vars_names.return_value = []
+    component = "forecaster.predictor.processor"
+    with (
+        patch(
+            "neural_lam.train_model.load_config_and_datastore",
+            return_value=(config, datastore, None),
+        ),
+        patch("neural_lam.train_model.WeatherDataModule"),
+        patch(
+            "neural_lam.train_model.MODELS",
+            {"graph_lam": UnsupportedPredictor},
+        ),
+    ):
+        with pytest.raises(ValueError, match="not supported"):
+            getattr(main, "__wrapped__", main)(
+                [
+                    "--config_path",
+                    "dummy.yaml",
+                    "--pretrained_checkpoint",
+                    "source.ckpt",
+                    "--pretrained_components",
+                    component,
+                ]
+            )
+
+
+def test_load_keeps_standard_lightning_resume_path(config):
+    """Keep normal resume delegated to ``Trainer.fit(ckpt_path=...)``."""
+
+    class TrainablePredictor:
+        """Minimal trainable predictor accepted by the fit setup."""
+
+        trainable = True
+
+        def __init__(self, **_kwargs):
+            pass
+
+    datastore = MagicMock()
+    datastore.get_vars_names.return_value = []
+    model = MagicMock()
+    trainer = MagicMock(global_rank=0)
+    val_checkpoint = MagicMock(best_model_path="")
+    latest_checkpoint = MagicMock(best_model_path="")
+
+    with (
+        patch(
+            "neural_lam.train_model.load_config_and_datastore",
+            return_value=(config, datastore, None),
+        ),
+        patch("neural_lam.train_model.WeatherDataModule"),
+        patch(
+            "neural_lam.train_model.MODELS",
+            {"graph_lam": TrainablePredictor},
+        ),
+        patch("neural_lam.train_model.DeterministicARForecaster"),
+        patch(
+            "neural_lam.train_model.DeterministicForecastingModule"
+        ) as module_class,
+        patch(
+            "neural_lam.train_model.pl.callbacks.ModelCheckpoint",
+            side_effect=[val_checkpoint, latest_checkpoint],
+        ),
+        patch("neural_lam.train_model.pl.Trainer", return_value=trainer),
+        patch("neural_lam.train_model.utils.setup_training_logger"),
+        patch("neural_lam.train_model.utils.init_training_logger_metrics"),
+    ):
+        module_class.return_value = model
+        getattr(main, "__wrapped__", main)(
+            [
+                "--config_path",
+                "dummy.yaml",
+                "--load",
+                "transferred.ckpt",
+            ]
+        )
+
+    module_class.load_from_checkpoint.assert_not_called()
+    trainer.fit.assert_called_once()
+    assert trainer.fit.call_args.kwargs["model"] is model
+    assert trainer.fit.call_args.kwargs["ckpt_path"] == "transferred.ckpt"
 
 
 def test_checkpoint_loader_restores_gnn_type_kwargs(config):

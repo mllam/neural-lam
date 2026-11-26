@@ -2,6 +2,7 @@
 
 # Standard library
 import dataclasses
+import inspect
 import json
 import os
 import random
@@ -83,6 +84,52 @@ class Run:
     def example_plots(self, example_i: int) -> Path:
         """Frames and GIF of example ``example_i`` (1-based, create_gif)."""
         return self.plot_dir / f"example_plots_{example_i}"
+
+
+def _checkpoint_loading_kwargs() -> dict[str, bool]:
+    """Return checkpoint-loading options supported by this Lightning version.
+
+    Returns
+    -------
+    dict of str to bool
+        ``weights_only=False`` when Lightning exposes that loader argument,
+        otherwise an empty mapping so the trusted-loader wrapper can use the
+        PyTorch compatibility setting.
+    """
+    parameters = inspect.signature(
+        DeterministicForecastingModule.load_from_checkpoint
+    ).parameters
+    return {"weights_only": False} if "weights_only" in parameters else {}
+
+
+def _load_trusted_checkpoint(
+    checkpoint_loader: Any,
+    checkpoint_path: str | Path,
+    **kwargs: Any,
+) -> Any:
+    """Load a trusted checkpoint across supported Lightning versions.
+
+    Lightning versions without a ``weights_only`` argument rely on PyTorch's
+    process setting to preserve full checkpoint loading on PyTorch 2.6+.
+    """
+    loading_kwargs = _checkpoint_loading_kwargs()
+    if loading_kwargs:
+        return checkpoint_loader(
+            checkpoint_path,
+            **loading_kwargs,
+            **kwargs,
+        )
+
+    variable = "TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"
+    previous_value = os.environ.get(variable)
+    os.environ[variable] = "1"
+    try:
+        return checkpoint_loader(checkpoint_path, **kwargs)
+    finally:
+        if previous_value is None:
+            os.environ.pop(variable, None)
+        else:
+            os.environ[variable] = previous_value
 
 
 def build_predictor(
@@ -178,12 +225,15 @@ def load_forecasting_module_from_checkpoint(
     forecaster = DeterministicARForecaster(
         predictor, datastore, config=config, loss=args.loss
     )
-    return DeterministicForecastingModule.load_from_checkpoint(
+    checkpoint_loader = cast(
+        "Any", DeterministicForecastingModule.load_from_checkpoint
+    )
+    return _load_trusted_checkpoint(
+        checkpoint_loader,
         ckpt_path,
         forecaster=forecaster,
         datastore=datastore,
         datastore_boundary=datastore_boundary,
-        weights_only=False,
     )
 
 
@@ -251,12 +301,45 @@ def build_parser() -> ArgumentParser:
     runtime_group.add_argument(
         "--load",
         type=str,
-        help="Path to load model parameters from",
+        help="Checkpoint path used for full training resume or evaluation",
     )
     runtime_group.add_argument(
         "--restore_opt",
         action="store_true",
         help="If optimizer state should be restored with model",
+    )
+    runtime_group.add_argument(
+        "--pretrained_checkpoint",
+        type=str,
+        help="Checkpoint used to initialize selected components for a fresh "
+        "training run",
+    )
+    runtime_group.add_argument(
+        "--pretrained_components",
+        nargs="+",
+        default=[],
+        help="Nested module paths (for example, "
+        "forecaster.predictor.processor) to initialize from "
+        "--pretrained_checkpoint",
+    )
+    runtime_group.add_argument(
+        "--freeze_components",
+        nargs="+",
+        default=[],
+        help="Nested module paths whose parameters should be frozen",
+    )
+    runtime_group.add_argument(
+        "--allow_missing_compatibility_metadata",
+        action="store_true",
+        help="Allow a legacy pretrained checkpoint without compatibility "
+        "metadata; the caller assumes graph and model-behavior compatibility "
+        "responsibility",
+    )
+    runtime_group.add_argument(
+        "--allow_incompatible_pretrained_behavior",
+        action="store_true",
+        help="Allow known model execution-setting differences when loading "
+        "pretrained components",
     )
 
     # Model architecture
@@ -562,6 +645,51 @@ def fit(
     Run
         Object containing paths to run outputs and saved checkpoints.
     """
+    if (
+        train_config.pretrained_checkpoint is not None
+        and not train_config.pretrained_checkpoint.strip()
+    ):
+        raise ValueError("pretrained_checkpoint must not be empty.")
+    has_pretrained_checkpoint = train_config.pretrained_checkpoint is not None
+    has_pretrained_components = bool(train_config.pretrained_components)
+    if has_pretrained_checkpoint != has_pretrained_components:
+        raise ValueError(
+            "pretrained_checkpoint and pretrained_components must be set "
+            "together."
+        )
+    if has_pretrained_checkpoint and train_config.load:
+        raise ValueError(
+            "pretrained_checkpoint cannot be combined with load: pretrained "
+            "initialization starts a fresh run, while load resumes a run."
+        )
+    if has_pretrained_checkpoint and train_config.eval:
+        raise ValueError(
+            "pretrained_checkpoint is only supported for training, not "
+            "evaluation."
+        )
+    if has_pretrained_checkpoint and train_config.restore_opt:
+        raise ValueError(
+            "restore_opt cannot be used with pretrained_checkpoint because "
+            "pretrained initialization starts with a fresh optimizer."
+        )
+    if (
+        train_config.allow_missing_compatibility_metadata
+        and not has_pretrained_checkpoint
+    ):
+        raise ValueError(
+            "allow_missing_compatibility_metadata requires "
+            "pretrained_checkpoint and pretrained_components."
+        )
+    if (
+        train_config.allow_incompatible_pretrained_behavior
+        and not has_pretrained_checkpoint
+    ):
+        raise ValueError(
+            "allow_incompatible_pretrained_behavior requires "
+            "pretrained_checkpoint and pretrained_components."
+        )
+    if train_config.eval and train_config.freeze_components:
+        raise ValueError("freeze_components is only supported for training.")
     if train_config.val_interval < 1:
         raise ValueError(
             "val_interval must be at least 1, got "
@@ -688,6 +816,12 @@ def fit(
     predictor_class = MODELS[model_config.model]
     predictor = build_predictor(predictor_class, hparams, config, datastore)
 
+    if has_pretrained_checkpoint and not predictor.supports_pretrained_transfer:
+        raise ValueError(
+            f"Selective pretrained initialization is not supported for "
+            f"{model_config.model!r}."
+        )
+
     if not train_config.eval and not predictor.trainable:
         raise ValueError(
             f"The {model_config.model} model cannot be trained. Run with "
@@ -700,8 +834,13 @@ def fit(
         loss=train_config.loss,
         gradient_checkpointing=train_config.gradient_checkpointing,
     )
+    if has_pretrained_checkpoint and str(compute_config.precision) in {
+        "64",
+        "64-true",
+    }:
+        forecaster.double()
 
-    model = DeterministicForecastingModule(
+    module_kwargs: dict[str, Any] = dict(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
@@ -716,6 +855,37 @@ def fit(
         var_leads_metrics_watch=train_config.var_leads_metrics_watch,
         args=hparams,
     )
+    if train_config.pretrained_checkpoint is not None:
+        checkpoint_loader = cast(
+            "Any", DeterministicForecastingModule.load_from_checkpoint
+        )
+        model = _load_trusted_checkpoint(
+            checkpoint_loader,
+            train_config.pretrained_checkpoint,
+            map_location="cpu",
+            strict=True,
+            pretrained_components=train_config.pretrained_components,
+            allow_missing_compatibility_metadata=(
+                train_config.allow_missing_compatibility_metadata
+            ),
+            allow_incompatible_pretrained_behavior=(
+                train_config.allow_incompatible_pretrained_behavior
+            ),
+            **module_kwargs,
+        )
+    else:
+        model = DeterministicForecastingModule(**module_kwargs)
+
+    if train_config.freeze_components:
+        model.freeze_components(train_config.freeze_components)
+        if not any(parameter.requires_grad for parameter in model.parameters()):
+            raise ValueError(
+                "freeze_components leaves no trainable parameters."
+            )
+        utils.log_on_rank_zero(
+            "Frozen model components: "
+            + ", ".join(train_config.freeze_components)
+        )
 
     prefix = f"eval-{train_config.eval}-" if train_config.eval else "train-"
     if logging_config.logger_run_name:

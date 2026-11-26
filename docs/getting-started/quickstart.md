@@ -27,6 +27,9 @@ python -m neural_lam.train_model --config_path $CONFIG --model graph_lam --graph
 
 See {doc}`../user-guide/training` for the available models and training options, and {doc}`../user-guide/datastores` for how to write a config for your own data.
 
+To initialize selected GraphLAM components from a trusted checkpoint, see
+{ref}`transfer-learning`.
+
 ## 3. Evaluate the model
 
 ```bash

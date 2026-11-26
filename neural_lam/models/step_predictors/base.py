@@ -30,6 +30,7 @@ class StepPredictor(nn.Module, ABC):
     clamp_lower_upper_idx: torch.Tensor
     clamp_lower_idx: torch.Tensor
     clamp_upper_idx: torch.Tensor
+    supports_pretrained_transfer: bool = False
 
     @property
     def trainable(self) -> bool:

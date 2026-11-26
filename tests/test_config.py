@@ -1,4 +1,5 @@
 # Standard library
+import dataclasses
 from pathlib import Path
 
 # Third-party
@@ -6,6 +7,15 @@ import pytest
 
 # First-party
 import neural_lam.config as nlconfig
+
+
+def test_train_run_config_preserves_existing_positional_field_order():
+    """Keep new transfer options after the former final constructor field."""
+    field_names = [
+        field.name for field in dataclasses.fields(nlconfig.TrainRunConfig)
+    ]
+    assert field_names[17] == "gradient_checkpointing"
+    assert field_names[18] == "pretrained_checkpoint"
 
 
 @pytest.mark.parametrize(

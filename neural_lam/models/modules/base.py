@@ -5,6 +5,7 @@ forecasting modules."""
 import os
 import warnings
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from typing import Any
 
 # Third-party
@@ -14,6 +15,7 @@ import pytorch_lightning as pl
 import torch
 import xarray as xr
 from PIL import Image
+from pytorch_lightning.utilities.rank_zero import rank_zero_warn
 
 # First-party
 from neural_lam.utils import get_integer_time
@@ -29,6 +31,15 @@ from ..forecasters.base import BaseForecaster
 Batch = tuple[
     torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor
 ]
+
+PRETRAINED_COMPATIBILITY_KEY = "neural_lam_pretrained_compatibility"
+PRETRAINED_COMPATIBILITY_FIELDS = {"graph", "model_behavior"}
+PRETRAINED_MODEL_BEHAVIOR_FIELDS = {
+    "predictor",
+    "mesh_aggr",
+    "g2m_gnn_type",
+    "m2g_gnn_type",
+}
 
 
 class BaseForecastingModule(pl.LightningModule, ABC):
@@ -81,6 +92,9 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         metrics_watch: list[str] | None = None,
         var_leads_metrics_watch: dict[int, list[int]] | None = None,
         args: Any | None = None,
+        pretrained_components: list[str] | None = None,
+        allow_missing_compatibility_metadata: bool = False,
+        allow_incompatible_pretrained_behavior: bool = False,
     ) -> None:
         """
         Initialize the BaseForecastingModule.
@@ -128,6 +142,17 @@ class BaseForecastingModule(pl.LightningModule, ABC):
             ``train_steps_to_log``, ``metrics_watch``,
             ``var_leads_metrics_watch``) so legacy checkpoints round-trip
             through ``load_from_checkpoint`` correctly.
+        pretrained_components : list of str, optional
+            Nested module paths, such as ``forecaster.predictor.processor``,
+            to initialize from the checkpoint being loaded. This transient
+            setting only acts when passed explicitly; it is not restored from
+            the saved ``args`` namespace.
+        allow_missing_compatibility_metadata : bool, default False
+            Whether selective initialization may proceed when a checkpoint
+            predates compatibility metadata. Known mismatches remain errors.
+        allow_incompatible_pretrained_behavior : bool, default False
+            Whether selective initialization may proceed when known GraphLAM
+            execution settings differ. Graph mismatches remain errors.
         """
         super().__init__()
         # Pre-refactor ``ARModel`` checkpoints saved every hyperparameter nested
@@ -197,6 +222,23 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         self.datastore = datastore
         self.datastore_boundary = datastore_boundary
         self.forecaster = forecaster
+        self._pretrained_components = self._validate_component_paths(
+            pretrained_components or []
+        )
+        predictor = getattr(forecaster, "predictor", None)
+        if self._pretrained_components and not getattr(
+            predictor, "supports_pretrained_transfer", False
+        ):
+            raise ValueError(
+                "The target predictor does not support selective pretrained "
+                "initialization."
+            )
+        self._allow_missing_compatibility_metadata = (
+            allow_missing_compatibility_metadata
+        )
+        self._allow_incompatible_pretrained_behavior = (
+            allow_incompatible_pretrained_behavior
+        )
         self.matched_metrics: set = set()
 
         # Compute interior_mask_bool directly from datastore
@@ -351,6 +393,453 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         lr = self.hparams.lr  # ty: ignore[unresolved-attribute]
         opt = torch.optim.AdamW(self.parameters(), lr=lr, betas=(0.9, 0.95))
         return opt
+
+    @staticmethod
+    def _validate_component_paths(
+        components: Sequence[str],
+    ) -> tuple[str, ...]:
+        """Validate and normalize nested component paths.
+
+        Parameters
+        ----------
+        components : sequence of str
+            Period-separated paths relative to the forecasting module, such as
+            ``forecaster.predictor.processor``.
+
+        Returns
+        -------
+        tuple of str
+            Validated component paths.
+
+        Raises
+        ------
+        ValueError
+            If a path is empty, duplicated, or overlaps another selected path.
+        """
+        if isinstance(components, str):
+            raise ValueError("Component paths must be provided as a sequence.")
+
+        paths = tuple(components)
+        non_strings = [path for path in paths if not isinstance(path, str)]
+        if non_strings:
+            raise ValueError(
+                f"Component paths must be strings, got {non_strings}."
+            )
+        invalid = [
+            path
+            for path in paths
+            if not path
+            or path.startswith(".")
+            or path.endswith(".")
+            or ".." in path
+        ]
+        if invalid:
+            raise ValueError(f"Invalid component paths: {invalid}.")
+
+        duplicates = sorted(
+            path for path in set(paths) if paths.count(path) > 1
+        )
+        if duplicates:
+            raise ValueError(f"Duplicate component paths: {duplicates}.")
+
+        overlaps = sorted(
+            (parent, child)
+            for parent in paths
+            for child in paths
+            if parent != child and child.startswith(f"{parent}.")
+        )
+        if overlaps:
+            raise ValueError(
+                "Component paths must not overlap: "
+                + ", ".join(
+                    f"{parent!r} contains {child!r}"
+                    for parent, child in overlaps
+                )
+                + "."
+            )
+        return paths
+
+    def freeze_components(self, components: Sequence[str]) -> None:
+        """Disable gradient updates recursively for complete model components.
+
+        Parameters
+        ----------
+        components : sequence of str
+            Period-separated module paths relative to this forecasting module.
+
+        Raises
+        ------
+        ValueError
+            If a path is invalid, does not identify a module, or identifies a
+            module without parameters.
+        """
+        paths = self._validate_component_paths(components)
+        resolved_components: list[torch.nn.Module] = []
+        for path in paths:
+            try:
+                component = self.get_submodule(path)
+            except AttributeError as exc:
+                raise ValueError(f"Unknown component path {path!r}.") from exc
+            if next(component.parameters(), None) is None:
+                raise ValueError(
+                    f"Component {path!r} does not contain parameters to freeze."
+                )
+            resolved_components.append(component)
+
+        for component in resolved_components:
+            component.requires_grad_(False)
+
+    def _merge_pretrained_component_state(
+        self,
+        source_state: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Merge selected checkpoint components into fresh target state.
+
+        Source values are applied only to the returned state; the model remains
+        unchanged until Lightning performs its strict state load.
+
+        Parameters
+        ----------
+        source_state : dict of str to Any
+            Migrated checkpoint state dictionary.
+
+        Returns
+        -------
+        dict of str to Any
+            Complete target state with selected values replaced by checkpoint
+            values.
+
+        Raises
+        ------
+        ValueError
+            If a selected component is absent or structurally incompatible.
+        """
+        target_state = self.state_dict()
+
+        for path in self._pretrained_components:
+            try:
+                component = self.get_submodule(path)
+            except AttributeError as exc:
+                raise ValueError(
+                    f"Unknown pretrained component path {path!r}."
+                ) from exc
+
+            component_state = component.state_dict()
+            if not component_state:
+                raise ValueError(
+                    f"Pretrained component {path!r} has no state to load."
+                )
+
+            prefix = f"{path}."
+            expected_keys = {
+                f"{prefix}{component_key}" for component_key in component_state
+            }
+            source_keys = {
+                key for key in source_state if key.startswith(prefix)
+            }
+            missing = sorted(expected_keys - source_keys)
+            unexpected = sorted(source_keys - expected_keys)
+            if missing or unexpected:
+                raise ValueError(
+                    f"Incompatible state keys for component {path!r}: "
+                    f"missing={missing}, unexpected={unexpected}."
+                )
+
+            incompatible_values = []
+            shape_mismatches = []
+            for key in sorted(expected_keys):
+                source_value = source_state[key]
+                target_value = target_state[key]
+                if isinstance(source_value, torch.Tensor) != isinstance(
+                    target_value, torch.Tensor
+                ):
+                    incompatible_values.append(key)
+                elif (
+                    isinstance(source_value, torch.Tensor)
+                    and isinstance(target_value, torch.Tensor)
+                    and source_value.shape != target_value.shape
+                ):
+                    shape_mismatches.append(
+                        f"{key}: checkpoint {tuple(source_value.shape)} != "
+                        f"target {tuple(target_value.shape)}"
+                    )
+
+            if incompatible_values:
+                raise ValueError(
+                    f"Incompatible state value types for component {path!r}: "
+                    f"{incompatible_values}."
+                )
+            if shape_mismatches:
+                raise ValueError(
+                    f"Incompatible parameter shapes for component {path!r}: "
+                    f"{'; '.join(shape_mismatches)}."
+                )
+
+            target_state.update(
+                {key: source_state[key] for key in expected_keys}
+            )
+
+        return target_state
+
+    def _get_pretrained_compatibility_metadata(
+        self,
+    ) -> dict[str, Any]:
+        """Collect compatibility fields from nested components.
+
+        Components opt in by defining ``get_pretrained_compatibility_metadata``.
+        Providers must return deterministic graph and model-behavior values.
+        Results are keyed by module path so each field retains its owner.
+
+        Returns
+        -------
+        dict of str to Any
+            Provider metadata keyed by nested module path, or an empty
+            dictionary when no nested component provides compatibility fields.
+
+        Raises
+        ------
+        ValueError
+            If a provider is invalid, fails, or returns malformed metadata.
+        """
+        providers = {}
+        for path, module in self.named_modules():
+            metadata_provider = getattr(
+                module, "get_pretrained_compatibility_metadata", None
+            )
+            if metadata_provider is None:
+                continue
+            if not callable(metadata_provider):
+                raise ValueError(
+                    f"Compatibility metadata provider at {path!r} is not "
+                    "callable."
+                )
+            try:
+                component_metadata = metadata_provider()
+            except Exception as exc:
+                raise ValueError(
+                    f"Compatibility metadata provider at {path!r} failed."
+                ) from exc
+            if not component_metadata:
+                raise ValueError(
+                    f"Compatibility metadata provider at {path!r} returned "
+                    "no fields."
+                )
+            providers[path] = component_metadata
+
+        if not providers:
+            return {}
+        self._validate_compatibility_metadata(
+            providers,
+            origin="target model",
+        )
+        return providers
+
+    @staticmethod
+    def _validate_compatibility_metadata(
+        metadata: Any,
+        *,
+        origin: str,
+    ) -> dict[str, Any]:
+        """Validate and return metadata keyed by provider path.
+
+        Parameters
+        ----------
+        metadata : Any
+            Metadata document to validate.
+        origin : str
+            Description used to identify invalid metadata in errors.
+
+        Returns
+        -------
+        dict of str to Any
+            Validated compatibility fields keyed by nested module path.
+
+        Raises
+        ------
+        ValueError
+            If the metadata, provider, or field schema is unsupported.
+        """
+        if not isinstance(metadata, dict):
+            raise ValueError(
+                f"{origin} compatibility metadata is not a mapping."
+            )
+        if not metadata:
+            raise ValueError(
+                f"{origin} compatibility metadata must contain providers."
+            )
+        for path, fields in metadata.items():
+            if not isinstance(path, str) or not path:
+                raise ValueError(
+                    f"{origin} compatibility metadata has an invalid provider "
+                    f"path {path!r}."
+                )
+            if not isinstance(fields, dict) or not fields:
+                raise ValueError(
+                    f"{origin} compatibility provider {path!r} must contain "
+                    "fields."
+                )
+            for field_name, value in fields.items():
+                if not isinstance(field_name, str) or not field_name:
+                    raise ValueError(
+                        f"{origin} compatibility provider {path!r} has an "
+                        f"invalid field name {field_name!r}."
+                    )
+                if field_name not in PRETRAINED_COMPATIBILITY_FIELDS:
+                    raise ValueError(
+                        f"{origin} compatibility provider {path!r} has an "
+                        f"unsupported field {field_name!r}."
+                    )
+                if field_name == "graph" and (
+                    not isinstance(value, str) or not value
+                ):
+                    raise ValueError(
+                        f"{origin} compatibility field {path!r}.graph requires "
+                        "a non-empty fingerprint string."
+                    )
+                if field_name == "model_behavior":
+                    if (
+                        not isinstance(value, dict)
+                        or set(value) != PRETRAINED_MODEL_BEHAVIOR_FIELDS
+                        or not all(
+                            isinstance(field_value, str) and field_value
+                            for field_value in value.values()
+                        )
+                    ):
+                        raise ValueError(
+                            f"{origin} compatibility field "
+                            f"{path!r}.model_behavior requires "
+                            "non-empty string values for exactly "
+                            f"{sorted(PRETRAINED_MODEL_BEHAVIOR_FIELDS)}."
+                        )
+        return metadata
+
+    @staticmethod
+    def _format_behavior_differences(
+        source: dict[str, str],
+        target: dict[str, str],
+    ) -> str:
+        """Format differing model-behavior fields for diagnostics."""
+        differences = [
+            f"{key}: checkpoint={source[key]!r}, target={target[key]!r}"
+            for key in sorted(source)
+            if source[key] != target[key]
+        ]
+        return "; ".join(differences)
+
+    def _validate_pretrained_compatibility(
+        self,
+        checkpoint: dict[str, Any],
+    ) -> None:
+        """Compare checkpoint compatibility fields with the target model.
+
+        Provider and field schemas must match exactly. Missing metadata and
+        known model-behavior differences have separate explicit overrides;
+        graph and schema mismatches always fail.
+
+        Parameters
+        ----------
+        checkpoint : dict
+            Lightning checkpoint being used for selective initialization.
+
+        Raises
+        ------
+        ValueError
+            If compatibility metadata is missing or differs from the target.
+        """
+        target_metadata = self._get_pretrained_compatibility_metadata()
+        if not target_metadata:
+            raise ValueError(
+                "The target model does not provide compatibility metadata; "
+                "selective pretrained initialization is unsupported."
+            )
+
+        if PRETRAINED_COMPATIBILITY_KEY not in checkpoint:
+            if self._allow_missing_compatibility_metadata:
+                rank_zero_warn(
+                    "The pretrained checkpoint does not contain compatibility "
+                    "metadata. Continuing because "
+                    "allow_missing_compatibility_metadata=True; the caller "
+                    "is responsible for graph and model-behavior "
+                    "compatibility.",
+                    category=UserWarning,
+                    stacklevel=2,
+                )
+                return
+            raise ValueError(
+                "The pretrained checkpoint does not contain compatibility "
+                "metadata. Recreate it with a Neural-LAM version that stores "
+                "graph fingerprints."
+            )
+        source_metadata = checkpoint[PRETRAINED_COMPATIBILITY_KEY]
+        source_providers = self._validate_compatibility_metadata(
+            source_metadata,
+            origin="checkpoint",
+        )
+        target_providers = target_metadata
+        source_paths = set(source_providers)
+        target_paths = set(target_providers)
+        if source_paths != target_paths:
+            raise ValueError(
+                "Compatibility metadata provider paths differ: "
+                f"missing={sorted(target_paths - source_paths)}, "
+                f"unexpected={sorted(source_paths - target_paths)}."
+            )
+
+        for path in sorted(target_paths):
+            source_fields = source_providers[path]
+            target_fields = target_providers[path]
+            source_names = set(source_fields)
+            target_names = set(target_fields)
+            if source_names != target_names:
+                raise ValueError(
+                    f"Compatibility fields differ for provider {path!r}: "
+                    f"missing={sorted(target_names - source_names)}, "
+                    f"unexpected={sorted(source_names - target_names)}."
+                )
+            for field_name in sorted(target_names):
+                source_value = source_fields[field_name]
+                target_value = target_fields[field_name]
+                if source_value == target_value:
+                    continue
+                if field_name == "graph":
+                    raise ValueError(
+                        "The pretrained checkpoint is incompatible with the "
+                        "target model graph topology, node ordering, or graph "
+                        "features."
+                    )
+                differences = self._format_behavior_differences(
+                    source_value,
+                    target_value,
+                )
+                if self._allow_incompatible_pretrained_behavior:
+                    rank_zero_warn(
+                        "The pretrained checkpoint uses incompatible model "
+                        "behavior. Continuing because "
+                        "allow_incompatible_pretrained_behavior=True; "
+                        f"{differences}.",
+                        category=UserWarning,
+                        stacklevel=2,
+                    )
+                    continue
+                raise ValueError(
+                    "The pretrained checkpoint uses incompatible model "
+                    f"behavior: {differences}."
+                )
+
+    def on_save_checkpoint(self, checkpoint: dict[str, Any]) -> None:
+        """Store component compatibility fields in a Lightning checkpoint.
+
+        Provider fields are validated and stored by module path under
+        ``PRETRAINED_COMPATIBILITY_KEY``.
+
+        Parameters
+        ----------
+        checkpoint : dict
+            Lightning checkpoint dictionary to augment in place.
+        """
+        metadata = self._get_pretrained_compatibility_metadata()
+        if metadata:
+            checkpoint[PRETRAINED_COMPATIBILITY_KEY] = metadata
 
     @staticmethod
     def _safe_std(
@@ -1023,8 +1512,12 @@ class BaseForecastingModule(pl.LightningModule, ABC):
 
     def on_load_checkpoint(self, checkpoint: dict[str, Any]) -> None:
         """
-        Perform actions when loading a checkpoint.
-        Handles backward compatibility for older checkpoints.
+        Prepare checkpoint state for Lightning's strict model-state load.
+
+        This first applies supported state-key migrations. During selective
+        initialization, it then validates compatibility and replaces the
+        checkpoint state with a complete fresh target state containing only
+        the selected source component values.
 
         Parameters
         ----------
@@ -1074,6 +1567,16 @@ class BaseForecastingModule(pl.LightningModule, ABC):
                 loaded_state_dict[new_key] = loaded_state_dict[old_key]
                 del loaded_state_dict[old_key]
 
+        if self._pretrained_components:
+            self._validate_pretrained_compatibility(checkpoint)
+            checkpoint["state_dict"] = self._merge_pretrained_component_state(
+                loaded_state_dict
+            )
+            # Selection is an initialization instruction, not persistent load
+            # behavior. Later restores on this instance must load full state.
+            self._pretrained_components = ()
+            self._allow_missing_compatibility_metadata = False
+            self._allow_incompatible_pretrained_behavior = False
         if not self.restore_opt:
             opt = self.configure_optimizers()
             checkpoint["optimizer_states"] = [opt.state_dict()]

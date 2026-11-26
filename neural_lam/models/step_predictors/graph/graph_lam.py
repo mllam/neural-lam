@@ -1,6 +1,7 @@
 """Graph-based LAM model with a flat mesh."""
 
 # Standard library
+import hashlib
 
 # Third-party
 import torch
@@ -24,6 +25,22 @@ class GraphLAM(BaseGraphModel):
     mesh_static_features: torch.Tensor
     m2m_features: torch.Tensor
     m2m_edge_index: torch.Tensor
+    _graph_compatibility_fingerprint: str
+    supports_pretrained_transfer = True
+
+    _GRAPH_COMPATIBILITY_ATTRIBUTES = (
+        "g2m_edge_index",
+        "m2g_edge_index",
+        "m2m_edge_index",
+        "mesh_up_edge_index",
+        "mesh_down_edge_index",
+        "g2m_features",
+        "m2g_features",
+        "m2m_features",
+        "mesh_up_features",
+        "mesh_down_features",
+        "mesh_static_features",
+    )
 
     def __init__(
         self,
@@ -85,6 +102,9 @@ class GraphLAM(BaseGraphModel):
             g2m_gnn_type=g2m_gnn_type,
             m2g_gnn_type=m2g_gnn_type,
         )
+        self._graph_compatibility_fingerprint = (
+            self._compute_graph_compatibility_fingerprint()
+        )
 
         assert not self.hierarchical, (
             "GraphLAM does not use a hierarchical mesh graph"
@@ -138,6 +158,47 @@ class GraphLAM(BaseGraphModel):
             The number of mesh nodes to ignore.
         """
         return self.mesh_static_features.shape[0], 0
+
+    def _compute_graph_compatibility_fingerprint(self) -> str:
+        """Hash the construction-time graph tensors and grid-node count."""
+        fingerprint = hashlib.sha256()
+        fingerprint.update(f"num_grid_nodes:{self.num_grid_nodes}".encode())
+        for attribute_name in self._GRAPH_COMPATIBILITY_ATTRIBUTES:
+            attribute = getattr(self, attribute_name)
+            tensors = (
+                (attribute,)
+                if isinstance(attribute, torch.Tensor)
+                else attribute
+            )
+            for index, tensor in enumerate(tensors):
+                tensor_cpu = tensor.detach().cpu().contiguous()
+                fingerprint.update(f"{attribute_name}:{index}".encode())
+                fingerprint.update(str(tensor_cpu.dtype).encode())
+                fingerprint.update(str(tuple(tensor_cpu.shape)).encode())
+                fingerprint.update(
+                    tensor_cpu.view(torch.uint8).numpy().tobytes()
+                )
+        return fingerprint.hexdigest()
+
+    def get_pretrained_compatibility_metadata(
+        self,
+    ) -> dict[str, object]:
+        """Expose GraphLAM graph and execution-behavior compatibility fields.
+
+        Returns
+        -------
+        dict of str to object
+            Graph fingerprint and model-behavior fields.
+        """
+        return {
+            "graph": self._graph_compatibility_fingerprint,
+            "model_behavior": {
+                "predictor": "graph_lam",
+                "mesh_aggr": self.mesh_aggr,
+                "g2m_gnn_type": self.g2m_gnn_type,
+                "m2g_gnn_type": self.m2g_gnn_type,
+            },
+        }
 
     def embedd_mesh_nodes(self) -> torch.Tensor:
         """

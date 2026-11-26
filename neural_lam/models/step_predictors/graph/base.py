@@ -1,7 +1,5 @@
 """Base class for graph-based step predictors."""
 
-# Standard library
-
 # Third-party
 import torch
 
@@ -121,7 +119,6 @@ class BaseGraphModel(StepPredictor):
             graph_name,
             mesh_node_features_scaling=grid_xy_max_span,
         )
-
         # Specify dimensions of data
         self.num_mesh_nodes, _ = self.get_num_mesh()
         utils.log_on_rank_zero(
