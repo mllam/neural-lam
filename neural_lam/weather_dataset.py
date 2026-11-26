@@ -178,7 +178,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             If the datastore does not provide state data, if the configured
             ``ar_steps`` and forcing windows leave zero samples in ``split``,
             or if the state/forcing dimension order does not match the
-            datastore's expected dimension order.
+            datastore's expected dimension order, or if state and forcing
+            ensemble member coordinates contain different members.
         NotImplementedError
             If ``datastore_boundary`` has ensemble forcing.
         """
@@ -205,6 +206,23 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.da_forcing = self.datastore.get_dataarray(
             category="forcing", split=self.split
         )
+        if (
+            self.datastore.has_ensemble_forcing
+            and self.da_forcing is not None
+            and "ensemble_member" in self.da_state.coords
+            and "ensemble_member" in self.da_forcing.coords
+        ):
+            state_members = self.da_state.ensemble_member.values.tolist()
+            forcing_members = self.da_forcing.ensemble_member.values.tolist()
+            if set(state_members) != set(forcing_members):
+                raise ValueError(
+                    "State and forcing ensemble_member coordinates must "
+                    f"contain the same members: state={state_members}, "
+                    f"forcing={forcing_members}."
+                )
+            self.da_forcing = self.da_forcing.sel(
+                ensemble_member=self.da_state.ensemble_member.values
+            )
 
         self.da_boundary_forcing = None
         self._forecast_step_boundary = None
