@@ -2,13 +2,16 @@
 from pathlib import Path
 
 # Third-party
+import numpy as np
 import plotly.graph_objects as go
 import pytest
+import torch
 
 # First-party
 from neural_lam import utils
 from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.plot_graph import (
+    MESH_HEIGHT,
     plot_graph,
 )
 from tests.dummy_datastore import DummyDatastore
@@ -88,3 +91,44 @@ def test_save_html(graph_fixture, tmp_path):
     )
     assert Path(save_path).exists()
     assert Path(save_path).stat().st_size > 0
+
+
+def _minimal_graph_ldict(
+    num_mesh_nodes: int, m2m_edge_index: torch.Tensor
+) -> dict[str, object]:
+    """Build the minimal ``load_graph``-shaped dict ``plot_graph`` needs."""
+    return {
+        "g2m_edge_index": torch.tensor([[0, 1], [0, 0]]),
+        "m2g_edge_index": torch.tensor([[0, 0], [0, 1]]),
+        "m2m_edge_index": m2m_edge_index,
+        "mesh_up_edge_index": [],
+        "mesh_down_edge_index": [],
+        "mesh_static_features": torch.zeros(num_mesh_nodes, 2),
+    }
+
+
+@pytest.mark.parametrize("num_mesh_nodes", [2, 3, 5])
+def test_mesh_node_without_m2m_edges(num_mesh_nodes: int) -> None:
+    """Every mesh node gets a marker, even one with no m2m edge.
+
+    ``pyg.utils.degree`` returns ``max(index) + 1`` entries unless the node
+    count is passed, so a trailing mesh node with no m2m edge used to be
+    missing from the z-offset array and ``np.concatenate`` raised a
+    ValueError.
+    """
+    # Ring over nodes 0 .. num_mesh_nodes - 2, leaving the last one unconnected.
+    senders = torch.arange(num_mesh_nodes - 1)
+    receivers = (senders + 1) % (num_mesh_nodes - 1)
+    m2m_edge_index = torch.stack((senders, receivers), dim=0)
+
+    fig = plot_graph(
+        grid_pos=np.zeros((4, 2)),
+        hierarchical=False,
+        graph_ldict=_minimal_graph_ldict(num_mesh_nodes, m2m_edge_index),
+    )
+
+    assert isinstance(fig, go.Figure)
+    mesh_marker_z = np.asarray(fig.data[-1].z)
+    assert mesh_marker_z.shape == (num_mesh_nodes,)
+    # The unconnected node sits at the base mesh height, i.e. degree 0.
+    assert mesh_marker_z[-1] == pytest.approx(MESH_HEIGHT)
