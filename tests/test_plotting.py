@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 # Third-party
 import matplotlib
+import matplotlib.collections
 import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,6 +15,7 @@ import pytest
 import torch
 import xarray as xr
 from cartopy import crs as ccrs
+from cartopy.mpl.geoaxes import GeoAxes
 
 # First-party
 from neural_lam import config as nlconfig
@@ -32,6 +34,10 @@ from tests.dummy_datastore import DummyDatastore
 # Create output directory for test figures
 TEST_OUTPUT_DIR = Path(__file__).parent / "test_outputs" / "plotting"
 TEST_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Kept before mock_cartopy_downloads stubs them, for tests needing the real ones
+_REAL_GEOAXES_COASTLINES = GeoAxes.coastlines
+_REAL_GEOAXES_ADD_FEATURE = GeoAxes.add_feature
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -136,10 +142,45 @@ def test_plot_prediction() -> None:
     assert len(ground_truth_ax.collections) == 1
     assert len(prediction_ax.collections) == 1
 
-    assert ground_truth_ax.collections[0].norm.vmin == expected_vmin
-    assert ground_truth_ax.collections[0].norm.vmax == expected_vmax
-    assert prediction_ax.collections[0].norm.vmin == expected_vmin
-    assert prediction_ax.collections[0].norm.vmax == expected_vmax
+    ground_truth_mesh, prediction_mesh = (
+        next(
+            c
+            for c in ax.collections
+            if isinstance(c, matplotlib.collections.QuadMesh)
+        )
+        for ax in (ground_truth_ax, prediction_ax)
+    )
+    assert ground_truth_mesh.norm.vmin == expected_vmin
+    assert ground_truth_mesh.norm.vmax == expected_vmax
+    assert prediction_mesh.norm.vmin == expected_vmin
+    assert prediction_mesh.norm.vmax == expected_vmax
+
+
+def test_plot_prediction_colorbar_uses_data_range(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The shared colorbar spans ``vrange`` even when coastlines and borders
+    are drawn, since cartopy adds those as collections before the mesh."""
+    # Undo the autouse stubs: creating feature artists needs no download,
+    # only drawing them does, and this test never draws.
+    monkeypatch.setattr(GeoAxes, "coastlines", _REAL_GEOAXES_COASTLINES)
+    monkeypatch.setattr(GeoAxes, "add_feature", _REAL_GEOAXES_ADD_FEATURE)
+
+    datastore = init_datastore_example("dummydata")
+    n_grid = datastore.num_grid_points
+    vmin, vmax = 250.0, 350.0
+
+    fig = vis.plot_prediction(
+        datastore=datastore,
+        da_prediction=xr.DataArray(np.linspace(vmin, vmax, n_grid)),
+        da_target=xr.DataArray(np.linspace(vmax, vmin, n_grid)),
+        vrange=(vmin, vmax),
+        boundary_alpha=None,
+        crop_to_interior=False,
+    )
+
+    *_, colorbar_ax = fig.axes
+    assert colorbar_ax.get_xlim() == pytest.approx((vmin, vmax))
 
 
 def test_plot_error_map() -> None:
