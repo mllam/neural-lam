@@ -809,12 +809,22 @@ class NpyFilesDatastoreMEPS(BaseDatastore):
                 mean_diff_values = load_pickled_tensor("diff_mean.pt")
                 std_diff_values = load_pickled_tensor("diff_std.pt")
             except FileNotFoundError:
-                warnings.warn(f"Could not load diff mean/std for {category}")
-                # XXX: this is a hack, but when running
-                # compute_standardization_stats the diff mean/std files are
-                # created, but require the std and mean files
-                mean_diff_values = np.empty_like(mean_values)
-                std_diff_values = np.empty_like(std_values)
+                # Leave the diff variables out rather than filling them with
+                # placeholder values, so consumers that need them fail
+                # instead of silently using made-up numbers.
+                mean_diff_values = None
+                std_diff_values = None
+                warnings.warn(
+                    "Could not load diff_mean.pt/diff_std.pt from "
+                    f"{self.root_path / 'static'}; the returned dataset has "
+                    "no `state_diff_mean_standardized` or "
+                    "`state_diff_std_standardized` variables. Run "
+                    "`python -m neural_lam.datastore.npyfilesmeps."
+                    "compute_standardization_stats --datastore_config_path "
+                    "<config>` to create them.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
         elif category == "forcing":
             flux_stats = load_pickled_tensor("flux_stats.pt")  # (2,)

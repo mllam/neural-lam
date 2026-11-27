@@ -36,6 +36,8 @@ In addition, datastores on a rectilinear grid (`is_on_rectilinear_grid` is
 # Standard library
 import collections
 import dataclasses
+import shutil
+import warnings
 from datetime import timedelta
 from pathlib import Path
 
@@ -287,6 +289,33 @@ def test_npyfilesmeps_analysis_times_unique():
 
     da_state = datastore.get_dataarray(category="state", split="train")
     assert da_state.analysis_time.to_index().is_unique
+
+
+@pytest.mark.requires_real_data
+def test_npyfilesmeps_missing_diff_stats_are_omitted(tmp_path):
+    """Without diff_mean.pt/diff_std.pt the state standardization dataset
+    must leave the diff variables out instead of filling them with
+    uninitialised memory."""
+    datastore = init_datastore_example("npyfilesmeps")
+    ds_full = datastore.get_standardization_dataarray(category="state")
+
+    static_dir = tmp_path / "static"
+    static_dir.mkdir()
+    for fn in ("parameter_mean.pt", "parameter_std.pt"):
+        shutil.copy(datastore.root_path / "static" / fn, static_dir / fn)
+    datastore._root_path = tmp_path
+
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        ds_stats = datastore.get_standardization_dataarray(category="state")
+
+    assert set(ds_stats.data_vars) == {"state_mean", "state_std"}
+    xr.testing.assert_equal(ds_stats["state_mean"], ds_full["state_mean"])
+    xr.testing.assert_equal(ds_stats["state_std"], ds_full["state_std"])
+    assert any(
+        issubclass(w.category, UserWarning) and "diff_mean.pt" in str(w.message)
+        for w in record
+    )
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
