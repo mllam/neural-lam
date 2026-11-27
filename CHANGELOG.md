@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Omit the state diff statistics from `NpyFilesDatastoreMEPS.get_standardization_dataarray` when `diff_mean.pt`/`diff_std.pt` are missing, instead of filling them with uninitialised memory from `np.empty_like` that graph models then used to rescale predictions @nikhil3495
+- Omit the state diff statistics from `NpyFilesDatastoreMEPS.get_standardization_dataarray` when `diff_mean.pt`/`diff_std.pt` are missing, instead of filling them with uninitialised memory from `np.empty_like` that graph models then used to rescale predictions [#913](https://github.com/mllam/neural-lam/pull/913) @nikhil3495
 
 - Fix `InteractionNet` and `PropagationNet` dimension mismatches when `hidden_dim` differs from `input_dim` [\#836](https://github.com/mllam/neural-lam/pull/836) @Karvy-Singh
 
