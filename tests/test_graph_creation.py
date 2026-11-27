@@ -277,3 +277,62 @@ def test_old_create_graph_deprecation_warning(datastore_name):
         ]
         assert len(deprecation_warnings) >= 1
         assert "create_graph_with_wmg" in str(deprecation_warnings[0].message)
+
+
+def test_hierarchical_plot_edges_match_saved_graph(tmp_path, monkeypatch):
+    """The up and down graph plots of create_graph --plot draw each edge
+    between the positions of the nodes it connects in the saved graph."""
+    # Third-party
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    # First-party
+    from neural_lam import create_graph as create_graph_module
+
+    plotted = {}
+    original_plot_graph = create_graph_module.plot_graph
+
+    def recording_plot_graph(graph, title=None):
+        fig, axis = original_plot_graph(graph, title=title)
+        plotted[title] = axis.collections[0].get_segments()
+        return fig, axis
+
+    monkeypatch.setattr(create_graph_module, "plot_graph", recording_plot_graph)
+    monkeypatch.setattr(create_graph_module.plt, "show", lambda: None)
+
+    grid = np.arange(30, dtype=float)
+    xy = np.stack(np.meshgrid(grid, grid, indexing="ij"), axis=-1)
+    create_graph_module.create_graph(
+        graph_dir_path=str(tmp_path),
+        xy=xy,
+        hierarchical=True,
+        create_plot=True,
+    )
+    plt.close("all")
+
+    mesh_pos = torch.load(tmp_path / "mesh_features.pt")
+    up_edge_index = torch.load(tmp_path / "mesh_up_edge_index.pt")
+    down_edge_index = torch.load(tmp_path / "mesh_down_edge_index.pt")
+    assert len(up_edge_index) >= 1
+
+    def saved_segments(edge_index, sender_pos, receiver_pos):
+        return np.stack(
+            (
+                sender_pos[edge_index[0]].numpy(),
+                receiver_pos[edge_index[1]].numpy(),
+            ),
+            axis=1,
+        )
+
+    for level_i, (up_edges, down_edges) in enumerate(
+        zip(up_edge_index, down_edge_index)
+    ):
+        lower_pos, upper_pos = mesh_pos[level_i], mesh_pos[level_i + 1]
+        np.testing.assert_allclose(
+            np.stack(plotted[f"Up graph, {level_i} -> {level_i + 1}"]),
+            saved_segments(up_edges, lower_pos, upper_pos),
+        )
+        np.testing.assert_allclose(
+            np.stack(plotted[f"Down graph, {level_i + 1} -> {level_i}"]),
+            saved_segments(down_edges, upper_pos, lower_pos),
+        )
