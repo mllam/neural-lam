@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shared autoregressive unrolling and forecaster-owned training objectives.
   [\#700](https://github.com/mllam/neural-lam/pull/700) @Sir-Sloth-The-Lazy
 
+- Add `neural_lam.api.predict` to roll out a checkpoint from Python and return the forecasts (optionally with targets) as an `xarray.Dataset`, built with the new `create_forecast_dataset` helper [\#811](https://github.com/mllam/neural-lam/pull/811) @GiGiKoneti
+
 - Add `--gradient_checkpointing` flag for autoregressive rollout gradient checkpointing in `DeterministicARForecaster`, reducing peak activation memory during training unrolls [\#807](https://github.com/mllam/neural-lam/pull/807) @Sharkyii
 
 - Add the `hello_world_danra.py` marimo tutorial (prepare the DANRA example data, build a graph, train and evaluate `graph_lam` on CPU, all through `neural_lam.api`), executed at docs build time so the docs page shows its outputs; `train_model` now exits non-zero on errors (`@logger.catch(reraise=True)`) [\#577](https://github.com/mllam/neural-lam/pull/577) @Sharkyii
