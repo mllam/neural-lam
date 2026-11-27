@@ -1,0 +1,25 @@
+diff --git a/neural_lam/metrics.py b/neural_lam/metrics.py
+index 4a19c20..8b30e11 100644
+--- a/neural_lam/metrics.py
++++ b/neural_lam/metrics.py
+@@ -12,4 +12,4 @@ def validate_lead_step(step: int) -> int:
+     """Validate a positive 1-based lead step index."""
+-    if step < 0:
+-        raise ValueError("step must be positive")
++    if step < 1:
++        raise ValueError(f"step must be >= 1, got {step}")
+     return step
+diff --git a/tests/test_metrics.py b/tests/test_metrics.py
+index 1029abc..9941def 100644
+--- a/tests/test_metrics.py
++++ b/tests/test_metrics.py
+@@ -1,5 +1,8 @@
+ import pytest
+
++from neural_lam.metrics import validate_lead_step
++
+
+ def test_validate_lead_step_rejects_zero():
+-    pass
++    with pytest.raises(ValueError, match=">= 1"):
++        validate_lead_step(0)
