@@ -468,6 +468,20 @@ def crps_ens(
         raise ValueError(
             "CRPS target shape must match predictions without ens_dim"
         )
+    num_members = pred.shape[ens_dim]
+    if num_members < 1:
+        raise ValueError("CRPS requires at least one ensemble member")
+    if num_members == 1:
+        warnings.warn(
+            "CRPS received a single ensemble member; falling back to MAE.",
+            stacklevel=2,
+        )
+        return mask_and_reduce_metric(
+            (pred.squeeze(ens_dim) - target).abs(),
+            mask=mask,
+            average_grid=average_grid,
+            sum_vars=sum_vars,
+        )
     if chunk_size is not None:
         if chunk_size < 1:
             raise ValueError("chunk_size must be positive")
@@ -494,20 +508,6 @@ def crps_ens(
         ]
         return mask_and_reduce_metric(
             torch.cat(entries, dim=target_dim), mask, average_grid, sum_vars
-        )
-    num_members = pred.shape[ens_dim]
-    if num_members < 1:
-        raise ValueError("CRPS requires at least one ensemble member")
-    if num_members == 1:
-        warnings.warn(
-            "CRPS received a single ensemble member; falling back to MAE.",
-            stacklevel=2,
-        )
-        return mask_and_reduce_metric(
-            (pred.squeeze(ens_dim) - target).abs(),
-            mask=mask,
-            average_grid=average_grid,
-            sum_vars=sum_vars,
         )
     first = (pred - target.unsqueeze(ens_dim)).abs().mean(dim=ens_dim)
     if num_members == 2:
