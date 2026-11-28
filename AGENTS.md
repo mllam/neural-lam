@@ -29,6 +29,18 @@ python -m neural_lam.train_model --eval test --config_path <config> --load <ckpt
 W&B is auto-disabled in tests. `DummyDatastore` is the in-memory test fixture; example data is
 downloaded from S3 on first run.
 
+## Agent skills
+
+Task-specific recipes following the [Agent Skills standard](https://agentskills.io) are located in `.agents/skills/`:
+- `add-datastore`: Implement and register a new `BaseDatastore` backend.
+- `add-loss`: Implement a loss function with spatial masking and state-feature weighting.
+- `add-metric`: Implement and register an evaluation metric in `DEFINED_METRICS`.
+- `add-step-predictor`: Implement and register a single-step predictor in `MODELS`.
+- `create-graph`: Construct offline graph meshes using `neural_lam.api.create_graph`.
+- `smoke-train`: End-to-end 1-epoch offline train and eval roundtrip on `DummyDatastore`.
+- `prepare-pr`: Checklist for duplicates, changelog, worktree pre-commit, and tests before opening a PR.
+- `review-pr`: Maintainer review workflow and checklist.
+
 ---
 
 ## AI-specific rules
