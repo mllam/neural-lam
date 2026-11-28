@@ -505,6 +505,8 @@ def crps_ens(
     if num_members == 2:
         spread = (pred.select(ens_dim, 0) - pred.select(ens_dim, 1)).abs() / 2
     else:
+        # Each sorted value appears positively in rank - 1 pair differences
+        # and negatively in num_members - rank pair differences.
         ordered = pred.sort(dim=ens_dim).values
         rank_shape = [1] * pred.ndim
         rank_shape[ens_dim] = num_members
@@ -516,6 +518,7 @@ def crps_ens(
         ).view(rank_shape)
         spread = ((2 * ranks - num_members - 1) * ordered).sum(dim=ens_dim)
         spread = spread / (num_members * (num_members - 1))
+    # Alpha blends the fair and empirical normalizations of the pair term.
     spread = spread * ((num_members - 1 + afc_alpha) / num_members)
     entry_crps = mean_member_error - spread
     return mask_and_reduce_metric(
