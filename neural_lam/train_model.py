@@ -119,7 +119,21 @@ def build_graph_efm_predictor(
     -------
     BaseGraphEFM
         Configured Graph-EFM predictor.
+
+    Raises
+    ------
+    ValueError
+        If the predictor class is not a supported Graph-EFM variant.
     """
+    if issubclass(predictor_class, GraphEFM):
+        prefix = "intra_level"
+    elif issubclass(predictor_class, GraphEFMMultiScale):
+        prefix = "m2m"
+    else:
+        raise ValueError(
+            f"Unsupported Graph-EFM predictor: {predictor_class.__name__}"
+        )
+
     defaults = ModelConfig()
     ignored = {
         name: getattr(defaults, name)
@@ -139,7 +153,6 @@ def build_graph_efm_predictor(
                 name,
             )
     prob = resolve_graph_efm_args(args)
-    prefix = "intra_level" if issubclass(predictor_class, GraphEFM) else "m2m"
     layers = {
         f"{part}_{prefix}_layers": getattr(prob, f"{part}_layers")
         for part in ("prior", "encoder", "decoder")
