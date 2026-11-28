@@ -836,7 +836,7 @@ def cli_graph_efm_checkpoint(request, tmp_path_factory):
 @pytest.mark.requires_training
 @pytest.mark.parametrize(
     "mode,kl_beta,crps_weight",
-    [("test", 1.0, 0.0), (None, 1.0, 0.1), (None, 0.0, 0.0)],
+    [("test", 1.0, 0.0), (None, 1.0, 0.1), (None, 0.0, 0.1), (None, 0.0, 0.0)],
 )
 def test_loading_graph_efm_uses_current_run_settings(
     cli_graph_efm_checkpoint,
@@ -876,6 +876,8 @@ def test_loading_graph_efm_uses_current_run_settings(
         return trainer
 
     warning = Mock()
+    strategy = Mock(wraps=train_model.utils.training_strategy)
+    monkeypatch.setattr(train_model.utils, "training_strategy", strategy)
     monkeypatch.setattr(train_model.pl, "Trainer", build_test_trainer)
     monkeypatch.setattr(train_model.logger, "warning", warning)
     (tmp_path / "loaded").mkdir()
@@ -921,6 +923,10 @@ def test_loading_graph_efm_uses_current_run_settings(
     assert evaluated.hparams.args.latent_dim == 8
     assert result.checkpoint_path is not None
     warning.assert_not_called()
+    expect_unused_prior = mode is None and kl_beta == 0 and crps_weight == 0
+    strategy.assert_called_once_with(
+        1, 1, find_unused_parameters=expect_unused_prior
+    )
     if mode == "test":
         source_weights = torch.load(checkpoint, weights_only=False)[
             "state_dict"

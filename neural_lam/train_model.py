@@ -968,9 +968,13 @@ def fit(
         strategy=utils.training_strategy(
             devices,
             compute_config.num_nodes,
+            # The learned prior receives gradients through KL or CRPS.
             find_unused_parameters=(
-                isinstance(forecaster, GraphEFMForecaster)
+                not train_config.eval
+                and isinstance(forecaster, GraphEFMForecaster)
+                and model_config.learn_prior
                 and forecaster.kl_beta == 0
+                and forecaster.crps_weight == 0
             ),
         ),
         accelerator=device_name,
