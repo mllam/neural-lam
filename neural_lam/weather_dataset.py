@@ -185,6 +185,11 @@ class WeatherDataset(torch.utils.data.Dataset):
         super().__init__()
 
         self.split = split
+
+        # covering possible zero and negative values of ar_steps
+        if ar_steps < 1:
+            raise ValueError("ar_steps must be at least 1")
+
         self.ar_steps = ar_steps
         self.datastore = datastore
         self.datastore_boundary = datastore_boundary
