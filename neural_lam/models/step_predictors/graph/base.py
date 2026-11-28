@@ -72,7 +72,18 @@ class BaseGraphModel(StepPredictor):
             Lower clamping limits for state variables.
         output_clamping_upper : dict, optional
             Upper clamping limits for state variables.
+
+        Raises
+        ------
+        ValueError
+            If ``processor_layers`` is negative.
         """
+        if processor_layers < 0:
+            raise ValueError(
+                "processor_layers must be non-negative, "
+                f"got {processor_layers}."
+            )
+
         super().__init__(
             datastore=datastore,
             output_std=output_std,
