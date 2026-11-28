@@ -478,7 +478,9 @@ def crps_ens(
         chunk_dim %= pred.ndim
         if chunk_dim == ens_dim:
             raise ValueError("chunk_dim must differ from ens_dim")
+        # The target omits the ensemble axis, shifting any later axes left.
         target_dim = chunk_dim - int(chunk_dim > ens_dim)
+        # Reassemble the per-entry scores before masking or reducing axes.
         entries = [
             crps_ens(
                 member_chunk,
