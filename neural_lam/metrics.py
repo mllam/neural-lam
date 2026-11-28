@@ -499,7 +499,9 @@ def crps_ens(
         return mask_and_reduce_metric(
             torch.cat(entries, dim=target_dim), mask, average_grid, sum_vars
         )
-    first = (pred - target.unsqueeze(ens_dim)).abs().mean(dim=ens_dim)
+    mean_member_error = (
+        (pred - target.unsqueeze(ens_dim)).abs().mean(dim=ens_dim)
+    )
     if num_members == 2:
         spread = (pred.select(ens_dim, 0) - pred.select(ens_dim, 1)).abs() / 2
     else:
@@ -515,7 +517,7 @@ def crps_ens(
         spread = ((2 * ranks - num_members - 1) * ordered).sum(dim=ens_dim)
         spread = spread / (num_members * (num_members - 1))
     spread = spread * ((num_members - 1 + afc_alpha) / num_members)
-    entry_crps = first - spread
+    entry_crps = mean_member_error - spread
     return mask_and_reduce_metric(
         entry_crps, mask=mask, average_grid=average_grid, sum_vars=sum_vars
     )
