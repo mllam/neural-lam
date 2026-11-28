@@ -403,9 +403,8 @@ def crps_ens(
     average_grid: bool = True,
     sum_vars: bool = True,
     ens_dim: int = 1,
-    estimator: str = "fair",
-    afc_alpha: float | None = None,
     *,
+    afc_alpha: float = 1.0,
     chunk_size: int | None = None,
     chunk_dim: int = 0,
 ) -> torch.Tensor:
@@ -435,13 +434,9 @@ def crps_ens(
         Sum over state variables. Default True.
     ens_dim : int, optional
         Ensemble dimension in ``pred``. Default 1.
-    estimator : str, optional
-        "unfair" scores the empirical ensemble distribution; "fair"
-        (default) estimates the generating distribution's CRPS fairly.
-        "almost-fair" interpolates using afc_alpha.
-    afc_alpha : float or None, optional
-        For almost-fair estimation, a finite value from 0 (unfair) to 1
-        (fair). Required only for the almost-fair estimator.
+    afc_alpha : float, optional
+        Interpolates from empirical (unfair) CRPS at 0 to fair CRPS
+        at 1 (default). Intermediate values give almost-fair CRPS.
     chunk_size : int or None, optional
         Maximum entries along chunk_dim per scoring call. None disables
         chunking. Smaller chunks reduce peak temporary memory; gradients
@@ -460,13 +455,9 @@ def crps_ens(
     Raises
     ------
     ValueError
-        If the estimator, alpha, ensemble layout or chunk settings are invalid.
+        If alpha, ensemble layout or chunk settings are invalid.
     """
-    if estimator not in {"unfair", "fair", "almost-fair"}:
-        raise ValueError(f"Unknown CRPS estimator: {estimator}")
-    if estimator == "almost-fair" and (
-        afc_alpha is None or not 0 <= afc_alpha <= 1
-    ):
+    if not 0 <= afc_alpha <= 1:
         raise ValueError("afc_alpha must be finite and between 0 and 1")
     if pred.ndim != target.ndim + 1:
         raise ValueError("CRPS predictions require an extra ensemble dimension")
@@ -493,7 +484,6 @@ def crps_ens(
                 average_grid=False,
                 sum_vars=False,
                 ens_dim=ens_dim,
-                estimator=estimator,
                 afc_alpha=afc_alpha,
             )
             for member_chunk, target_chunk in zip(
@@ -534,11 +524,7 @@ def crps_ens(
         ).view(rank_shape)
         spread = ((2 * ranks - num_members - 1) * ordered).sum(dim=ens_dim)
         spread = spread / (num_members * (num_members - 1))
-    if estimator == "unfair":
-        spread = spread * (num_members - 1) / num_members
-    elif estimator == "almost-fair":
-        assert afc_alpha is not None
-        spread = spread * (num_members - 1 + afc_alpha) / num_members
+    spread = spread * ((num_members - 1 + afc_alpha) / num_members)
     entry_crps = first - spread
     return mask_and_reduce_metric(
         entry_crps, mask=mask, average_grid=average_grid, sum_vars=sum_vars
@@ -616,10 +602,8 @@ def crps_ens_fair(
     )
 
 
-crps_ens_unfair = partial(crps_ens, estimator="unfair")
-crps_ens_almost_fair = partial(
-    crps_ens, estimator="almost-fair", afc_alpha=0.95
-)
+crps_ens_unfair = partial(crps_ens, afc_alpha=0.0)
+crps_ens_almost_fair = partial(crps_ens, afc_alpha=0.95)
 
 ENSEMBLE_METRICS: dict[str, Callable[..., torch.Tensor]] = {
     "crps_ens": crps_ens,

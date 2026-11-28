@@ -63,35 +63,21 @@ def test_fair_crps_rejects_insufficient_members(members):
 
 
 @pytest.mark.parametrize("members", [2, 5])
-@pytest.mark.parametrize(
-    "estimator,alpha",
-    [
-        ("unfair", None),
-        ("fair", None),
-        ("almost-fair", 0.0),
-        ("almost-fair", 0.4),
-        ("almost-fair", 1.0),
-    ],
-)
-def test_general_crps_estimators(members, estimator, alpha):
+@pytest.mark.parametrize("alpha", [0.0, 0.4, 1.0])
+def test_general_crps_estimators(members, alpha):
     """Every estimator agrees with its pairwise definition and gradients."""
     torch.manual_seed(8)
     ensemble = torch.randn(2, members, 3, 2, requires_grad=True)
     target = torch.randn(2, 3, 2)
     first = (ensemble - target.unsqueeze(1)).abs().mean(1)
     pairs = (ensemble.unsqueeze(2) - ensemble.unsqueeze(1)).abs().sum((1, 2))
-    factor = {
-        "unfair": 1 / members,
-        "fair": 1 / (members - 1),
-        "almost-fair": (members - 1 + (alpha or 0)) / (members * (members - 1)),
-    }[estimator]
+    factor = (members - 1 + alpha) / (members * (members - 1))
     expected = first - pairs * factor / (2 * members)
     actual = crps_ens(
         ensemble,
         target,
         average_grid=False,
         sum_vars=False,
-        estimator=estimator,
         afc_alpha=alpha,
     )
     torch.testing.assert_close(actual, expected)
@@ -99,13 +85,12 @@ def test_general_crps_estimators(members, estimator, alpha):
     assert torch.isfinite(ensemble.grad).all()
 
 
-@pytest.mark.parametrize("alpha", [None, -1, 2, float("nan"), float("inf")])
+@pytest.mark.parametrize("alpha", [-1, 2, float("nan"), float("inf")])
 def test_almost_fair_crps_rejects_invalid_alpha(alpha):
     with pytest.raises(ValueError, match="afc_alpha"):
         crps_ens(
             torch.zeros(1, 2, 3, 2),
             torch.zeros(1, 3, 2),
-            estimator="almost-fair",
             afc_alpha=alpha,
         )
 
@@ -114,27 +99,19 @@ def test_empirical_crps_single_member_is_mae():
     ensemble = torch.tensor([[[[1.0, 4.0]]]])
     target = torch.tensor([[[2.0, 2.0]]])
     with pytest.warns(UserWarning, match="single ensemble member"):
-        actual = crps_ens(ensemble, target, estimator="unfair")
+        actual = crps_ens(ensemble, target, afc_alpha=0.0)
     torch.testing.assert_close(actual, torch.tensor([3.0]))
 
 
-def test_unknown_crps_estimator():
-    with pytest.raises(ValueError, match="Unknown CRPS estimator"):
-        crps_ens(torch.zeros(1, 2, 3, 2), torch.zeros(1, 3, 2), estimator="bad")
-
-
 @pytest.mark.parametrize(
-    "metric_name,kwargs",
+    "metric_name,alpha",
     [
-        ("crps_ens_fair", {"estimator": "fair"}),
-        ("crps_ens_unfair", {"estimator": "unfair"}),
-        (
-            "crps_ens_almost_fair",
-            {"estimator": "almost-fair", "afc_alpha": 0.95},
-        ),
+        ("crps_ens_fair", 1.0),
+        ("crps_ens_unfair", 0.0),
+        ("crps_ens_almost_fair", 0.95),
     ],
 )
-def test_registered_crps_variants_follow_shared_metric_api(metric_name, kwargs):
+def test_registered_crps_variants_follow_shared_metric_api(metric_name, alpha):
     # First-party
     from neural_lam.metrics import (
         get_metric,
@@ -154,14 +131,14 @@ def test_registered_crps_variants_follow_shared_metric_api(metric_name, kwargs):
             pred_std=torch.tensor([0.1, 2.0]),
             sum_vars=False,
         ),
-        crps_ens(ensemble, target, sum_vars=False, **kwargs),
+        crps_ens(ensemble, target, sum_vars=False, afc_alpha=alpha),
     )
 
 
 @pytest.mark.parametrize("sum_vars", [False, True])
-@pytest.mark.parametrize("estimator", ["fair", "unfair", "almost-fair"])
+@pytest.mark.parametrize("alpha", [0.0, 0.95, 1.0])
 def test_single_member_crps_warns_and_preserves_mask_and_variables(
-    sum_vars, estimator
+    sum_vars, alpha
 ):
     ensemble = torch.arange(12.0).reshape(1, 1, 2, 3, 2)
     target = torch.ones(1, 2, 3, 2)
@@ -173,8 +150,7 @@ def test_single_member_crps_warns_and_preserves_mask_and_variables(
             torch.tensor([1.0, 2.0]),
             mask=mask,
             sum_vars=sum_vars,
-            estimator=estimator,
-            afc_alpha=0.95,
+            afc_alpha=alpha,
         )
     expected = mask_and_reduce_metric(
         (ensemble[:, 0] - target).abs(), mask, True, sum_vars
@@ -197,13 +173,8 @@ def test_deterministic_forecaster_rejects_ensemble_loss():
 
 @pytest.mark.parametrize("members", [2, 5, 12])
 @pytest.mark.parametrize("chunk_dim", [0, 2, -2])
-@pytest.mark.parametrize(
-    "estimator,alpha",
-    [("fair", None), ("unfair", None), ("almost-fair", 0.95)],
-)
-def test_chunked_crps_matches_values_and_gradients(
-    members, chunk_dim, estimator, alpha
-):
+@pytest.mark.parametrize("alpha", [0.0, 0.95, 1.0])
+def test_chunked_crps_matches_values_and_gradients(members, chunk_dim, alpha):
     torch.manual_seed(12)
     ensemble = torch.randn(
         3, members, 4, 5, 2, dtype=torch.float64, requires_grad=True
@@ -214,7 +185,6 @@ def test_chunked_crps_matches_values_and_gradients(
         mask=mask,
         average_grid=True,
         sum_vars=False,
-        estimator=estimator,
         afc_alpha=alpha,
     )
     expected = crps_ens(ensemble, target, **kwargs)
