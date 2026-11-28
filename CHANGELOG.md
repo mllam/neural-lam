@@ -150,6 +150,8 @@ It also contains a number of smaller improvements, bug fixes and maintenance upd
 
 - Raise `ValueError` instead of a bare `assert` when an `output_clamping` `lower` limit is not smaller than its `upper` limit in `StepPredictor.prepare_clamping_params`, so the check is no longer stripped under `python -O` [\#757](https://github.com/mllam/neural-lam/pull/757) @RudraDudhat2509
 
+- Compute the standardization statistics of the `npyfilesmeps` datastore (`compute_standardization_stats`) with float64 accumulators, since `sqrt(E[x²] - E[x]²)` from float32 moments gave a wrong or NaN std for variables with a large mean compared to their std [\#759](https://github.com/mllam/neural-lam/pull/759) @RudraDudhat2509
+
 - Derive the `plot_error_heatmap` lead-time axis label from a full unit-name
   lookup instead of `time_step_unit[0]`, which rendered `minutes`,
   `milliseconds` and `microseconds` all as "m" and `unknown` as "u"; the
