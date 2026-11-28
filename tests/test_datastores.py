@@ -317,6 +317,91 @@ def test_init_datastore_rejects_n_boundary_points_for_non_mdp():
 
 
 @pytest.mark.requires_real_data
+def test_mdp_boundary_mask_ensemble_state(tmp_path):
+    """`boundary_mask` is a field over the grid only, so it must not keep the
+    `ensemble_member` dim of ensemble state data."""
+    nx, ny, n = 8, 6, 2
+    time = np.datetime64("2022-04-01T00:00") + np.arange(16) * np.timedelta64(
+        6, "h"
+    )
+    xr.Dataset(
+        {"t2m": (("time", "member", "x", "y"), np.zeros((16, 2, nx, ny)))},
+        coords={
+            "time": time,
+            "member": [0, 1],
+            "x": np.arange(nx),
+            "y": np.arange(ny),
+        },
+    ).to_zarr(tmp_path / "src.zarr")
+
+    def split(start, end):
+        return {"start": start, "end": end}
+
+    config = {
+        "schema_version": "v0.5.0",
+        "dataset_version": "v0.1.0",
+        "output": {
+            "variables": {
+                "state": [
+                    "time",
+                    "ensemble_member",
+                    "grid_index",
+                    "state_feature",
+                ]
+            },
+            "coord_ranges": {
+                "time": {
+                    "start": "2022-04-01T00:00",
+                    "end": "2022-04-04T18:00",
+                    "step": "PT6H",
+                }
+            },
+            "splitting": {
+                "dim": "time",
+                "splits": {
+                    "train": split("2022-04-01T00:00", "2022-04-02T18:00"),
+                    "val": split("2022-04-03T00:00", "2022-04-03T18:00"),
+                    "test": split("2022-04-04T00:00", "2022-04-04T18:00"),
+                },
+            },
+        },
+        "inputs": {
+            "state": {
+                "path": str(tmp_path / "src.zarr"),
+                "dims": ["time", "member", "x", "y"],
+                "variables": ["t2m"],
+                "dim_mapping": {
+                    "time": {"method": "rename", "dim": "time"},
+                    "ensemble_member": {"method": "rename", "dim": "member"},
+                    "grid_index": {"method": "stack", "dims": ["x", "y"]},
+                    "state_feature": {
+                        "method": "stack_variables_by_var_name",
+                        "name_format": "{var_name}",
+                    },
+                },
+                "target_output_variable": "state",
+            }
+        },
+        "extra": {"projection": {"class_name": "PlateCarree", "kwargs": {}}},
+    }
+    config_path = tmp_path / "ensemble.datastore.yaml"
+    config_path.write_text(yaml.safe_dump(config))
+
+    datastore = MDPDatastore(config_path=config_path, n_boundary_points=n)
+    assert datastore.is_ensemble
+
+    da_mask = datastore.boundary_mask
+    assert da_mask.dims == ("grid_index",)
+    # 8 x 6 grid with a 2-point frame around a 4 x 2 interior
+    np.testing.assert_array_equal(
+        da_mask.values.reshape(nx, ny),
+        np.pad(
+            np.zeros((nx - 2 * n, ny - 2 * n), dtype=int), n, constant_values=1
+        ),
+    )
+
+
+@pytest.mark.requires_real_data
 @pytest.mark.parametrize("n_boundary_points", [0, 1, 30])
 def test_mdp_boundary_mask_n_boundary_points(n_boundary_points):
     """Check that `MDPDatastore.boundary_mask` marks exactly the outer
