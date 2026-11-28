@@ -606,9 +606,9 @@ python -m neural_lam.train_model --config_path <config> \
   --kl_beta 1 --crps_weight 0 --ar_steps_train 1 --lr 1e-3 --epochs 400
 ```
 
-Unspecified Graph-EFM options inherit saved checkpoint arguments; explicit
-values, including zero, override them. Keep architecture options consistent
-with the checkpoint. Lightning resumes the epoch counter, so `--epochs` is
+The current run's options apply when loading a checkpoint. Repeat any
+non-default architecture options used to train it. Lightning resumes the
+epoch counter, so `--epochs` is
 the cumulative target (400 after the first two stages above).
 Omit `--restore_opt` to reset the optimizer and apply the new learning rate;
 include it to resume optimizer state within a stage. Validation checkpoints

@@ -297,14 +297,12 @@ class ModelConfig:
         GNN layer type for downward mesh message passing.
     latent_dim : int or None
         Graph-EFM latent size; defaults to hidden_dim.
-    prior_layers, encoder_layers, decoder_layers : int or None
+    prior_layers, encoder_layers, decoder_layers : int
         Graph-EFM mesh depths; defaults to 2, 2 and 4 respectively.
-    learn_prior : bool or None
+    learn_prior : bool, default True
         Learn the Graph-EFM prior; defaults to True.
-    prior_dist : str or None
+    prior_dist : str, default "isotropic"
         Graph-EFM prior covariance, isotropic (default) or diagonal.
-
-    Unset Graph-EFM options inherit checkpoint values when loading.
     """
 
     model: str = "graph_lam"
@@ -319,11 +317,11 @@ class ModelConfig:
     mesh_up_gnn_type: str = "InteractionNet"
     mesh_down_gnn_type: str = "InteractionNet"
     latent_dim: int | None = None
-    prior_layers: int | None = None
-    encoder_layers: int | None = None
-    decoder_layers: int | None = None
-    learn_prior: bool | None = None
-    prior_dist: str | None = None
+    prior_layers: int = 2
+    encoder_layers: int = 2
+    decoder_layers: int = 4
+    learn_prior: bool = True
+    prior_dist: str = "isotropic"
 
 
 @dataclasses.dataclass
@@ -333,15 +331,14 @@ class TrainRunConfig:
 
     Attributes
     ----------
-    kl_beta : float or None
+    kl_beta : float, default 1.0
         Graph-EFM KL weight; defaults to 1.0.
-    crps_weight : float or None
+    crps_weight : float, default 0.0
         Graph-EFM fair CRPS weight; defaults to 0.0.
-    crps_members : int or None
+    crps_members : int, default 2
         Independent prior trajectories for fair CRPS; defaults to 2.
-    eval_ensemble_size : int or None
+    eval_ensemble_size : int, default 5
         Graph-EFM evaluation ensemble size; defaults to 5.
-        Unset Graph-EFM options inherit checkpoint values when loading.
     epochs : int, default 200
         Number of training epochs.
     batch_size : int, default 4
@@ -378,10 +375,10 @@ class TrainRunConfig:
         Whether to create animation GIFs during evaluation.
     """
 
-    kl_beta: float | None = None
-    crps_weight: float | None = None
-    crps_members: int | None = None
-    eval_ensemble_size: int | None = None
+    kl_beta: float = 1.0
+    crps_weight: float = 0.0
+    crps_members: int = 2
+    eval_ensemble_size: int = 5
     epochs: int = 200
     batch_size: int = 4
     ar_steps_train: int = 1

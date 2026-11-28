@@ -152,9 +152,10 @@ def build_graph_efm_predictor(
                 "Graph-EFM CLI options instead.",
                 name,
             )
-    prob = resolve_graph_efm_args(args)
     layers = {
-        f"{part}_{prefix}_layers": getattr(prob, f"{part}_layers")
+        f"{part}_{prefix}_layers": getattr(
+            args, f"{part}_layers", getattr(defaults, f"{part}_layers")
+        )
         for part in ("prior", "encoder", "decoder")
     }
     return predictor_class(
@@ -162,9 +163,9 @@ def build_graph_efm_predictor(
         graph_name=args.graph,
         hidden_dim=args.hidden_dim,
         hidden_layers=args.hidden_layers,
-        latent_dim=prob.latent_dim,
-        learn_prior=prob.learn_prior,
-        prior_dist=prob.prior_dist,
+        latent_dim=getattr(args, "latent_dim", defaults.latent_dim),
+        learn_prior=getattr(args, "learn_prior", defaults.learn_prior),
+        prior_dist=getattr(args, "prior_dist", defaults.prior_dist),
         num_past_forcing_steps=args.num_past_forcing_steps,
         num_future_forcing_steps=args.num_future_forcing_steps,
         output_std=args.output_std,
@@ -269,19 +270,23 @@ def build_forecaster(
         Additional module settings, including evaluation ensemble size.
     """
     if isinstance(predictor, (GraphEFM, GraphEFMMultiScale)):
-        prob = resolve_graph_efm_args(args)
+        defaults = TrainRunConfig()
         forecaster = GraphEFMForecaster(
             predictor,
             datastore,
             config=config,
-            kl_beta=prob.kl_beta,
-            crps_weight=prob.crps_weight,
-            crps_members=prob.crps_members,
+            kl_beta=getattr(args, "kl_beta", defaults.kl_beta),
+            crps_weight=getattr(args, "crps_weight", defaults.crps_weight),
+            crps_members=getattr(args, "crps_members", defaults.crps_members),
         )
         return (
             forecaster,
             ProbabilisticForecastingModule,
-            {"eval_ensemble_size": prob.eval_ensemble_size},
+            {
+                "eval_ensemble_size": getattr(
+                    args, "eval_ensemble_size", defaults.eval_ensemble_size
+                )
+            },
         )
     return (
         DeterministicARForecaster(
@@ -305,46 +310,6 @@ class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
             max_help_position=help_position,
             width=width,
         )
-
-
-GRAPH_EFM_DEFAULTS = {
-    "latent_dim": None,
-    "prior_layers": 2,
-    "encoder_layers": 2,
-    "decoder_layers": 4,
-    "learn_prior": True,
-    "prior_dist": "isotropic",
-    "kl_beta": 1.0,
-    "crps_weight": 0.0,
-    "crps_members": 2,
-    "eval_ensemble_size": 5,
-}
-
-
-def resolve_graph_efm_args(
-    args: Namespace, saved_args: Namespace | None = None
-) -> Namespace:
-    """Resolve Graph-EFM options, preferring explicit values to saved ones.
-
-    Parameters
-    ----------
-    args : Namespace
-        Current CLI or API options. None means unspecified.
-    saved_args : Namespace or None, optional
-        Checkpoint arguments supplying defaults for unspecified options.
-
-    Returns
-    -------
-    Namespace
-        A copy with Graph-EFM options resolved to saved or initial defaults.
-    """
-    resolved = vars(args).copy()
-    for name, default in GRAPH_EFM_DEFAULTS.items():
-        value = getattr(args, name, None)
-        if value is None:
-            value = getattr(saved_args, name, None)
-        resolved[name] = default if value is None else value
-    return Namespace(**resolved)
 
 
 def load_forecasting_module_from_checkpoint(
@@ -383,8 +348,6 @@ def load_forecasting_module_from_checkpoint(
     args = ckpt["hyper_parameters"]["args"]
     predictor_class = MODELS[args.model]
     is_graph_efm = issubclass(predictor_class, (GraphEFM, GraphEFMMultiScale))
-    if is_graph_efm:
-        args = resolve_graph_efm_args(args)
     predictor = build_predictor(predictor_class, args, config, datastore)
     forecaster, module_class, _ = build_forecaster(
         args, config, datastore, predictor
@@ -554,19 +517,20 @@ def build_parser() -> ArgumentParser:
         efm_group.add_argument(
             f"--{name}",
             type=int,
-            help=f"Graph-EFM {name.replace('_', ' ')}; inherits checkpoint "
-            f"value when loading, otherwise {GRAPH_EFM_DEFAULTS[name]}",
+            default=getattr(ModelConfig, name),
+            help=f"Graph-EFM {name.replace('_', ' ')}",
         )
     efm_group.add_argument(
         "--learn_prior",
         action=BooleanOptionalAction,
-        default=None,
-        help="Learn the latent prior (default True); inherits checkpoint value",
+        default=ModelConfig.learn_prior,
+        help="Learn the latent prior",
     )
     efm_group.add_argument(
         "--prior_dist",
         choices=["isotropic", "diagonal"],
-        help="Prior covariance (default isotropic); inherits checkpoint value",
+        default=ModelConfig.prior_dist,
+        help="Prior covariance",
     )
     for name, arg_type in (
         ("kl_beta", float),
@@ -577,8 +541,8 @@ def build_parser() -> ArgumentParser:
         efm_group.add_argument(
             f"--{name}",
             type=arg_type,
-            help=f"Graph-EFM {name.replace('_', ' ')}; inherits checkpoint "
-            f"value when loading, otherwise {GRAPH_EFM_DEFAULTS[name]}",
+            default=getattr(TrainRunConfig, name),
+            help=f"Graph-EFM {name.replace('_', ' ')}",
         )
 
     # Training options
@@ -924,17 +888,6 @@ def fit(
     # Build predictor and forecaster externally, then inject into
     # DeterministicForecastingModule
     predictor_class = MODELS[model_config.model]
-    if train_config.load and issubclass(
-        predictor_class, (GraphEFM, GraphEFMMultiScale)
-    ):
-        saved_args = (
-            torch.load(train_config.load, weights_only=False)
-            .get("hyper_parameters", {})
-            .get("args")
-        )
-        hparams = resolve_graph_efm_args(hparams, saved_args)
-    elif issubclass(predictor_class, (GraphEFM, GraphEFMMultiScale)):
-        hparams = resolve_graph_efm_args(hparams)
     predictor = build_predictor(predictor_class, hparams, config, datastore)
 
     if not train_config.eval and not predictor.trainable:

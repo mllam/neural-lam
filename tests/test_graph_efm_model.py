@@ -836,9 +836,9 @@ def cli_graph_efm_checkpoint(request, tmp_path_factory):
 @pytest.mark.requires_training
 @pytest.mark.parametrize(
     "mode,kl_beta,crps_weight",
-    [("test", None, None), (None, 1.0, 0.1), (None, 0.0, 0.0)],
+    [("test", 1.0, 0.0), (None, 1.0, 0.1), (None, 0.0, 0.0)],
 )
-def test_cli_restores_probabilistic_checkpoint_settings(
+def test_loading_graph_efm_uses_current_run_settings(
     cli_graph_efm_checkpoint,
     mode,
     kl_beta,
@@ -846,7 +846,7 @@ def test_cli_restores_probabilistic_checkpoint_settings(
     monkeypatch,
     tmp_path,
 ):
-    """CLI evaluation and resume build models with checkpoint architecture."""
+    """Evaluation and resume load weights using the current run settings."""
     # Standard library
     from unittest.mock import Mock
 
@@ -884,6 +884,10 @@ def test_cli_restores_probabilistic_checkpoint_settings(
             model=model_name,
             graph=graph_name,
             hidden_dim=4,
+            latent_dim=8,
+            prior_layers=1,
+            encoder_layers=1,
+            decoder_layers=2,
         ),
         train_config=nlconfig.TrainRunConfig(
             epochs=2,
@@ -908,11 +912,12 @@ def test_cli_restores_probabilistic_checkpoint_settings(
     )
     evaluated = trainers[0].lightning_module
     assert evaluated.forecaster.predictor.latent_dim == 8
-    assert evaluated.forecaster.kl_beta == (0 if kl_beta is None else kl_beta)
-    assert evaluated.forecaster.crps_weight == (
-        0 if crps_weight is None else crps_weight
+    assert evaluated.forecaster.kl_beta == kl_beta
+    assert evaluated.forecaster.crps_weight == crps_weight
+    assert (
+        evaluated.eval_ensemble_size
+        == nlconfig.TrainRunConfig().eval_ensemble_size
     )
-    assert evaluated.eval_ensemble_size == 2
     assert evaluated.hparams.args.latent_dim == 8
     assert result.checkpoint_path is not None
     warning.assert_not_called()
