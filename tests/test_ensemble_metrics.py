@@ -57,9 +57,22 @@ def test_fair_crps_retains_gradients():
 
 
 @pytest.mark.parametrize("members", [0, 1])
-def test_fair_crps_rejects_insufficient_members(members):
+@pytest.mark.parametrize("chunk_size", [None, 1])
+@pytest.mark.parametrize(
+    "metric_name",
+    ["crps_ens", "crps_ens_fair", "crps_ens_unfair", "crps_ens_almost_fair"],
+)
+def test_crps_rejects_insufficient_members(members, chunk_size, metric_name):
+    # First-party
+    from neural_lam.metrics import get_metric
+
+    metric = get_metric(metric_name)
     with pytest.raises(ValueError, match="at least two"):
-        crps_ens_fair(torch.zeros(2, members, 4, 3), torch.zeros(2, 4, 3))
+        metric(
+            torch.zeros(2, members, 4, 3),
+            torch.zeros(2, 4, 3),
+            chunk_size=chunk_size,
+        )
 
 
 @pytest.mark.parametrize("members", [2, 5])
@@ -95,14 +108,6 @@ def test_almost_fair_crps_rejects_invalid_alpha(alpha):
         )
 
 
-def test_empirical_crps_single_member_is_mae():
-    ensemble = torch.tensor([[[[1.0, 4.0]]]])
-    target = torch.tensor([[[2.0, 2.0]]])
-    with pytest.warns(UserWarning, match="single ensemble member"):
-        actual = crps_ens(ensemble, target, afc_alpha=0.0)
-    torch.testing.assert_close(actual, torch.tensor([3.0]))
-
-
 @pytest.mark.parametrize(
     "metric_name,alpha",
     [
@@ -133,29 +138,6 @@ def test_registered_crps_variants_follow_shared_metric_api(metric_name, alpha):
         ),
         crps_ens(ensemble, target, sum_vars=False, afc_alpha=alpha),
     )
-
-
-@pytest.mark.parametrize("sum_vars", [False, True])
-@pytest.mark.parametrize("alpha", [0.0, 0.95, 1.0])
-def test_single_member_crps_warns_and_preserves_mask_and_variables(
-    sum_vars, alpha
-):
-    ensemble = torch.arange(12.0).reshape(1, 1, 2, 3, 2)
-    target = torch.ones(1, 2, 3, 2)
-    mask = torch.tensor([True, False, True])
-    with pytest.warns(UserWarning, match="single ensemble member"):
-        actual = crps_ens(
-            ensemble,
-            target,
-            torch.tensor([1.0, 2.0]),
-            mask=mask,
-            sum_vars=sum_vars,
-            afc_alpha=alpha,
-        )
-    expected = mask_and_reduce_metric(
-        (ensemble[:, 0] - target).abs(), mask, True, sum_vars
-    )
-    torch.testing.assert_close(actual, expected)
 
 
 def test_deterministic_forecaster_rejects_ensemble_loss():

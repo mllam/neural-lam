@@ -2,7 +2,6 @@
 
 # Standard library
 import inspect
-import warnings
 from collections.abc import Callable
 from functools import partial
 
@@ -420,8 +419,7 @@ def crps_ens(
     pred : torch.Tensor
         Target shape with an additional ensemble dimension of size ``S``
         at ``ens_dim``, normally ``(B, S, pred_steps, num_grid_nodes,
-        num_state_vars)``. Fair and almost-fair estimation require at least
-        two independent members. A single member warns and returns MAE.
+        num_state_vars)``. At least two ensemble members are required.
     target : torch.Tensor
         Shape ``(..., num_grid_nodes, num_state_vars)``. Ground truth.
     pred_std : torch.Tensor or None, optional
@@ -469,19 +467,8 @@ def crps_ens(
             "CRPS target shape must match predictions without ens_dim"
         )
     num_members = pred.shape[ens_dim]
-    if num_members < 1:
-        raise ValueError("CRPS requires at least one ensemble member")
-    if num_members == 1:
-        warnings.warn(
-            "CRPS received a single ensemble member; falling back to MAE.",
-            stacklevel=2,
-        )
-        return mask_and_reduce_metric(
-            (pred.squeeze(ens_dim) - target).abs(),
-            mask=mask,
-            average_grid=average_grid,
-            sum_vars=sum_vars,
-        )
+    if num_members < 2:
+        raise ValueError("CRPS requires at least two ensemble members")
     if chunk_size is not None:
         if chunk_size < 1:
             raise ValueError("chunk_size must be positive")
@@ -531,77 +518,7 @@ def crps_ens(
     )
 
 
-def crps_ens_fair(
-    pred: torch.Tensor,
-    target: torch.Tensor,
-    pred_std: torch.Tensor | None = None,
-    mask: torch.Tensor | None = None,
-    average_grid: bool = True,
-    sum_vars: bool = True,
-    ens_dim: int = 1,
-    *,
-    chunk_size: int | None = None,
-    chunk_dim: int = 0,
-) -> torch.Tensor:
-    """Compute fair CRPS from independent ensemble samples.
-
-    Uses sorted ranks to compute the pairwise spread term with memory
-    linear in the number of members, with a direct two-member formula.
-    Gradients are retained for training.
-
-    Parameters
-    ----------
-    pred : torch.Tensor
-        Target shape with an additional ensemble dimension of size ``S``
-        at ``ens_dim``, normally ``(B, S, pred_steps, num_grid_nodes,
-        num_state_vars)``. At least two independent members are required.
-    target : torch.Tensor
-        Shape ``(..., num_grid_nodes, num_state_vars)``. Ground truth.
-    pred_std : torch.Tensor or None, optional
-        Unused; accepted for compatibility with the shared metric interface.
-    mask : torch.Tensor or None, optional
-        Shape ``(num_grid_nodes,)``. Boolean mask selecting grid nodes.
-    average_grid : bool, optional
-        Average over selected grid nodes. Default True.
-    sum_vars : bool, optional
-        Sum over state variables. Default True.
-    ens_dim : int, optional
-        Ensemble dimension in ``pred``. Default 1.
-
-    chunk_size : int or None, optional
-        Maximum entries along chunk_dim per scoring call. None disables
-        chunking. Smaller chunks reduce peak temporary memory; gradients
-        remain available to callers using CRPS for training.
-    chunk_dim : int, optional
-        Dimension in pred to chunk, excluding ens_dim. Defaults to
-        batch dimension 0; use 2 for forecast steps in (B, S, T, N, F).
-        Negative dimension indices are supported.
-
-    Returns
-    -------
-    torch.Tensor
-        CRPS with the ensemble dimension removed, reduced according to
-        ``mask``, ``average_grid`` and ``sum_vars`` as for ``nll``.
-
-    Raises
-    ------
-    ValueError
-        If there are fewer than two members.
-    """
-    if pred.shape[ens_dim] < 2:
-        raise ValueError("Fair CRPS requires at least two ensemble members")
-    return crps_ens(
-        pred,
-        target,
-        mask=mask,
-        average_grid=average_grid,
-        sum_vars=sum_vars,
-        ens_dim=ens_dim,
-        chunk_size=chunk_size,
-        chunk_dim=chunk_dim,
-    )
-
-
+crps_ens_fair = partial(crps_ens, afc_alpha=1.0)
 crps_ens_unfair = partial(crps_ens, afc_alpha=0.0)
 crps_ens_almost_fair = partial(crps_ens, afc_alpha=0.95)
 

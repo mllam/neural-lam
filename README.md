@@ -627,8 +627,7 @@ Graph-EFM uses the same fair CRPS implementation for its training objective.
 All metrics follow `(B, S, pred_steps, num_grid_nodes, num_state_vars)`,
 preserve gradients and use the shared grid mask and variable reductions.
 `pred_std` is accepted for API compatibility but does not affect these
-sample-based metrics. Fair CRPS requires at least two members;
-the general `crps_ens` function warns and falls back to MAE for one member.
+sample-based metrics. Ensemble CRPS requires at least two members.
 
 For large forecasts, CRPS supports optional chunking without changing its
 value or gradients. Choose `chunk_dim=0` for batches or `chunk_dim=2` for
