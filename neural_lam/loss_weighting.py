@@ -155,6 +155,7 @@ def get_pressure_level_state_feature_weights(
             )
 
     computed_weights: dict[str, float] = {}
+    alt_feature_names: dict[str, str] = {}
     if weighting_config.variables:
         total_pressure = float(sum(weighting_config.pressure_levels))
         for var_name in weighting_config.variables:
@@ -168,6 +169,20 @@ def get_pressure_level_state_feature_weights(
                     )
                 computed_weights[feat_name] = float(level) / total_pressure
 
+                if isinstance(level, int) and not isinstance(level, bool):
+                    alt_level: int | float | None = float(level)
+                elif isinstance(level, float) and level.is_integer():
+                    alt_level = int(level)
+                else:
+                    alt_level = None
+
+                if alt_level is not None:
+                    alt_name = weighting_config.name_format.format(
+                        var_name=var_name, level=alt_level
+                    )
+                    if alt_name != feat_name:
+                        alt_feature_names[feat_name] = alt_name
+
     for feat, w in weighting_config.other_weights.items():
         if feat in computed_weights:
             raise ValueError(
@@ -177,6 +192,18 @@ def get_pressure_level_state_feature_weights(
         computed_weights[feat] = float(w)
 
     state_feature_names = datastore.get_vars_names(category="state")
+    if len(state_feature_names) != len(set(state_feature_names)):
+        duplicates = sorted(
+            {
+                name
+                for name in state_feature_names
+                if state_feature_names.count(name) > 1
+            }
+        )
+        raise ValueError(
+            f"Datastore contains duplicate state feature names: {duplicates}."
+        )
+
     if set(computed_weights.keys()) != set(state_feature_names):
         missing = sorted(
             set(state_feature_names) - set(computed_weights.keys())
@@ -194,7 +221,10 @@ def get_pressure_level_state_feature_weights(
             suggestions = []
             candidates = missing if missing else state_feature_names
             for feat in unrecognized:
-                if f"{feat}.0" in candidates:
+                alt = alt_feature_names.get(feat)
+                if alt and alt in candidates:
+                    match = alt
+                elif f"{feat}.0" in candidates:
                     match = f"{feat}.0"
                 elif feat.endswith(".0") and feat[:-2] in candidates:
                     match = feat[:-2]

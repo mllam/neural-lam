@@ -307,3 +307,36 @@ def test_pressure_level_weighting_invalid_other_weights(invalid_weight):
         match="Weight for feature '2t' must be a finite, strictly positive",
     ):
         get_pressure_level_state_feature_weights(weighting_config, datastore)
+
+
+def test_pressure_level_weighting_duplicate_datastore_features():
+    """Datastore containing duplicate state features raises ValueError."""
+    datastore = PressureDummyDatastore(
+        state_features=["t500", "t500", "t850", "2t"]
+    )
+    weighting_config = nlconfig.PressureLevelWeighting(
+        variables=["t"],
+        pressure_levels=[500, 850],
+        name_format="{var_name}{level}",
+        other_weights={"2t": 1.0},
+    )
+    with pytest.raises(
+        ValueError, match="Datastore contains duplicate state feature names"
+    ):
+        get_pressure_level_state_feature_weights(weighting_config, datastore)
+
+
+def test_pressure_level_weighting_name_format_float_suggestion():
+    """Custom name_format with integer level correctly suggests float level
+    counterpart in datastore even when close lexical matches exist."""
+    datastore = PressureDummyDatastore(
+        state_features=["t500.0_p", "tt500_p", "2t"]
+    )
+    weighting_config = nlconfig.PressureLevelWeighting(
+        variables=["t"],
+        pressure_levels=[500],
+        name_format="{var_name}{level}_p",
+        other_weights={"2t": 1.0},
+    )
+    with pytest.raises(ValueError, match=r"closest in datastore: 't500\.0_p'"):
+        get_pressure_level_state_feature_weights(weighting_config, datastore)

@@ -90,6 +90,11 @@ For now the neural-lam config only defines few things:
    > and gradient magnitudes; the effect depends on the loss function and
    > feature errors, so account for this when tuning learning rates or
    > comparing loss values.
+   >
+   > These feature weights apply when the loss function uses the fallback
+   > per-variable standard deviation. When training with `--output_std`, the
+   > loss uses the predicted standard deviation instead, and losses such as
+   > `mse` ignore standard deviations altogether.
 3. Valid numerical range for output of each feature.
    The numerical range of all features default to $]-\infty, \infty[$.
 
