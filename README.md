@@ -622,7 +622,7 @@ Use `val_crps_ens` or `test_crps_ens` with
 and lead times. Testing also saves the metric heatmaps and CSV values.
 
 The shared metric API exposes `crps_ens`, `crps_ens_fair`,
-`crps_ens_biased` and `crps_ens_almost_fair` (alpha 0.95).
+`crps_ens_unfair` and `crps_ens_almost_fair` (alpha 0.95).
 Graph-EFM uses the same fair CRPS implementation for its training objective.
 All metrics follow `(B, S, pred_steps, num_grid_nodes, num_state_vars)`,
 preserve gradients and use the shared grid mask and variable reductions.

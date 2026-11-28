@@ -403,7 +403,7 @@ def crps_ens(
     average_grid: bool = True,
     sum_vars: bool = True,
     ens_dim: int = 1,
-    estimator: str = "unbiased",
+    estimator: str = "fair",
     afc_alpha: float | None = None,
     *,
     chunk_size: int | None = None,
@@ -436,12 +436,12 @@ def crps_ens(
     ens_dim : int, optional
         Ensemble dimension in ``pred``. Default 1.
     estimator : str, optional
-        "biased" scores the empirical ensemble distribution; "unbiased"
+        "unfair" scores the empirical ensemble distribution; "fair"
         (default) estimates the generating distribution's CRPS fairly.
         "almost-fair" interpolates using afc_alpha.
     afc_alpha : float or None, optional
-        For almost-fair estimation, a finite value from 0 (biased) to 1
-        (unbiased). Required only for the almost-fair estimator.
+        For almost-fair estimation, a finite value from 0 (unfair) to 1
+        (fair). Required only for the almost-fair estimator.
     chunk_size : int or None, optional
         Maximum entries along chunk_dim per scoring call. None disables
         chunking. Smaller chunks reduce peak temporary memory; gradients
@@ -462,7 +462,7 @@ def crps_ens(
     ValueError
         If the estimator, alpha, ensemble layout or chunk settings are invalid.
     """
-    if estimator not in {"biased", "unbiased", "almost-fair"}:
+    if estimator not in {"unfair", "fair", "almost-fair"}:
         raise ValueError(f"Unknown CRPS estimator: {estimator}")
     if estimator == "almost-fair" and (
         afc_alpha is None or not 0 <= afc_alpha <= 1
@@ -534,7 +534,7 @@ def crps_ens(
         ).view(rank_shape)
         spread = ((2 * ranks - num_members - 1) * ordered).sum(dim=ens_dim)
         spread = spread / (num_members * (num_members - 1))
-    if estimator == "biased":
+    if estimator == "unfair":
         spread = spread * (num_members - 1) / num_members
     elif estimator == "almost-fair":
         assert afc_alpha is not None
@@ -616,7 +616,7 @@ def crps_ens_fair(
     )
 
 
-crps_ens_biased = partial(crps_ens, estimator="biased")
+crps_ens_unfair = partial(crps_ens, estimator="unfair")
 crps_ens_almost_fair = partial(
     crps_ens, estimator="almost-fair", afc_alpha=0.95
 )
@@ -624,7 +624,7 @@ crps_ens_almost_fair = partial(
 ENSEMBLE_METRICS: dict[str, Callable[..., torch.Tensor]] = {
     "crps_ens": crps_ens,
     "crps_ens_fair": crps_ens_fair,
-    "crps_ens_biased": crps_ens_biased,
+    "crps_ens_unfair": crps_ens_unfair,
     "crps_ens_almost_fair": crps_ens_almost_fair,
 }
 

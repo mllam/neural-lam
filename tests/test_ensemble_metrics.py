@@ -66,8 +66,8 @@ def test_fair_crps_rejects_insufficient_members(members):
 @pytest.mark.parametrize(
     "estimator,alpha",
     [
-        ("biased", None),
-        ("unbiased", None),
+        ("unfair", None),
+        ("fair", None),
         ("almost-fair", 0.0),
         ("almost-fair", 0.4),
         ("almost-fair", 1.0),
@@ -81,8 +81,8 @@ def test_general_crps_estimators(members, estimator, alpha):
     first = (ensemble - target.unsqueeze(1)).abs().mean(1)
     pairs = (ensemble.unsqueeze(2) - ensemble.unsqueeze(1)).abs().sum((1, 2))
     factor = {
-        "biased": 1 / members,
-        "unbiased": 1 / (members - 1),
+        "unfair": 1 / members,
+        "fair": 1 / (members - 1),
         "almost-fair": (members - 1 + (alpha or 0)) / (members * (members - 1)),
     }[estimator]
     expected = first - pairs * factor / (2 * members)
@@ -114,7 +114,7 @@ def test_empirical_crps_single_member_is_mae():
     ensemble = torch.tensor([[[[1.0, 4.0]]]])
     target = torch.tensor([[[2.0, 2.0]]])
     with pytest.warns(UserWarning, match="single ensemble member"):
-        actual = crps_ens(ensemble, target, estimator="biased")
+        actual = crps_ens(ensemble, target, estimator="unfair")
     torch.testing.assert_close(actual, torch.tensor([3.0]))
 
 
@@ -126,8 +126,8 @@ def test_unknown_crps_estimator():
 @pytest.mark.parametrize(
     "metric_name,kwargs",
     [
-        ("crps_ens_fair", {"estimator": "unbiased"}),
-        ("crps_ens_biased", {"estimator": "biased"}),
+        ("crps_ens_fair", {"estimator": "fair"}),
+        ("crps_ens_unfair", {"estimator": "unfair"}),
         (
             "crps_ens_almost_fair",
             {"estimator": "almost-fair", "afc_alpha": 0.95},
@@ -159,7 +159,7 @@ def test_registered_crps_variants_follow_shared_metric_api(metric_name, kwargs):
 
 
 @pytest.mark.parametrize("sum_vars", [False, True])
-@pytest.mark.parametrize("estimator", ["unbiased", "biased", "almost-fair"])
+@pytest.mark.parametrize("estimator", ["fair", "unfair", "almost-fair"])
 def test_single_member_crps_warns_and_preserves_mask_and_variables(
     sum_vars, estimator
 ):
@@ -199,7 +199,7 @@ def test_deterministic_forecaster_rejects_ensemble_loss():
 @pytest.mark.parametrize("chunk_dim", [0, 2, -2])
 @pytest.mark.parametrize(
     "estimator,alpha",
-    [("unbiased", None), ("biased", None), ("almost-fair", 0.95)],
+    [("fair", None), ("unfair", None), ("almost-fair", 0.95)],
 )
 def test_chunked_crps_matches_values_and_gradients(
     members, chunk_dim, estimator, alpha
