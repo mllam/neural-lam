@@ -36,6 +36,7 @@ In addition, datastores on a rectilinear grid (`is_on_rectilinear_grid` is
 # Standard library
 import collections
 import dataclasses
+import time
 from datetime import timedelta
 from pathlib import Path
 
@@ -608,3 +609,159 @@ def test_symlinked_config_resolves_to_the_real_directory():
 
     assert datastore.root_path == linked.resolve().parent
     assert datastore.root_path.name == "danra_100m_winds"
+
+
+def _write_mdp_example(tmp_path, x_name, y_name, x, y, stack_dims):
+    """Write a small zarr and MDP config with a single `t2m` variable whose
+    value encodes the stored position of each grid point
+    (`10 * i_x + i_y`), and return the config path. `stack_dims` sets the
+    order in which the grid is stacked into `grid_index`."""
+    nx_, ny_ = len(x), len(y)
+    t = np.datetime64("2022-04-01T00:00") + np.arange(24) * np.timedelta64(
+        3, "h"
+    )
+    vals = 10 * np.arange(nx_)[:, None] + np.arange(ny_)[None, :]
+    xr.Dataset(
+        {
+            "t2m": (
+                ("time", x_name, y_name),
+                np.broadcast_to(vals, (24, nx_, ny_)).astype(float),
+            )
+        },
+        coords={"time": t, x_name: x, y_name: y},
+    ).to_zarr(tmp_path / "in.zarr", mode="w")
+
+    def split(start, end):
+        return {"start": start, "end": end}
+
+    stats = {
+        "ops": ["mean", "std", "diff_mean", "diff_std"],
+        "dims": ["grid_index", "time"],
+    }
+    config = {
+        "schema_version": "v0.5.0",
+        "dataset_version": "v0.1.0",
+        "output": {
+            "variables": {"state": ["time", "grid_index", "state_feature"]},
+            "coord_ranges": {
+                "time": {
+                    "start": "2022-04-01T00:00",
+                    "end": "2022-04-03T21:00",
+                    "step": "PT3H",
+                }
+            },
+            "splitting": {
+                "dim": "time",
+                "splits": {
+                    "train": {
+                        **split("2022-04-01T00:00", "2022-04-02T00:00"),
+                        "compute_statistics": stats,
+                    },
+                    "val": split("2022-04-02T03:00", "2022-04-03T00:00"),
+                    "test": split("2022-04-03T03:00", "2022-04-03T21:00"),
+                },
+            },
+        },
+        "inputs": {
+            "surface": {
+                "path": str(tmp_path / "in.zarr"),
+                "dims": ["time", x_name, y_name],
+                "variables": ["t2m"],
+                "dim_mapping": {
+                    "time": {"method": "rename", "dim": "time"},
+                    "grid_index": {"method": "stack", "dims": stack_dims},
+                    "state_feature": {
+                        "method": "stack_variables_by_var_name",
+                        "name_format": "{var_name}",
+                    },
+                },
+                "target_output_variable": "state",
+            }
+        },
+        "extra": {"projection": {"class_name": "PlateCarree", "kwargs": {}}},
+    }
+    config_path = tmp_path / "ds.yaml"
+    config_path.write_text(yaml.safe_dump(config))
+    return config_path
+
+
+@pytest.mark.requires_real_data
+@pytest.mark.parametrize(
+    "lon, lat, stored_lat_major",
+    [
+        ([10.0, 11.0], [57.0, 55.0, 53.0], False),  # descending latitude
+        ([11.0, 10.0], [53.0, 55.0, 57.0], False),  # descending longitude
+        ([11.0, 10.0], [57.0, 55.0, 53.0], False),  # both descending
+        # zarr stacked latitude-first, config then changed to longitude-first
+        ([10.0, 11.0], [57.0, 55.0, 53.0], True),
+    ],
+)
+def test_get_xy_preserves_stored_coordinate_order(
+    tmp_path, lon, lat, stored_lat_major
+):
+    """`get_xy(stacked=True)` must follow the stored `grid_index` order, so
+    that its rows line up with `get_dataarray` and `get_lat_lon` for
+    descending coordinates (e.g. ERA5 latitude 90 -> -90) and when the grid
+    is stored in a different dimension order than the config."""
+    x_first = ["longitude", "latitude"]
+    config_path = _write_mdp_example(
+        tmp_path,
+        "longitude",
+        "latitude",
+        lon,
+        lat,
+        stack_dims=x_first[::-1] if stored_lat_major else x_first,
+    )
+    if stored_lat_major:
+        # build the latitude-first zarr, then reorder the config so that the
+        # existing zarr is reused with a longitude-first `spatial_coordinates`
+        MDPDatastore(config_path=config_path, n_boundary_points=0)
+        time.sleep(1.5)
+        _write_mdp_example(
+            tmp_path, "longitude", "latitude", lon, lat, stack_dims=x_first
+        )
+
+    datastore = MDPDatastore(config_path=config_path, n_boundary_points=0)
+    assert datastore.spatial_coordinates == x_first
+
+    da = datastore.get_dataarray("state", split="train").isel(
+        time=0, state_feature=0
+    )
+    expected_xy = np.array(
+        [[lon[int(v) // 10], lat[int(v) % 10]] for v in da.values]
+    )
+
+    xy_stacked = datastore.get_xy("state", stacked=True)
+    np.testing.assert_array_equal(xy_stacked, expected_xy)
+    np.testing.assert_array_equal(xy_stacked, datastore.get_lat_lon("state"))
+
+    xy_unstacked = datastore.get_xy("state", stacked=False)
+    assert xy_unstacked.shape == (len(lon), len(lat), 2)
+    np.testing.assert_array_equal(xy_unstacked[:, 0, 0], lon)
+    np.testing.assert_array_equal(xy_unstacked[0, :, 1], lat)
+
+
+@pytest.mark.requires_real_data
+def test_boundary_mask_matches_state_for_descending_coordinates(tmp_path):
+    """`boundary_mask` must have the same `grid_index` as the state data when
+    `y` is stored descending, since the forecaster applies it by position."""
+    x = [0.0, 1.0, 2.0, 3.0]
+    y = [4.0, 3.0, 2.0, 1.0, 0.0]
+    config_path = _write_mdp_example(
+        tmp_path, "x", "y", x, y, stack_dims=["x", "y"]
+    )
+    datastore = MDPDatastore(config_path=config_path, n_boundary_points=1)
+
+    da = datastore.get_dataarray("state", split="train").isel(
+        time=0, state_feature=0
+    )
+    mask = datastore.boundary_mask
+
+    np.testing.assert_array_equal(mask.x.values, da.x.values)
+    np.testing.assert_array_equal(mask.y.values, da.y.values)
+
+    # decode the stored position of each grid point from the data values
+    i_x = da.values.astype(int) // 10
+    i_y = da.values.astype(int) % 10
+    on_edge = (i_x % (len(x) - 1) == 0) | (i_y % (len(y) - 1) == 0)
+    np.testing.assert_array_equal(mask.values, on_edge.astype(int))
