@@ -210,8 +210,9 @@ class StepPredictor(nn.Module, ABC):
         ------
         ValueError
             If clamping limits are specified for unknown features, if any
-            limit is not a finite number, or if lower limit is greater
-            than or equal to upper limit for a feature.
+            limit is not a finite number, if normalized limits or two-sided
+            interval widths are not finite in float32, or if lower limit is
+            greater than or equal to upper limit for a feature.
         """
 
         # Read clamping limits stored on self
@@ -296,23 +297,54 @@ class StepPredictor(nn.Module, ABC):
                         f"lower ({lower_lims[feature]}) must be smaller than "
                         f"upper ({upper_lims[feature]})."
                     )
+                norm_lower = normalize_clamping_lim(
+                    lower_lims[feature], feature_idx
+                )
+                norm_upper = normalize_clamping_lim(
+                    upper_lims[feature], feature_idx
+                )
+                if not torch.isfinite(norm_lower):
+                    raise ValueError(
+                        f"Normalized lower clamping limit for feature "
+                        f"'{feature}' must be a finite float32 number."
+                    )
+                if not torch.isfinite(norm_upper):
+                    raise ValueError(
+                        f"Normalized upper clamping limit for feature "
+                        f"'{feature}' must be a finite float32 number."
+                    )
+                interval_width = norm_upper - norm_lower
+                if not torch.isfinite(interval_width) or interval_width <= 0:
+                    raise ValueError(
+                        f"Normalized clamping interval width for feature "
+                        f"'{feature}' must be a finite, strictly positive "
+                        f"number in float32."
+                    )
                 sigmoid_lower_upper_idx.append(feature_idx)
-                sigmoid_lower_lims.append(
-                    normalize_clamping_lim(lower_lims[feature], feature_idx)
-                )
-                sigmoid_upper_lims.append(
-                    normalize_clamping_lim(upper_lims[feature], feature_idx)
-                )
+                sigmoid_lower_lims.append(norm_lower)
+                sigmoid_upper_lims.append(norm_upper)
             elif feature in lower_lims and feature not in upper_lims:
+                norm_lower = normalize_clamping_lim(
+                    lower_lims[feature], feature_idx
+                )
+                if not torch.isfinite(norm_lower):
+                    raise ValueError(
+                        f"Normalized lower clamping limit for feature "
+                        f"'{feature}' must be a finite float32 number."
+                    )
                 softplus_lower_idx.append(feature_idx)
-                softplus_lower_lims.append(
-                    normalize_clamping_lim(lower_lims[feature], feature_idx)
-                )
+                softplus_lower_lims.append(norm_lower)
             elif feature not in lower_lims and feature in upper_lims:
-                softplus_upper_idx.append(feature_idx)
-                softplus_upper_lims.append(
-                    normalize_clamping_lim(upper_lims[feature], feature_idx)
+                norm_upper = normalize_clamping_lim(
+                    upper_lims[feature], feature_idx
                 )
+                if not torch.isfinite(norm_upper):
+                    raise ValueError(
+                        f"Normalized upper clamping limit for feature "
+                        f"'{feature}' must be a finite float32 number."
+                    )
+                softplus_upper_idx.append(feature_idx)
+                softplus_upper_lims.append(norm_upper)
 
         self.register_buffer(
             "sigmoid_lower_lims", torch.tensor(sigmoid_lower_lims)

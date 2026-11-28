@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Validate that output clamping limits are finite numbers in `StepPredictor.prepare_clamping_params` and add unit test coverage [\#848](https://github.com/mllam/neural-lam/issues/848) @muskan-creates352
+- Validate that output clamping limits are finite numbers in `StepPredictor.prepare_clamping_params` and add unit test coverage [\#849](https://github.com/mllam/neural-lam/pull/849) @muskan-creates352
 
 - Fix shifted test spatial loss map titles and `spatial_loss_maps/loss_t{n}.pdf` filenames when `val_steps_to_log` contains steps outside the evaluation rollout [\#752](https://github.com/mllam/neural-lam/pull/752) @vikramsingh920
 

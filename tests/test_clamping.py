@@ -481,3 +481,53 @@ def test_clamping_valid_limits_setup_and_forward(dummy_datastore):
     new_state = model.get_clamped_new_state(state_delta, prev_state)
     assert new_state.shape == (batch_size, num_nodes, num_vars)
     assert torch.isfinite(new_state).all().item()
+
+
+@pytest.mark.parametrize(
+    "lower_val, upper_val",
+    [
+        (-1e39, 10.0),
+        (-10.0, 1e39),
+        (-1e39, 1e39),
+    ],
+)
+def test_clamping_float32_overflow_raises(
+    dummy_datastore, lower_val, upper_val
+):
+    """Test that clamping limits overflowing float32 raise ValueError."""
+    model = DummyStepPredictor(
+        dummy_datastore,
+        output_clamping_lower={"state_feat_0": lower_val},
+        output_clamping_upper={"state_feat_0": upper_val},
+    )
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"(Normalized (lower|upper) clamping limit.*must be a finite "
+            r"float32|Normalized clamping interval width.*must be a finite)"
+        ),
+    ):
+        model.prepare_clamping_params(dummy_datastore)
+
+
+@pytest.mark.parametrize("bool_val", ["true", "false"])
+def test_clamping_config_loading_boolean_bound_raises(tmp_path, bool_val):
+    """Test that boolean bounds in YAML config raise during config loading."""
+    cfg_content = f"""
+datastores:
+  main:
+    kind: mdp
+    config_path: dummy
+training:
+  output_clamping:
+    lower:
+      state_feat_0: {bool_val}
+"""
+    cfg_file = tmp_path / "config.yaml"
+    cfg_file.write_text(cfg_content, encoding="utf-8")
+
+    with pytest.raises(
+        (nlconfig.InvalidConfigError, ValueError),
+        match="Output clamping lower limit for feature 'state_feat_0'",
+    ):
+        nlconfig.load_config_and_datastore(str(cfg_file))

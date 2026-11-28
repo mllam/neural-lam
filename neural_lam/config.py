@@ -2,8 +2,9 @@
 
 # Standard library
 import dataclasses
+import math
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 # Third-party
 import dataclass_wizard
@@ -79,6 +80,12 @@ class UniformFeatureWeighting:
     pass
 
 
+class InvalidConfigError(ValueError):
+    """Raised when the Neural-LAM configuration file is invalid or malformed."""
+
+    pass
+
+
 @dataclasses.dataclass
 class OutputClamping:
     """
@@ -86,14 +93,31 @@ class OutputClamping:
 
     Attributes
     ----------
-    lower : dict[str, float]
+    lower : dict[str, Any]
         The minimum value to clamp each output feature to.
-    upper : dict[str, float]
+    upper : dict[str, Any]
         The maximum value to clamp each output feature to.
     """
 
-    lower: dict[str, float] = dataclasses.field(default_factory=dict)
-    upper: dict[str, float] = dataclasses.field(default_factory=dict)
+    lower: dict[str, Any] = dataclasses.field(default_factory=dict)
+    upper: dict[str, Any] = dataclasses.field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        for bound_type, bounds in (
+            ("lower", self.lower),
+            ("upper", self.upper),
+        ):
+            if isinstance(bounds, dict):
+                for feat, val in bounds.items():
+                    if (
+                        isinstance(val, bool)
+                        or not isinstance(val, (int, float))
+                        or not math.isfinite(val)
+                    ):
+                        raise InvalidConfigError(
+                            f"Output clamping {bound_type} limit for feature "
+                            f"'{feat}' must be a finite number, got {val}."
+                        )
 
 
 @dataclasses.dataclass
@@ -175,12 +199,6 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
         # raise_on_unknown_json_key = True
 
 
-class InvalidConfigError(Exception):
-    """Raised when the Neural-LAM configuration file is invalid or malformed."""
-
-    pass
-
-
 def load_config_and_datastore(
     config_path: str,
 ) -> tuple[
@@ -211,14 +229,33 @@ def load_config_and_datastore(
     """
     with open(config_path, encoding="utf-8") as f:
         raw_config = yaml.safe_load(f)
-    if isinstance(raw_config, dict) and (
-        "datastore" in raw_config and "datastores" not in raw_config
-    ):
-        raise InvalidConfigError(
-            "The `datastore:` config key has been replaced by a named "
-            "`datastores:` mapping, move your datastore under a named entry "
-            "(`datastores: {<name>: {kind: ..., config_path: ...}}`)."
-        )
+    if isinstance(raw_config, dict):
+        if "datastore" in raw_config and "datastores" not in raw_config:
+            raise InvalidConfigError(
+                "The `datastore:` config key has been replaced by a named "
+                "`datastores:` mapping, move your datastore under a named "
+                "entry "
+                "(`datastores: {<name>: {kind: ..., config_path: ...}}`)."
+            )
+
+        training_section = raw_config.get("training", {})
+        if isinstance(training_section, dict):
+            clamping_section = training_section.get("output_clamping", {})
+            if isinstance(clamping_section, dict):
+                for bound_type in ("lower", "upper"):
+                    bounds = clamping_section.get(bound_type, {})
+                    if isinstance(bounds, dict):
+                        for feat, val in bounds.items():
+                            if (
+                                isinstance(val, bool)
+                                or not isinstance(val, (int, float))
+                                or not math.isfinite(val)
+                            ):
+                                raise InvalidConfigError(
+                                    f"Output clamping {bound_type} limit for "
+                                    f"feature '{feat}' must be a finite "
+                                    f"number, got {val}."
+                                )
 
     try:
         config = NeuralLAMConfig.from_yaml_file(config_path)
