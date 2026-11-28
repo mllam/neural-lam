@@ -119,7 +119,7 @@ def test_ar_forecaster_gradient_checkpointing_numerical_parity(output_std):
 @pytest.mark.parametrize(
     ("training", "checkpointing", "expected_calls"),
     [
-        (True, True, 4),
+        (True, True, 5),
         (True, False, 0),
         (False, True, 0),
         (False, False, 0),
