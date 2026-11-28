@@ -604,3 +604,57 @@ def test_step_predictor_invalid_clamping_limits(lower, upper):
 
     with pytest.raises(ValueError, match="must be smaller than upper"):
         predictor.prepare_clamping_params(datastore)
+
+
+def test_forecasting_module_empty_interior_mask_raises():
+    """A datastore whose boundary mask marks every grid point as a boundary must
+    raise a ValueError during forecasting module initialization."""
+    datastore = DummyDatastore()
+    datastore.ds["boundary_mask"].values[:] = 1
+    datastore.__dict__.pop("boundary_mask", None)  # Bust cached_property
+
+    config = nlconfig.NeuralLAMConfig(
+        datastores={
+            "main": nlconfig.DatastoreSelection(kind="mdp", config_path="dummy")
+        }
+    )
+    predictor = MockStepPredictor(datastore=datastore, output_std=False)
+    forecaster = DeterministicARForecaster(predictor, datastore, config=config)
+
+    with pytest.raises(ValueError) as exc_info:  # noqa: PT011
+        DeterministicForecastingModule(
+            forecaster=forecaster,
+            config=config,
+            datastore=datastore,
+        )
+
+    assert str(exc_info.value) == (
+        "The datastore boundary mask must leave at least one interior "
+        "grid point."
+    )
+
+
+def test_forecasting_module_valid_interior_mask_initialization():
+    """A datastore with at least one interior grid point must initialize
+    successfully and register interior_mask_bool."""
+    datastore = DummyDatastore()
+    # Mask all grid points except one as boundary
+    datastore.ds["boundary_mask"].values[:] = 1
+    datastore.ds["boundary_mask"].values.flat[0] = 0
+    datastore.__dict__.pop("boundary_mask", None)  # Bust cached_property
+
+    config = nlconfig.NeuralLAMConfig(
+        datastores={
+            "main": nlconfig.DatastoreSelection(kind="mdp", config_path="dummy")
+        }
+    )
+    predictor = MockStepPredictor(datastore=datastore, output_std=False)
+    forecaster = DeterministicARForecaster(predictor, datastore, config=config)
+
+    module = DeterministicForecastingModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+    )
+    assert hasattr(module, "interior_mask_bool")
+    assert module.interior_mask_bool.sum().item() == 1

@@ -128,6 +128,11 @@ class BaseForecastingModule(pl.LightningModule, ABC):
             ``train_steps_to_log``, ``metrics_watch``,
             ``var_leads_metrics_watch``) so legacy checkpoints round-trip
             through ``load_from_checkpoint`` correctly.
+
+        Raises
+        ------
+        ValueError
+            If the datastore boundary mask leaves no interior grid points.
         """
         super().__init__()
         # Pre-refactor ``ARModel`` checkpoints saved every hyperparameter nested
@@ -206,9 +211,15 @@ class BaseForecastingModule(pl.LightningModule, ABC):
             .unsqueeze(-1)
         )  # (1, num_grid_nodes, 1)
         interior_mask = 1.0 - boundary_mask
+        interior_mask_bool = interior_mask[0, :, 0].to(torch.bool)
+        if not interior_mask_bool.any():
+            raise ValueError(
+                "The datastore boundary mask must leave at least one "
+                "interior grid point."
+            )
         self.register_buffer(
             "interior_mask_bool",
-            interior_mask[0, :, 0].to(torch.bool),
+            interior_mask_bool,
             persistent=False,
         )
 
