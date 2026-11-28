@@ -293,21 +293,17 @@ class GraphEFMForecaster(BaseProbabilisticARForecaster):
         ValueError
             If num_members is less than one.
         """
-        if num_members < 1:
-            raise ValueError("num_members must be at least 1")
-        if graph_emb is None:
+        if graph_emb is None and num_members > 0:
             graph_emb = self.predictor.embedd_graph(init_states.shape[0])
-        samples = [
-            unroll_forecast(
+        return self._sample_ensemble(
+            num_members,
+            partial(
+                unroll_forecast,
                 partial(self.predictor, graph_emb=graph_emb),
                 init_states,
                 forcing_features,
                 boundary_states,
                 self.boundary_mask,
                 self.interior_mask,
-            )
-            for _ in range(num_members)
-        ]
-        ensemble = torch.stack([sample[0] for sample in samples], dim=1)
-        scales = [sample[1] for sample in samples if sample[1] is not None]
-        return ensemble, torch.stack(scales, dim=1) if scales else None
+            ),
+        )

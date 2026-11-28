@@ -1,6 +1,8 @@
 """Forecasters that sample their forecast from a predictive distribution."""
 
 # Standard library
+from collections.abc import Callable
+from functools import partial
 
 # Third-party
 import torch
@@ -93,6 +95,37 @@ class BaseProbabilisticForecaster(BaseForecaster):
         ValueError
             If ``num_members`` is less than 1.
         """
+        return self._sample_ensemble(
+            num_members,
+            partial(self, init_states, forcing_features, boundary_states),
+        )
+
+    @staticmethod
+    def _sample_ensemble(
+        num_members: int,
+        sample_member: Callable[[], tuple[torch.Tensor, torch.Tensor | None]],
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+        """Sample and stack an ensemble along the dimension after batch.
+
+        Parameters
+        ----------
+        num_members : int
+            Number of forecasts to sample, at least one.
+        sample_member : callable
+            Draw one forecast and its optional predicted standard deviation.
+
+        Returns
+        -------
+        ensemble : torch.Tensor
+            The sampled forecasts stacked along the ensemble dimension.
+        per_member_std : torch.Tensor or None
+            Predicted standard deviations stacked the same way, if available.
+
+        Raises
+        ------
+        ValueError
+            If ``num_members`` is less than 1.
+        """
         if num_members < 1:
             raise ValueError(
                 f"num_members must be at least 1, got {num_members}"
@@ -101,9 +134,7 @@ class BaseProbabilisticForecaster(BaseForecaster):
         member_list = []
         member_std_list = []
         for _ in range(num_members):
-            prediction, pred_std = self(
-                init_states, forcing_features, boundary_states
-            )
+            prediction, pred_std = sample_member()
             member_list.append(prediction)
             if pred_std is not None:
                 member_std_list.append(pred_std)
