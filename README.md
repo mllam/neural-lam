@@ -580,12 +580,6 @@ Graph-EFM options are CLI arguments:
 | `--crps_members` | 2 | Independent prior trajectories for fair CRPS (at least two) |
 | `--eval_ensemble_size` | 5 | Members sampled during validation and testing |
 
-Fair CRPS uses separate prior trajectories, independent of the variational
-rollout. It sums over variables and averages over interior grid nodes,
-forecast steps and batch. The likelihood sums over interior grid nodes,
-variables and forecast steps; KL sums over latent mesh nodes and steps.
-Both variational terms are averaged over the batch.
-
 A starting curriculum is the hierarchical MEPS schedule from
 [Table 13 of the paper](https://arxiv.org/html/2406.04759v2#A9.T13):
 
