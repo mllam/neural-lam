@@ -55,16 +55,14 @@ def test_evaluation_scores_one_ensemble_on_interior_nodes(evaluation, phase):
     else:
         model.test_step(batch, 0)
         collected = model.test_metrics
-    assert set(collected) == {"ens_mse", "crps_ens", "spread_squared"}
+    assert set(collected) == {"ens_mse", "crps_ens"}
     expected_mse = (ensemble.mean(1) - target).square()[:, :, mask].mean(-2)
     first = (ensemble - target.unsqueeze(1)).abs().mean(1)
     pairs = (ensemble.unsqueeze(2) - ensemble.unsqueeze(1)).abs().sum((1, 2))
     expected_crps = (first - pairs / 12)[:, :, mask].mean(-2)
-    expected_variance = ensemble.var(1)[:, :, mask].mean(-2)
     for name, expected in {
         "ens_mse": expected_mse,
         "crps_ens": expected_crps,
-        "spread_squared": expected_variance,
     }.items():
         torch.testing.assert_close(collected[name][0], expected)
         assert collected[name][0].shape == (2, 4, 5)
@@ -93,7 +91,6 @@ def test_epoch_metrics_root_after_averaging_and_restore_units(
     model.aggregate_and_plot_metrics(
         {
             "ens_mse": squared_values,
-            "spread_squared": squared_values,
             "crps_ens": squared_values,
         },
         prefix,
@@ -105,9 +102,6 @@ def test_epoch_metrics_root_after_averaging_and_restore_units(
     mean = torch.full((2, 5), 19 / 3)
     torch.testing.assert_close(
         captured[f"{prefix}_ens_rmse"], mean.sqrt() * state_std
-    )
-    torch.testing.assert_close(
-        captured[f"{prefix}_spread"], mean.sqrt() * state_std
     )
     torch.testing.assert_close(captured[f"{prefix}_crps_ens"], mean * state_std)
 

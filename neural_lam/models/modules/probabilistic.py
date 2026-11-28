@@ -23,7 +23,7 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
     wrapped forecaster assembles its own training loss. Validation and
     testing are ensemble based instead of deterministic: an ensemble is
     sampled through ``forecaster.sample_ensemble`` and scored with
-    ensemble-mean RMSE, fair CRPS and spread per lead time and variable,
+    ensemble-mean RMSE and fair CRPS per lead time and variable,
     with validation also reporting the forecaster's own objective. The
     module makes no assumption on how members are produced, only that
     repeated sampling is what an ensemble is made of.
@@ -66,7 +66,7 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
             Datastore providing grid metadata and data access.
         eval_ensemble_size : int
             Number of ensemble members sampled during validation and
-            testing. At least two are needed for fair CRPS and spread;
+            testing. At least two are needed for fair CRPS;
             single-member evaluation reports only ensemble-mean error.
             Keyword-only and required.
         datastore_boundary : BaseDatastore, optional
@@ -132,7 +132,7 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
         self.eval_ensemble_size = eval_ensemble_size
         metric_names = ["ens_mse"]
         if eval_ensemble_size > 1:
-            metric_names.extend(("crps_ens", "spread_squared"))
+            metric_names.append("crps_ens")
         self.val_metrics = {name: [] for name in metric_names}
         self.test_metrics = {name: [] for name in metric_names}
 
@@ -141,14 +141,14 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
         batch: Batch,
     ) -> dict[str, torch.Tensor]:
         """
-        Score an ensemble with mean error, fair CRPS and ensemble variance.
+        Score an ensemble with mean error and fair CRPS.
 
         Validation and testing share one sampled ensemble. Every metric is
         computed on interior nodes per lead time and variable. Fair CRPS
-        and variance require at least two members; single-member evaluation
-        reports only mean error. Epoch aggregation takes the square roots
-        of mean squared error and variance after sample averaging and
-        rescales all metrics to the variables' physical units.
+        requires at least two members; single-member evaluation reports
+        only mean error. Epoch aggregation takes the square root of mean
+        squared error after sample averaging and rescales both metrics
+        to the variables' physical units.
 
         The forecaster's training objective is logged separately by
         _log_objective, since its sampling procedure may differ.
@@ -182,13 +182,12 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
 
         values = {"ens_mse": entry_mses}
         if self.eval_ensemble_size > 1:
-            for name in ("crps_ens", "spread_squared"):
-                values[name] = metrics.get_metric(name)(
-                    ensemble,
-                    target_states,
-                    mask=self.interior_mask_bool,
-                    sum_vars=False,
-                )
+            values["crps_ens"] = metrics.crps_ens_fair(
+                ensemble,
+                target_states,
+                mask=self.interior_mask_bool,
+                sum_vars=False,
+            )
         return values
 
     def _log_objective(
@@ -240,7 +239,7 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
 
         Logs the forecaster's objective as ``val_mean_loss``, scores the
         ensemble mean against the target states (see ``_ensemble_step``) and
-        collects error, fair CRPS and variance for epoch-end aggregation.
+        collects error and fair CRPS for epoch-end aggregation.
 
         Parameters
         ----------
@@ -265,7 +264,7 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
         Perform a single ensemble test step.
 
         Scores the ensemble mean against the target states (see
-        ``_ensemble_step``) and collects error, fair CRPS and variance for
+        ``_ensemble_step``) and collects error and fair CRPS for
         epoch-end aggregation.
 
         Parameters

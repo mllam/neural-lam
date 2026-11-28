@@ -616,62 +616,6 @@ def crps_ens_fair(
     )
 
 
-def spread_squared(
-    pred: torch.Tensor,
-    target: torch.Tensor,
-    pred_std: torch.Tensor | None = None,
-    mask: torch.Tensor | None = None,
-    average_grid: bool = True,
-    sum_vars: bool = True,
-    ens_dim: int = 1,
-) -> torch.Tensor:
-    """Compute unbiased ensemble variance before any spatial reduction.
-
-    Uses Bessel's correction, dividing by S - 1. To report ensemble spread,
-    take the square root after averaging variance over grid and samples.
-    Conditional observation scales are not part of the sampled ensemble's
-    spread and are ignored here.
-
-    Parameters
-    ----------
-    pred : torch.Tensor
-        Shape (B, S, pred_steps, num_grid_nodes, num_state_vars), with the
-        ensemble dimension at ens_dim. At least two members are required.
-    target : torch.Tensor
-        Unused; accepted for compatibility with the shared metric interface.
-    pred_std : torch.Tensor or None, optional
-        Unused; accepted for compatibility with the shared metric interface.
-    mask : torch.Tensor or None, optional
-        Shape (num_grid_nodes,). Boolean mask selecting interior nodes.
-    average_grid : bool, optional
-        Average over selected grid nodes. Default True.
-    sum_vars : bool, optional
-        Sum over state variables. Default True.
-    ens_dim : int, optional
-        Ensemble dimension in pred. Default 1.
-
-    Returns
-    -------
-    torch.Tensor
-        Ensemble variance with the ensemble axis removed, reduced with
-        mask_and_reduce_metric like the other metrics.
-
-    Raises
-    ------
-    ValueError
-        If the ensemble dimension is invalid or has fewer than two members.
-    """
-    if not -pred.ndim <= ens_dim < pred.ndim:
-        raise ValueError("ens_dim is outside the prediction dimensions")
-    if pred.shape[ens_dim] < 2:
-        raise ValueError(
-            "spread_squared requires at least two ensemble members"
-        )
-    return mask_and_reduce_metric(
-        pred.var(dim=ens_dim, unbiased=True), mask, average_grid, sum_vars
-    )
-
-
 crps_ens_biased = partial(crps_ens, estimator="biased")
 crps_ens_almost_fair = partial(
     crps_ens, estimator="almost-fair", afc_alpha=0.95
@@ -682,7 +626,6 @@ ENSEMBLE_METRICS: dict[str, Callable[..., torch.Tensor]] = {
     "crps_ens_fair": crps_ens_fair,
     "crps_ens_biased": crps_ens_biased,
     "crps_ens_almost_fair": crps_ens_almost_fair,
-    "spread_squared": spread_squared,
 }
 
 

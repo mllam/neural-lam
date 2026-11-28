@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add Graph-EFM ensemble forecasting with variational training, CRPS and spread
+- Add Graph-EFM ensemble forecasting with variational training and CRPS
   [\#712](https://github.com/mllam/neural-lam/pull/712) @Sir-Sloth-The-Lazy
 
 - Add deterministic and probabilistic forecaster/module interfaces with
