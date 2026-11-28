@@ -589,9 +589,12 @@ class MDPDatastore(BaseDatastore):
         """
         xdim, ydim = self.spatial_coordinates
 
-        if stacked and not self.is_on_rectilinear_grid:
-            # There is no x/y grid to unstack onto, so return the
-            # coordinates of the grid points in `grid_index` order
+        if stacked:
+            # Return the coordinates of the grid points in the stored
+            # `grid_index` order, so that rows line up with the data. Going
+            # through unstack/restack would sort the coordinates and stack
+            # them x-major, which does not match data stored y-major or with
+            # descending coordinates
             da_cat = self._ds[category]
             return np.stack([da_cat[xdim].values, da_cat[ydim].values], axis=1)
 
