@@ -461,6 +461,7 @@ def crps_ens(
         raise ValueError("CRPS predictions require an extra ensemble dimension")
     if not -pred.ndim <= ens_dim < pred.ndim:
         raise ValueError("ens_dim is outside the prediction dimensions")
+    # Normalize negative axes so shape slicing and axis comparisons agree.
     ens_dim %= pred.ndim
     if pred.shape[:ens_dim] + pred.shape[ens_dim + 1 :] != target.shape:
         raise ValueError(
